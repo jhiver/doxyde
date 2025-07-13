@@ -1,5 +1,18 @@
 # Doxyde Development Guide
 
+## Language Policy
+
+**ALL code, comments, documentation, commit messages, and variable names MUST be in English.**
+
+This includes:
+- Code comments and documentation
+- Variable, function, and type names
+- Error messages and log output
+- Git commit messages
+- README and documentation files
+- User-facing text in templates
+- CLI output and help text
+
 ## Project Overview
 
 Doxyde is a modern, AI-native content management system built with Rust. It's designed to be simple, fast, and extensible with AI capabilities.
