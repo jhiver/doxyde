@@ -1,19 +1,12 @@
 # Doxyde
 
-A modern, AI-native content management system built with Rust. Simple, fast, and extensible.
+## Introduction
 
-## Features
+Doxyde aims to be a modern, Rust-powered content management system built from the ground up to create sites that don’t suck — sites that are clean, fast, accessible, and genuinely pleasant to use, both for visitors and for the people managing them.
 
-- **Multi-site Support**: Host multiple sites from a single instance
-- **Hierarchical Pages**: Organize content with parent-child page relationships
-- **Component-Based Content**: Build pages with reusable components (text, images)
-- **Version Control**: Every edit creates a new version
-- **Draft/Publish Workflow**: Edit safely without affecting the live site
-- **Role-Based Access**: Admin, Owner, Editor, and Viewer roles
-- **Image Management**: Upload and serve images with metadata
-- **Markdown Support**: Write content in Markdown with automatic HTML conversion
-- **Modern UI**: Responsive design with dark header/footer theme
-- **Logo Support**: Custom logo per site with dimension control
+This project started as a personal challenge. In a previous life — back in the early 2000s — I had written a similar CMS. Doxyde is my way of reconnecting with that era, but with fresh eyes and modern tools. Inspired by the so-called "Vibe Coding" trend, this is also a learning journey: an opportunity to get back into serious development using today’s best practices — Rust, Axum, modern workflows, and AI-driven tooling.
+
+The goal is simple: build something solid and future-proof. Content-first, with clear navigation, a logical structure, and the ability to extend things without everything falling apart. Over time, Doxyde will evolve to include AI-assisted workflows for content generation, SEO, and editorial planning — all while integrating cleanly with the tools people actually use today.
 
 ## Quick Start
 
@@ -151,7 +144,7 @@ doxyde migrate
 Doxyde uses a hierarchical URL structure with dot-prefixed system actions:
 
 - **Content URLs**: `/`, `/about`, `/products/widget`
-- **System Actions**: 
+- **System Actions**:
   - `/.login` - User login
   - `/.logout` - User logout
   - `/about/.edit` - Edit page content
@@ -252,7 +245,13 @@ SQLite with migrations:
 
 ## License
 
-This project is dual-licensed under MIT OR Apache-2.0.
+Doxyde is licensed under the GNU Affero General Public License v3 (AGPLv3). See the [LICENSE](LICENSE) file for the full license text.
+
+This ensures that the source code remains open and that any modifications — including those used in SaaS platforms — must be shared under the same terms. The AGPLv3 specifically addresses network use, requiring that users who interact with the software over a network must have access to the source code.
+
+Copyright (C) 2025 Doxyde Project Contributors
+
+If you're interested in a different licensing model — for example, for commercial use without the obligations of the AGPL — let's talk: jhiver@gmail.com.
 
 ## Acknowledgments
 

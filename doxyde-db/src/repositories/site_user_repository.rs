@@ -1,3 +1,19 @@
+// Doxyde - A modern, AI-native CMS built with Rust
+// Copyright (C) 2025 Doxyde Project Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use anyhow::{Context, Result};
 use doxyde_core::models::permission::SiteUser;
 use sqlx::SqlitePool;
@@ -1016,7 +1032,10 @@ mod tests {
         )
         .await?;
         let found = repo.find_by_site_and_user(site_id, user_id).await?.unwrap();
-        assert_eq!(found.role, doxyde_core::models::permission::SiteRole::Editor);
+        assert_eq!(
+            found.role,
+            doxyde_core::models::permission::SiteRole::Editor
+        );
 
         // Editor -> Owner
         repo.update_role(
@@ -1036,7 +1055,10 @@ mod tests {
         )
         .await?;
         let found = repo.find_by_site_and_user(site_id, user_id).await?.unwrap();
-        assert_eq!(found.role, doxyde_core::models::permission::SiteRole::Viewer);
+        assert_eq!(
+            found.role,
+            doxyde_core::models::permission::SiteRole::Viewer
+        );
 
         Ok(())
     }

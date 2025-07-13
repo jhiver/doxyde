@@ -1,3 +1,19 @@
+// Doxyde - A modern, AI-native CMS built with Rust
+// Copyright (C) 2025 Doxyde Project Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use anyhow::Result;
 use axum::{
     extract::Path,
@@ -89,7 +105,7 @@ pub async fn show_page_handler(
 
     // Build hierarchical navigation data
     let mut navigation_levels = Vec::new();
-    
+
     // Build navigation from current page up to root, showing children of each
     for (i, nav_page) in breadcrumb.iter().enumerate().rev() {
         // Get children of this page
@@ -97,19 +113,19 @@ pub async fn show_page_handler(
             .list_children(nav_page.id.unwrap())
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        
+
         // Skip if no children
         if page_children.is_empty() {
             continue;
         }
-        
+
         // Find which child (if any) is in our breadcrumb path
         let next_in_path = if i < breadcrumb.len() - 1 {
             breadcrumb.get(i + 1).map(|p| p.id).flatten()
         } else {
             None
         };
-        
+
         // Build URLs for children
         let children_data: Vec<serde_json::Value> = page_children
             .into_iter()
@@ -119,13 +135,14 @@ pub async fn show_page_handler(
                     format!("/{}", child.slug)
                 } else {
                     // Build path from breadcrumb up to current level
-                    let path_parts: Vec<&str> = breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+                    let path_parts: Vec<&str> =
+                        breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
                     format!("/{}/{}", path_parts.join("/"), child.slug)
                 };
-                
+
                 // Check if this child is the current page or in the path to current page
                 let is_active = child.id == page.id || child.id == next_in_path;
-                
+
                 serde_json::json!({
                     "title": child.title,
                     "url": child_url,
@@ -134,18 +151,17 @@ pub async fn show_page_handler(
                 })
             })
             .collect();
-        
+
         // Add level to navigation (will be reversed to show top-down)
         navigation_levels.push(serde_json::json!({
             "title": nav_page.title.clone(),
             "pages": children_data
         }));
     }
-    
+
     // Reverse to show from top to bottom
     navigation_levels.reverse();
-    
-    
+
     // Keep children data for backward compatibility
     let children_data: Vec<serde_json::Value> = children
         .into_iter()
@@ -164,7 +180,7 @@ pub async fn show_page_handler(
 
     // Prepare template context
     let mut context = Context::new();
-    
+
     // Add base context (site_title, root_page_title, logo data)
     add_base_context(&mut context, &state, &site)
         .await

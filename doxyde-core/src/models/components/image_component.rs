@@ -1,3 +1,19 @@
+// Doxyde - A modern, AI-native CMS built with Rust
+// Copyright (C) 2025 Doxyde Project Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use crate::models::component::Component;
 use crate::models::component_trait::{escape_html, extract_text, ComponentRenderer};
 
@@ -110,30 +126,26 @@ impl ComponentRenderer for ImageComponent {
 
         // Build style attribute with display dimensions
         let mut style_parts = vec![];
-        
+
         if let Some(display_width) = &self.display_width {
             style_parts.push(format!("width: {}", display_width));
         } else {
             style_parts.push("max-width: 100%".to_string());
         }
-        
+
         if let Some(display_height) = &self.display_height {
             style_parts.push(format!("height: {}", display_height));
         } else {
             style_parts.push("height: auto".to_string());
         }
-        
+
         let style_attr = if !style_parts.is_empty() {
             format!(r#" style="{}""#, style_parts.join("; "))
         } else {
             String::new()
         };
 
-        let img_tag = format!(
-            r#"<img {}{}>"#,
-            img_attrs.join(" "),
-            style_attr
-        );
+        let img_tag = format!(r#"<img {}{}>"#, img_attrs.join(" "), style_attr);
 
         match template {
             "default" => {

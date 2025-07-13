@@ -1,3 +1,19 @@
+// Doxyde - A modern, AI-native CMS built with Rust
+// Copyright (C) 2025 Doxyde Project Contributors
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the
+// License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 use anyhow::Result;
 use axum::{
     extract::{Host, State},
@@ -14,18 +30,14 @@ use tera::Context;
 use crate::{template_context::add_base_context, AppState};
 
 /// Helper to create a login context with site-specific data
-async fn create_login_context(
-    state: &AppState,
-    host: &str,
-    error: Option<&str>,
-) -> Context {
+async fn create_login_context(state: &AppState, host: &str, error: Option<&str>) -> Context {
     let mut context = Context::new();
-    
+
     // Add error if present
     if let Some(err) = error {
         context.insert("error", err);
     }
-    
+
     // Try to resolve the site from the host
     let site_repo = SiteRepository::new(state.db.clone());
     if let Ok(Some(site)) = site_repo.find_by_domain(host).await {
@@ -39,7 +51,7 @@ async fn create_login_context(
         // No site found, use default
         context.insert("site_title", "Doxyde");
     }
-    
+
     context
 }
 
@@ -55,7 +67,7 @@ pub async fn login_form(
     State(state): State<AppState>,
 ) -> Result<Html<String>, StatusCode> {
     let context = create_login_context(&state, &host, None).await;
-    
+
     let html = state
         .templates
         .render("login.html", &context)
@@ -106,7 +118,8 @@ pub async fn login(
         }
         None => {
             // User not found
-            let context = create_login_context(&state, &host, Some("Invalid username or password")).await;
+            let context =
+                create_login_context(&state, &host, Some("Invalid username or password")).await;
             let html = state
                 .templates
                 .render("login.html", &context)
@@ -123,7 +136,8 @@ pub async fn login(
         Ok(true) => {} // Password is correct, continue
         Ok(false) => {
             // Return to login form with error message
-            let context = create_login_context(&state, &host, Some("Invalid username or password")).await;
+            let context =
+                create_login_context(&state, &host, Some("Invalid username or password")).await;
             let html = state
                 .templates
                 .render("login.html", &context)
