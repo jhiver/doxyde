@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Edit: {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .edit-form {
+        margin: 20px 0;
+        padding: 20px;
+        background: #f5f5f5;
+        border-radius: 5px;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    .form-group input[type="text"],
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 16px;
+    }
+    .form-group textarea {
+        min-height: 100px;
+        resize: vertical;
+    }
+    .button {
+        padding: 8px 20px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+    }
+    .button:hover {
+        background: #0052a3;
+    }
+    .button-secondary {
+        background: #666;
+    }
+    .button-secondary:hover {
+        background: #555;
+    }
+    .component {
+        margin: 20px 0;
+        padding: 15px;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+    }
+    .component-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        font-size: 0.9em;
+        color: #666;
+    }
+    .component-content {
+        line-height: 1.6;
+    }
+    .component-actions {
+        margin-top: 10px;
+        font-size: 0.9em;
+    }
+    .add-component-form {
+        margin: 20px 0;
+        padding: 20px;
+        background: #e8f4f8;
+        border: 1px dashed #0066cc;
+        border-radius: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="edit-mode">
+    <h1>Edit Page</h1>
+    
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
+            {% else %}
+                {{ crumb.title }}
+            {% endif %}
+        {% endfor %}
+        / <strong>Edit</strong>
+    </nav>
+    {% endif %}
+    
+    
+    <!-- Components -->
+    <h2>Page Components</h2>
+    
+    {% if components %}
+        {% for component in components %}
+        <div class="component">
+            <div class="component-header">
+                <span>{{ component.component_type|title }} Component</span>
+                <span>Position: {{ component.position }}</span>
+            </div>
+            <div class="component-content">
+                {% if component.component_type == "text" %}
+                    {{ component.content.text|safe }}
+                {% elif component.component_type == "image" %}
+                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
+                {% elif component.component_type == "code" %}
+                    <pre><code>{{ component.content.code }}</code></pre>
+                {% else %}
+                    <pre>{{ component.content|json_encode }}</pre>
+                {% endif %}
+            </div>
+            <div class="component-actions">
+                <a href="#" class="button button-secondary" style="font-size: 0.9em;">Edit</a>
+                <a href="#" class="button button-secondary" style="font-size: 0.9em;">Delete</a>
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <p style="color: #666;">No components yet. Add one below!</p>
+    {% endif %}
+    
+    <!-- Add Component Form -->
+    <div class="add-component-form">
+        <h3>Add Text Component</h3>
+        <form method="post">
+            <input type="hidden" name="action" value="add_component">
+            <input type="hidden" name="component_type" value="text">
+            <div class="form-group">
+                <label for="content">Content (HTML allowed):</label>
+                <textarea id="content" name="content" required placeholder="Enter your text content here..."></textarea>
+            </div>
+            <button type="submit" class="button">Add Component</button>
+        </form>
+    </div>
+    
+    <!-- Page Actions -->
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee;">
+        <a href="../.new" class="button">Create Child Page</a>
+        <a href="../" class="button button-secondary">View Page</a>
+    </div>
+</div>
+{% endblock %}

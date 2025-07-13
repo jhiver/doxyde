@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}Properties: {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .properties-form {
+        margin: 20px 0;
+        padding: 20px;
+        background: #f5f5f5;
+        border-radius: 5px;
+    }
+    .form-group {
+        margin-bottom: 15px;
+    }
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+    }
+    .form-group input[type="text"],
+    .form-group textarea,
+    .form-group select {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 3px;
+        font-size: 16px;
+    }
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+    .form-group .help-text {
+        font-size: 0.9em;
+        color: #666;
+        margin-top: 4px;
+    }
+    .button {
+        padding: 8px 20px;
+        background: #0066cc;
+        color: white;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        margin-right: 10px;
+    }
+    .button:hover {
+        background: #0052a3;
+    }
+    .button-secondary {
+        background: #666;
+    }
+    .button-secondary:hover {
+        background: #555;
+    }
+    .form-section {
+        border-top: 2px solid #ddd;
+        margin-top: 30px;
+        padding-top: 20px;
+    }
+    .form-section h3 {
+        margin-top: 0;
+        color: #333;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="edit-mode">
+    <h1>Page Properties</h1>
+    
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
+            {% else %}
+                {{ crumb.title }}
+            {% endif %}
+        {% endfor %}
+        / <strong>Properties</strong>
+    </nav>
+    {% endif %}
+    
+    <!-- Properties Form -->
+    <div class="properties-form">
+        <form method="post">
+            <!-- Basic Properties -->
+            <div class="form-group">
+                <label for="title">Page Title:</label>
+                <input type="text" id="title" name="title" value="{{ page.title }}" required>
+                <div class="help-text">The title displayed in navigation and at the top of the page</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="description">Description:</label>
+                <textarea id="description" name="description" placeholder="Brief description of the page content">{% if page.description %}{{ page.description }}{% endif %}</textarea>
+                <div class="help-text">Used for SEO and may appear in search results (max 500 characters)</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="keywords">Keywords:</label>
+                <input type="text" id="keywords" name="keywords" value="{% if page.keywords %}{{ page.keywords }}{% endif %}" placeholder="comma, separated, keywords">
+                <div class="help-text">Comma-separated keywords for SEO (max 255 characters)</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="template">Page Template:</label>
+                <select id="template" name="template">
+                    {% for tmpl in available_templates %}
+                        <option value="{{ tmpl }}" {% if page.template == tmpl %}selected{% endif %}>
+                            {% if tmpl == "default" %}Default{% endif %}
+                            {% if tmpl == "full_width" %}Full Width{% endif %}
+                            {% if tmpl == "landing" %}Landing{% endif %}
+                            {% if tmpl == "blog" %}Blog{% endif %}
+                        </option>
+                    {% endfor %}
+                </select>
+                <div class="help-text">Choose the layout template for this page</div>
+            </div>
+            
+            <!-- SEO Settings -->
+            <div class="form-section">
+                <h3>SEO Settings</h3>
+                
+                <div class="form-group">
+                    <label for="meta_robots">Search Engine Instructions:</label>
+                    <select id="meta_robots" name="meta_robots">
+                        {% for robots in available_robots %}
+                            <option value="{{ robots }}" {% if page.meta_robots == robots %}selected{% endif %}>
+                                {% if robots == "index,follow" %}Index & Follow (Default){% endif %}
+                                {% if robots == "noindex,follow" %}Don't Index, Follow Links{% endif %}
+                                {% if robots == "index,nofollow" %}Index, Don't Follow Links{% endif %}
+                                {% if robots == "noindex,nofollow" %}Don't Index or Follow{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="help-text">Control how search engines index this page</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="canonical_url">Canonical URL:</label>
+                    <input type="text" id="canonical_url" name="canonical_url" value="{% if page.canonical_url %}{{ page.canonical_url }}{% endif %}" placeholder="https://example.com/preferred-url">
+                    <div class="help-text">Override the canonical URL if this page has duplicate content (optional)</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="structured_data_type">Content Type:</label>
+                    <select id="structured_data_type" name="structured_data_type">
+                        {% for data_type in available_data_types %}
+                            <option value="{{ data_type }}" {% if page.structured_data_type == data_type %}selected{% endif %}>
+                                {{ data_type }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <div class="help-text">Schema.org type for structured data</div>
+                </div>
+            </div>
+            
+            <!-- Social Media -->
+            <div class="form-section">
+                <h3>Social Media</h3>
+                
+                <div class="form-group">
+                    <label for="og_image_url">Social Media Image URL:</label>
+                    <input type="text" id="og_image_url" name="og_image_url" value="{% if page.og_image_url %}{{ page.og_image_url }}{% endif %}" placeholder="https://example.com/image.jpg">
+                    <div class="help-text">Image URL for social media sharing (recommended: 1200x630px)</div>
+                </div>
+            </div>
+            
+            <button type="submit" class="button">Save Properties</button>
+            <a href="{{ current_path }}" class="button button-secondary">Cancel</a>
+        </form>
+    </div>
+    
+    <!-- Page Info -->
+    <div style="margin-top: 40px; padding: 20px; background: #f9f9f9; border-radius: 5px; font-size: 0.9em; color: #666;">
+        <h3 style="margin-top: 0;">Page Information</h3>
+        <p><strong>URL:</strong> {{ current_path }}</p>
+        <p><strong>Created:</strong> {{ page.created_at }}</p>
+        <p><strong>Last Updated:</strong> {{ page.updated_at }}</p>
+    </div>
+</div>
+{% endblock %}

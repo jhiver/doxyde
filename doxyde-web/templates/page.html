@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - {{ super() }}{% endblock %}
+
+{% block content %}
+<article>
+    <h1>{{ page.title }}</h1>
+    
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
+            {% else %}
+                {{ crumb.title }}
+            {% endif %}
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    <div class="content">
+        {% if user %}
+        <div style="float: right; margin-bottom: 10px;">
+            <a href="{{ request_path | default(value="/") }}/.edit" style="text-decoration: none; color: #0066cc;">✏️ Edit Page</a>
+        </div>
+        <div style="clear: both;"></div>
+        {% endif %}
+        
+        {% for component in components %}
+            {% if component.component_type == "text" %}
+                <div class="text-component">
+                    {{ component.content.text | safe }}
+                </div>
+            {% elif component.component_type == "image" %}
+                <div class="image-component">
+                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
+                </div>
+            {% elif component.component_type == "code" %}
+                <pre><code>{{ component.content.code }}</code></pre>
+            {% else %}
+                <div class="custom-component">
+                    {{ component.content | json_encode }}
+                </div>
+            {% endif %}
+        {% endfor %}
+        
+        {% if components|length == 0 %}
+            <p style="color: #666; font-style: italic;">This page has no content yet.</p>
+        {% endif %}
+    </div>
+
+    {% if children %}
+    <div class="child-pages">
+        <h2>Pages</h2>
+        <ul>
+        {% for child in children %}
+            <li><a href="{{ child.url }}">{{ child.title }}</a></li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</article>
+{% endblock %}

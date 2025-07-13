@@ -1,0 +1,104 @@
+{% if user is defined and can_edit is defined and can_edit %}
+<div class="action-bar">
+    <div class="action-bar-content">
+        {% set current_action = action | default(value="view") %}
+        
+        {% if current_action == "view" %}
+            <strong>View</strong>
+        {% else %}
+            <a href="../">View</a>
+        {% endif %}
+        
+        <span class="separator">|</span>
+        
+        {% if current_action == ".properties" %}
+            <strong>Properties</strong>
+        {% else %}
+            <a href="./.properties">Properties</a>
+        {% endif %}
+        
+        <span class="separator">|</span>
+        
+        {% if current_action == ".edit" %}
+            <strong>Edit</strong>
+        {% else %}
+            <a href="./.edit">Edit</a>
+        {% endif %}
+        
+        <span class="separator">|</span>
+        
+        {% if current_action == ".new" %}
+            <strong>Create New</strong>
+        {% else %}
+            <a href="./.new">Create New</a>
+        {% endif %}
+        
+        {% if is_movable is defined and is_movable %}
+            <span class="separator">|</span>
+            
+            {% if current_action == ".move" %}
+                <strong>Move</strong>
+            {% else %}
+                <a href="./.move">Move</a>
+            {% endif %}
+        {% endif %}
+        
+        {% if can_delete is defined and can_delete %}
+            <span class="separator">|</span>
+            
+            {% if current_action == ".delete" %}
+                <strong>Delete</strong>
+            {% else %}
+                <a href="./.delete" class="danger">Delete</a>
+            {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<style>
+.action-bar {
+    background-color: #fffbdc;
+    border-bottom: 2px solid #e6d600;
+    padding: 10px 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.action-bar-content {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.action-bar-content a {
+    color: #0066cc;
+    text-decoration: none;
+    font-size: 0.9em;
+}
+
+.action-bar-content a:hover {
+    text-decoration: underline;
+}
+
+.action-bar-content a.danger {
+    color: #d00;
+}
+
+.action-bar-content a.danger:hover {
+    text-decoration: underline;
+}
+
+.action-bar-content strong {
+    font-weight: bold;
+    color: #333;
+    font-size: 0.9em;
+}
+
+.action-bar-content .separator {
+    color: #999;
+    font-size: 0.9em;
+    margin: 0 5px;
+}
+</style>

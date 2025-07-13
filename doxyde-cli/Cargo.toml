@@ -1,0 +1,20 @@
+[package]
+name = "doxyde-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "doxyde"
+path = "src/main.rs"
+
+[dependencies]
+doxyde-core = { path = "../doxyde-core" }
+doxyde-db = { path = "../doxyde-db" }
+anyhow.workspace = true
+clap = { version = "4.5", features = ["derive"] }
+tokio.workspace = true
+sqlx.workspace = true
+dotenvy = "0.15"
+rpassword = "7.3"

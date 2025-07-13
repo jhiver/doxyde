@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}Delete {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block sidebar %}
+    <div class="sidebar-card">
+        <div class="sidebar-card-header">
+            <h3>Delete Page</h3>
+        </div>
+        <div class="sidebar-card-body">
+            <p class="danger-text">This action cannot be undone!</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<article>
+    <h1>Delete Page: {{ page.title }}</h1>
+    
+    <div class="warning-box">
+        <h3>⚠️ Warning</h3>
+        <p>You are about to <strong>permanently delete</strong> the page "{{ page.title }}" and <strong>all its versions</strong>.</p>
+        <p>This action <strong>cannot be undone</strong>.</p>
+        
+        <p>The following will be deleted:</p>
+        <ul>
+            <li>The page "{{ page.title }}"</li>
+            <li>All page versions and their history</li>
+            <li>All components and content</li>
+        </ul>
+    </div>
+    
+    <p>Current location: <strong>{{ current_path }}</strong></p>
+    
+    <form method="post" action="{{ current_path }}/.delete" class="delete-form">
+        <div class="confirmation-input">
+            <label for="confirm">
+                To confirm deletion, please type <strong>DELETE</strong> in the box below:
+            </label>
+            <input type="text" 
+                   name="confirm" 
+                   id="confirm" 
+                   placeholder="Type DELETE to confirm" 
+                   autocomplete="off"
+                   required>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-danger">Delete Page</button>
+            <a href="{{ current_path }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+
+<style>
+.warning-box {
+    background-color: #fff3cd;
+    border: 2px solid #ffc107;
+    border-radius: 4px;
+    padding: 20px;
+    margin: 20px 0;
+}
+
+.warning-box h3 {
+    margin-top: 0;
+    color: #856404;
+}
+
+.warning-box p {
+    color: #856404;
+    margin: 10px 0;
+}
+
+.warning-box ul {
+    color: #856404;
+    margin: 10px 0;
+    padding-left: 30px;
+}
+
+.danger-text {
+    color: #d00;
+    font-weight: bold;
+}
+
+.delete-form {
+    margin-top: 30px;
+}
+
+.confirmation-input {
+    margin: 20px 0;
+}
+
+.confirmation-input label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 1.1em;
+}
+
+.confirmation-input input {
+    width: 300px;
+    padding: 10px;
+    font-size: 16px;
+    border: 2px solid #dc3545;
+    border-radius: 4px;
+}
+
+.confirmation-input input:focus {
+    outline: none;
+    border-color: #bd2130;
+}
+
+.form-actions {
+    margin-top: 30px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 10px 20px;
+    margin-right: 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-size: 16px;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    border-color: #dc3545;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+    border-color: #bd2130;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+}
+</style>
+
+<script>
+// Add client-side validation to ensure user types exactly "DELETE"
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.querySelector('.delete-form');
+    const confirmInput = document.getElementById('confirm');
+    
+    if (form && confirmInput) {
+        form.addEventListener('submit', function(e) {
+            if (confirmInput.value !== 'DELETE') {
+                e.preventDefault();
+                alert('Please type DELETE exactly as shown to confirm deletion.');
+                confirmInput.focus();
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

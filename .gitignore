@@ -1,0 +1,38 @@
+# Rust
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+Cargo.lock
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env.local
+.env.*.local
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Logs
+*.log
+
+# Testing
+tarpaulin-report.html
+cobertura.xml
+
+# Build artifacts
+/dist/
+EOF < /dev/null

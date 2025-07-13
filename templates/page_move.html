@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Move {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block sidebar %}
+    <div class="sidebar-card">
+        <div class="sidebar-card-header">
+            <h3>Move Page</h3>
+        </div>
+        <div class="sidebar-card-body">
+            <p>Select the new parent location for this page.</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<article>
+    <h1>Move Page: {{ page.title }}</h1>
+    
+    <p>Current location: <strong>{{ current_path }}</strong></p>
+    
+    <form method="post" action="{{ current_path }}/.move">
+        <div class="move-targets">
+            <h3>Select New Parent:</h3>
+            <select name="target_parent_id" class="move-dropdown" required>
+                <option value="" disabled selected>Choose a destination...</option>
+                {% for target in targets %}
+                <option value="{{ target.id }}">
+                    {{ target.path }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Move Page</button>
+            <a href="{{ current_path }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</article>
+
+<style>
+.move-targets {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.move-targets h3 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #495057;
+}
+
+.move-dropdown {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    background-color: white;
+    cursor: pointer;
+    transition: border-color 0.2s;
+}
+
+.move-dropdown:hover {
+    border-color: #80bdff;
+}
+
+.move-dropdown:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+
+.form-actions {
+    margin-top: 30px;
+}
+
+.btn {
+    display: inline-block;
+    padding: 8px 16px;
+    margin-right: 10px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    text-decoration: none;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-primary {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.btn-primary:hover {
+    background-color: #0056b3;
+    border-color: #0056b3;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    border-color: #6c757d;
+}
+
+.btn-secondary:hover {
+    background-color: #545b62;
+    border-color: #545b62;
+}
+</style>
+{% endblock %}

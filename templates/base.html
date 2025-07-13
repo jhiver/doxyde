@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{{ site_title | default(value="Doxyde") }}{% endblock %}</title>
+
+    {% if page is defined and page.title is defined %}
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="{% if page.description %}{{ page.description }}{% else %}{{ page.title }} - {{ site_title }}{% endif %}">
+    {% if page.keywords %}<meta name="keywords" content="{{ page.keywords }}">{% endif %}
+    <meta name="robots" content="{{ page.meta_robots | default(value='index,follow') }}">
+    {% if page.canonical_url %}<link rel="canonical" href="{{ page.canonical_url }}">{% endif %}
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="{{ page.title }}">
+    <meta property="og:description" content="{% if page.description %}{{ page.description }}{% else %}{{ page.title }} - {{ site_title }}{% endif %}">
+    {% if page.og_image_url %}<meta property="og:image" content="{{ page.og_image_url }}">{% endif %}
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="{% if page.og_image_url %}summary_large_image{% else %}summary{% endif %}">
+    <meta name="twitter:title" content="{{ page.title }}">
+    <meta name="twitter:description" content="{% if page.description %}{{ page.description }}{% else %}{{ page.title }} - {{ site_title }}{% endif %}">
+    {% if page.og_image_url %}<meta name="twitter:image" content="{{ page.og_image_url }}">{% endif %}
+
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "{{ page.structured_data_type | default(value='WebPage') }}",
+        "name": "{{ page.title }}",
+        "description": "{% if page.description %}{{ page.description }}{% endif %}",
+        {% if page.og_image_url %}"image": "{{ page.og_image_url }}",{% endif %}
+        "url": "{{ current_url | default(value=current_path) }}"
+    }
+    </script>
+    {% endif %}
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Modern CSS -->
+    <style>
+{% include "styles.css" %}
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% include "action_bar.html" %}
+
+    <nav class="header-nav">
+        <div class="header-nav-content">
+            <div class="nav-left">
+                <a href="/" class="site-logo">
+                    {% if logo_url %}
+                        <img src="{{ logo_url }}" 
+                             alt="{% if root_page_title %}{{ root_page_title }}{% else %}Doxyde{% endif %}" 
+                             class="logo-image"
+                             {% if logo_width %}style="width: {{ logo_width }};{% if logo_height %} height: {{ logo_height }};{% else %} height: auto;{% endif %}"{% elif logo_height %}style="height: {{ logo_height }}; width: auto;"{% endif %}>
+                    {% else %}
+                        {% if root_page_title %}{{ root_page_title }}{% elif page is defined and page.title %}{{ page.title }}{% else %}Doxyde{% endif %}
+                    {% endif %}
+                </a>
+            </div>
+            <div class="nav-right">
+                {% if user %}
+                    <span class="auth-info">
+                        Welcome, <strong>{{ user.username }}</strong>
+                    </span>
+                    <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
+                {% else %}
+                    <a href="/.login" class="btn btn-sm btn-primary">Login</a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <div class="main-container">
+        {% block main %}
+            <aside class="sidebar">
+                {% block sidebar %}{% endblock %}
+            </aside>
+            <main class="content">
+                {% block content %}{% endblock %}
+            </main>
+        {% endblock %}
+    </div>
+
+    <footer>
+        <p>&copy; 2025 {{ site_title | default(value="Doxyde") }}. Powered by <a href="https://github.com/jhiver/doxyde">Doxyde</a></p>
+    </footer>
+</body>
+</html>

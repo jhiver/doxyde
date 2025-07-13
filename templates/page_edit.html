@@ -1,0 +1,706 @@
+{% extends "base.html" %}
+
+{% block title %}Edit: {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<style>
+    .component-editor {
+        margin: var(--space-lg) 0;
+        padding: var(--space-lg);
+        background: var(--gray-50);
+        border: 1px solid var(--gray-200);
+        border-radius: var(--border-radius);
+    }
+    
+    .component-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: var(--space-md);
+        padding-bottom: var(--space-md);
+        border-bottom: 1px solid var(--gray-200);
+    }
+    
+    .component-type {
+        font-weight: 600;
+        color: var(--gray-700);
+        text-transform: capitalize;
+    }
+    
+    .component-position {
+        font-size: 0.875rem;
+        color: var(--gray-500);
+    }
+    
+    .form-group input[type="text"],
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 16px;
+        transition: border-color 0.15s ease-in-out;
+    }
+    
+    .form-group input[type="text"]:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #80bdff;
+        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+    }
+    
+    .form-group textarea {
+        min-height: 150px;
+        resize: vertical;
+        font-family: monospace;
+    }
+    
+    .form-group select {
+        cursor: pointer;
+    }
+    
+    .button {
+        padding: 8px 20px;
+        background: #007bff;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 16px;
+        transition: background-color 0.15s ease-in-out;
+    }
+    
+    .button:hover {
+        background: #0056b3;
+    }
+    
+    .button-success {
+        background: #28a745;
+    }
+    
+    .button-success:hover {
+        background: #218838;
+    }
+    
+    .button-danger {
+        background: #dc3545;
+    }
+    
+    .button-danger:hover {
+        background: #c82333;
+    }
+    
+    .button-secondary {
+        background: #6c757d;
+    }
+    
+    .button-secondary:hover {
+        background: #5a6268;
+    }
+    
+    .button-small {
+        padding: 5px 10px;
+        font-size: 14px;
+    }
+    
+    .draft-actions {
+        position: sticky;
+        top: 0;
+        background: #fff;
+        padding: 15px 0;
+        margin-bottom: 20px;
+        border-bottom: 2px solid #dee2e6;
+        z-index: 100;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+    
+    .draft-status {
+        margin-left: auto;
+        font-size: 14px;
+        color: #6c757d;
+    }
+    
+    .add-component-section {
+        margin: 30px 0;
+        padding: 15px 20px;
+        background: #e7f3ff;
+        border: 2px dashed #007bff;
+        border-radius: 8px;
+    }
+    
+    .add-component-section form {
+        margin: 0;
+    }
+    
+    .add-component-section select {
+        padding: 6px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    .add-component-section .button {
+        padding: 6px 16px;
+        font-size: 14px;
+    }
+    
+    .help-text {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-top: 5px;
+    }
+    
+    /* Template-specific styles */
+    .template-preview {
+        margin-top: 10px;
+        padding: 15px;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        background: white;
+    }
+    
+    .template-card {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .template-highlight {
+        background: #fff3cd;
+        border-left: 4px solid #ffc107;
+    }
+    
+    .template-quote {
+        font-style: italic;
+        border-left: 4px solid #6c757d;
+        padding-left: 20px;
+        color: #495057;
+    }
+    
+    .template-with_title h3 {
+        margin-top: 0;
+        margin-bottom: 10px;
+        color: #343a40;
+    }
+</style>
+<script>
+function submitComponentsForm(action) {
+    const form = document.getElementById('components-form');
+    const actionInput = form.querySelector('input[name="action"]');
+    actionInput.value = action;
+    form.submit();
+}
+
+function deleteComponent(componentId) {
+    Swal.fire({
+        title: 'Êtes-vous sûr ?',
+        text: "Cette action supprimera définitivement ce composant",
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#d33',
+        cancelButtonColor: '#3085d6',
+        confirmButtonText: 'Oui, supprimer',
+        cancelButtonText: 'Annuler'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            // First save all current component data
+            const form = document.getElementById('components-form');
+            const actionInput = form.querySelector('input[name="action"]');
+            actionInput.value = 'delete_component';
+            
+            // Add the component ID to delete
+            const deleteInput = document.createElement('input');
+            deleteInput.type = 'hidden';
+            deleteInput.name = 'delete_component_id';
+            deleteInput.value = componentId;
+            form.appendChild(deleteInput);
+            
+            // Submit the form
+            form.submit();
+        }
+    });
+}
+
+function addNewComponent() {
+    const addForm = document.getElementById('add-component-form');
+    const componentType = addForm.querySelector('select[name="component_type"]').value;
+    
+    // For all components, including image, just add an empty component
+    // The user can upload images after the component is created
+    let emptyContent = '';
+    switch(componentType) {
+        case 'text':
+        case 'markdown':
+        case 'html':
+        case 'code':
+            emptyContent = '';
+            break;
+        case 'image':
+            // Create empty image component with placeholder
+            emptyContent = JSON.stringify({
+                src: '',
+                alt: ''
+            });
+            break;
+        default:
+            emptyContent = '';
+    }
+    
+    // Update the content field in the add form
+    addForm.querySelector('input[name="content"]').value = emptyContent;
+    
+    // Submit the add component form
+    addForm.submit();
+}
+
+function uploadImageForComponent(componentId) {
+    // Create a hidden file input
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = 'image/*';
+    
+    fileInput.onchange = async function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Check file size (10MB max)
+        if (file.size > 10 * 1024 * 1024) {
+            alert('File is too large. Maximum size is 10MB.');
+            return;
+        }
+        
+        // Generate slug from filename
+        const slug = file.name
+            .replace(/\.[^/.]+$/, '') // Remove extension
+            .toLowerCase()
+            .replace(/[^a-z0-9-_]/g, '-') // Replace invalid chars
+            .replace(/-+/g, '-') // Remove multiple dashes
+            .replace(/^-|-$/g, ''); // Remove leading/trailing dashes
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('slug', slug);
+        formData.append('title', file.name);
+        formData.append('description', '');
+        formData.append('component_id', componentId);
+        
+        // Show loading state
+        const uploadArea = document.querySelector(`#component-${componentId} .image-upload-area`);
+        if (uploadArea) {
+            uploadArea.innerHTML = '<p style="color: #007bff;">Uploading image...</p>';
+        }
+        
+        try {
+            // Upload the image
+            const response = await fetch('./.upload-component-image', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                // Update the component content
+                updateImageComponent(componentId, result);
+            } else {
+                alert('Failed to upload image. Please try again.');
+                location.reload();
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('Failed to upload image. Please try again.');
+            location.reload();
+        }
+    };
+    
+    // Trigger file selection
+    fileInput.click();
+}
+
+function changeImage(componentId) {
+    // Same as upload, just for existing images
+    uploadImageForComponent(componentId);
+}
+
+function updateImageSlug(componentId, newSlug) {
+    // Validate slug - only allow lowercase letters, numbers, hyphens, and underscores
+    const validSlug = newSlug.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    
+    // Update the input value with validated slug
+    const slugInput = document.getElementById(`slug_${componentId}`);
+    if (slugInput && slugInput.value !== validSlug) {
+        slugInput.value = validSlug;
+    }
+    
+    // Update the hidden content input
+    const contentInput = document.getElementById(`content_${componentId}`);
+    if (contentInput) {
+        try {
+            const content = JSON.parse(contentInput.value);
+            content.slug = validSlug;
+            contentInput.value = JSON.stringify(content);
+            
+            // Update the image preview URL
+            const imgPreview = document.querySelector(`#component-${componentId} .image-preview img`);
+            if (imgPreview) {
+                imgPreview.src = `/${validSlug}.${content.format}`;
+            }
+        } catch (e) {
+            console.error('Failed to update slug:', e);
+        }
+    }
+}
+
+function updateImageDisplaySize(componentId) {
+    const widthInput = document.getElementById(`display_width_${componentId}`);
+    const heightInput = document.getElementById(`display_height_${componentId}`);
+    const contentInput = document.getElementById(`content_${componentId}`);
+    
+    if (contentInput) {
+        try {
+            const content = JSON.parse(contentInput.value);
+            
+            // Store display dimensions (empty string means auto)
+            content.display_width = widthInput.value.trim();
+            content.display_height = heightInput.value.trim();
+            
+            contentInput.value = JSON.stringify(content);
+            
+            // Update the preview image style if needed
+            const imgPreview = document.querySelector(`#component-${componentId} .image-preview img`);
+            if (imgPreview) {
+                if (content.display_width) {
+                    imgPreview.style.width = content.display_width;
+                } else {
+                    imgPreview.style.width = '';
+                }
+                
+                if (content.display_height) {
+                    imgPreview.style.height = content.display_height;
+                } else {
+                    imgPreview.style.height = '';
+                }
+            }
+        } catch (e) {
+            console.error('Failed to update display size:', e);
+        }
+    }
+}
+
+function updateImageComponent(componentId, imageData) {
+    // Update the hidden input with new image data
+    const contentInput = document.getElementById(`content_${componentId}`);
+    if (contentInput) {
+        const newContent = {
+            slug: imageData.slug,
+            title: imageData.title || imageData.slug,
+            description: imageData.description || '',
+            format: imageData.format,
+            file_path: imageData.file_path,
+            original_name: imageData.original_name,
+            mime_type: imageData.mime_type,
+            size: imageData.size,
+            width: imageData.width,
+            height: imageData.height
+        };
+        contentInput.value = JSON.stringify(newContent);
+        
+        // Update the UI to show the uploaded image
+        const componentEditor = document.getElementById(`component-${componentId}`);
+        const contentGroup = componentEditor.querySelector('.form-group:last-child');
+        
+        contentGroup.innerHTML = `
+            <label for="content_${componentId}">Content</label>
+            <div class="image-preview" style="margin-bottom: 10px;">
+                <img src="/${imageData.slug}.${imageData.format}" 
+                     alt="${imageData.description || imageData.title}"
+                     style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
+            </div>
+            <input type="hidden" 
+                   id="content_${componentId}" 
+                   name="component_contents" 
+                   value='${JSON.stringify(newContent)}'>
+            <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                <div style="margin: 0 0 10px 0;">
+                    <label for="slug_${componentId}" style="font-weight: bold; display: inline-block; width: 100px;">Slug:</label>
+                    <input type="text" 
+                           id="slug_${componentId}" 
+                           value="${imageData.slug}" 
+                           onchange="updateImageSlug(${componentId}, this.value)"
+                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                    <span style="color: #6c757d; font-size: 12px;">.${imageData.format}</span>
+                </div>
+                <div style="margin: 0 0 10px 0;">
+                    <label style="font-weight: bold; display: inline-block; width: 100px;">Display Size:</label>
+                    <input type="text" 
+                           id="display_width_${componentId}" 
+                           value="${newContent.display_width || ''}" 
+                           placeholder="auto"
+                           onchange="updateImageDisplaySize(${componentId})"
+                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
+                    <span style="color: #6c757d; font-size: 14px;"> × </span>
+                    <input type="text" 
+                           id="display_height_${componentId}" 
+                           value="${newContent.display_height || ''}" 
+                           placeholder="auto"
+                           onchange="updateImageDisplaySize(${componentId})"
+                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
+                    <span style="color: #6c757d; font-size: 12px; margin-left: 10px;">CSS values (px, %, rem, auto)</span>
+                </div>
+                <p style="margin: 0 0 5px 0;"><strong>Format:</strong> ${imageData.format}</p>
+                <p style="margin: 0 0 5px 0;"><strong>Size:</strong> ${(imageData.size / 1024).toFixed(2)} KB</p>
+                ${imageData.width && imageData.height ? `<p style="margin: 0;"><strong>Original Dimensions:</strong> ${imageData.width} × ${imageData.height}</p>` : ''}
+            </div>
+            <button type="button" 
+                    class="button button-secondary button-small" 
+                    style="margin-top: 10px;"
+                    onclick="changeImage(${componentId})">
+                Change Image
+            </button>
+        `;
+        
+        // Auto-save the draft
+        submitComponentsForm('save_draft');
+    }
+}
+
+function moveComponent(componentId, direction) {
+    // Save all current component data and move the component
+    const form = document.getElementById('components-form');
+    const actionInput = form.querySelector('input[name="action"]');
+    actionInput.value = 'move_component';
+    
+    // Add the component ID and direction
+    const moveIdInput = document.createElement('input');
+    moveIdInput.type = 'hidden';
+    moveIdInput.name = 'move_component_id';
+    moveIdInput.value = componentId;
+    form.appendChild(moveIdInput);
+    
+    const directionInput = document.createElement('input');
+    directionInput.type = 'hidden';
+    directionInput.name = 'move_direction';
+    directionInput.value = direction;
+    form.appendChild(directionInput);
+    
+    // Submit the form
+    form.submit();
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="edit-mode">
+    <h1>Edit Page: {{ page.title }}</h1>
+    
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
+            {% else %}
+                {{ crumb.title }}
+            {% endif %}
+        {% endfor %}
+        / <strong>Edit</strong>
+    </nav>
+    {% endif %}
+    
+    <!-- Draft Actions -->
+    <div class="draft-actions">
+        <button type="button" class="button" onclick="submitComponentsForm('save_draft')">Save Draft</button>
+        <button type="button" class="button button-success" onclick="submitComponentsForm('publish_draft')">Save &amp; Publish</button>
+        
+        <form method="post" style="display: inline;">
+            <input type="hidden" name="action" value="discard_draft">
+            <button type="submit" class="button button-danger" 
+                    onclick="return confirm('Are you sure you want to discard all draft changes?')">Discard Draft</button>
+        </form>
+        
+        <a href="{{ current_path }}" class="button button-secondary">Cancel</a>
+        
+        <span class="draft-status">Editing draft version</span>
+    </div>
+    
+    <!-- Components Form -->
+    <form method="post" id="components-form">
+        <input type="hidden" name="action" value="save_draft">
+        
+        <!-- Components -->
+        <div class="components-list">
+            {% if components %}
+                {% for component in components %}
+                <div class="component-editor" id="component-{{ component.id }}">
+                    <div class="component-header">
+                        <span class="component-type">{{ component.component_type|title }} Component</span>
+                        <div>
+                            <span class="component-position">Position: {{ component.position }}</span>
+                            {% if not loop.first %}
+                            <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'up')" title="Move Up">↑</button>
+                            {% endif %}
+                            {% if not loop.last %}
+                            <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'down')" title="Move Down">↓</button>
+                            {% endif %}
+                            <button type="button" class="button button-danger button-small" onclick="deleteComponent({{ component.id }})">Delete</button>
+                        </div>
+                    </div>
+                    
+                    <input type="hidden" name="component_ids" value="{{ component.id }}">
+                    <input type="hidden" name="component_types" value="{{ component.component_type }}">
+                    
+                    <div class="form-group">
+                        <label for="title_{{ component.id }}">Title (optional)</label>
+                        <input type="text" 
+                               id="title_{{ component.id }}" 
+                               name="component_titles" 
+                               value="{{ component.title|default(value='') }}"
+                               placeholder="Enter component title...">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="template_{{ component.id }}">Display Template</label>
+                        <select id="template_{{ component.id }}" name="component_templates">
+                            {% set templates = get_component_templates(type=component.component_type) %}
+                            {% for template in templates %}
+                                <option value="{{ template }}" {% if component.template == template %}selected{% endif %}>
+                                    {{ template | replace(from="_", to=" ") | title }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="content_{{ component.id }}">Content</label>
+                        {% if component.component_type == "text" or component.component_type == "markdown" %}
+                            <textarea id="content_{{ component.id }}" 
+                                      name="component_contents" 
+                                      required>{{ component.content.text|default(value='') }}</textarea>
+                            <div class="help-text">
+                                {% if component.component_type == "markdown" %}
+                                Markdown formatting is supported
+                                {% else %}
+                                Plain text or HTML
+                                {% endif %}
+                            </div>
+                        {% elif component.component_type == "html" %}
+                            <textarea id="content_{{ component.id }}" 
+                                      name="component_contents" 
+                                      required>{{ component.content.html|default(value='') }}</textarea>
+                            <div class="help-text">Raw HTML content</div>
+                        {% elif component.component_type == "code" %}
+                            <textarea id="content_{{ component.id }}" 
+                                      name="component_contents" 
+                                      required>{{ component.content.code|default(value='') }}</textarea>
+                            <div class="help-text">Code content</div>
+                        {% elif component.component_type == "image" %}
+                            {% if component.content.slug %}
+                                <!-- New format with uploaded image -->
+                                <div class="image-preview" style="margin-bottom: 10px;">
+                                    <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
+                                         alt="{{ component.content.description|default(value=component.content.title) }}"
+                                         style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
+                                </div>
+                                <input type="hidden" 
+                                       id="content_{{ component.id }}" 
+                                       name="component_contents" 
+                                       value="{{ component.content|json_encode }}">
+                                <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
+                                    <div style="margin: 0 0 10px 0;">
+                                        <label for="slug_{{ component.id }}" style="font-weight: bold; display: inline-block; width: 100px;">Slug:</label>
+                                        <input type="text" 
+                                               id="slug_{{ component.id }}" 
+                                               value="{{ component.content.slug }}" 
+                                               onchange="updateImageSlug({{ component.id }}, this.value)"
+                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
+                                        <span style="color: #6c757d; font-size: 12px;">.{{ component.content.format }}</span>
+                                    </div>
+                                    <div style="margin: 0 0 10px 0;">
+                                        <label style="font-weight: bold; display: inline-block; width: 100px;">Display Size:</label>
+                                        <input type="text" 
+                                               id="display_width_{{ component.id }}" 
+                                               value="{{ component.content.display_width|default(value='') }}" 
+                                               placeholder="auto"
+                                               onchange="updateImageDisplaySize({{ component.id }})"
+                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
+                                        <span style="color: #6c757d; font-size: 14px;"> × </span>
+                                        <input type="text" 
+                                               id="display_height_{{ component.id }}" 
+                                               value="{{ component.content.display_height|default(value='') }}" 
+                                               placeholder="auto"
+                                               onchange="updateImageDisplaySize({{ component.id }})"
+                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
+                                        <span style="color: #6c757d; font-size: 12px; margin-left: 10px;">CSS values (px, %, rem, auto)</span>
+                                    </div>
+                                    <p style="margin: 0 0 5px 0;"><strong>Format:</strong> {{ component.content.format }}</p>
+                                    <p style="margin: 0 0 5px 0;"><strong>Size:</strong> {{ (component.content.size / 1024)|round(precision=2) }} KB</p>
+                                    {% if component.content.width and component.content.height %}
+                                    <p style="margin: 0;"><strong>Original Dimensions:</strong> {{ component.content.width }} × {{ component.content.height }}</p>
+                                    {% endif %}
+                                </div>
+                                <button type="button" 
+                                        class="button button-secondary button-small" 
+                                        style="margin-top: 10px;"
+                                        onclick="changeImage({{ component.id }})">
+                                    Change Image
+                                </button>
+                            {% else %}
+                                <!-- No image uploaded yet -->
+                                <div class="image-upload-area" style="border: 2px dashed #007bff; border-radius: 8px; padding: 20px; text-align: center; background: #f8f9fa;">
+                                    <p style="margin: 0 0 10px 0; color: #6c757d;">No image uploaded yet</p>
+                                    <input type="hidden" 
+                                           id="content_{{ component.id }}" 
+                                           name="component_contents" 
+                                           value="{{ component.content|json_encode }}">
+                                    <button type="button" 
+                                            class="button" 
+                                            onclick="uploadImageForComponent({{ component.id }})">
+                                        Upload Image
+                                    </button>
+                                    <div class="help-text" style="margin-top: 10px;">
+                                        Click to upload an image file (JPG, PNG, GIF, WebP, SVG)
+                                    </div>
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <textarea id="content_{{ component.id }}" 
+                                      name="component_contents" 
+                                      required>{{ component.content|json_encode }}</textarea>
+                            <div class="help-text">JSON content</div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                <p style="color: #6c757d; text-align: center; margin: 40px 0;">
+                    No components yet. Add your first component below!
+                </p>
+            {% endif %}
+        </div>
+    </form>
+    
+    <!-- Add Component Section -->
+    <div class="add-component-section">
+        <form method="post" id="add-component-form" style="display: flex; align-items: center; gap: 15px;">
+            <input type="hidden" name="action" value="add_component">
+            <input type="hidden" name="content" value="">
+            
+            <label for="new_component_type" style="margin: 0; font-weight: 600;">Add Component:</label>
+            <select id="new_component_type" name="component_type" required style="flex: 1; max-width: 200px;">
+                <option value="text">Text</option>
+                <option value="markdown">Markdown</option>
+                <option value="html">HTML</option>
+                <option value="code">Code</option>
+                <option value="image">Image</option>
+            </select>
+            
+            <button type="button" class="button" onclick="addNewComponent()">Add</button>
+        </form>
+    </div>
+    
+</div>
+{% endblock %}
