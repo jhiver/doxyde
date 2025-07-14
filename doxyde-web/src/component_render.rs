@@ -70,14 +70,39 @@ fn process_markdown_placeholders(html: &str) -> String {
             // Convert to HTML
             let html_content = markdown_to_html(&markdown);
 
-            // Find the corresponding content to replace
-            if let Some(content_start) = result[attr_start + end..].find('>') {
-                let content_start_abs = attr_start + end + content_start + 1;
-                if let Some(content_end) = result[content_start_abs..].find("</div>") {
-                    let content_end_abs = content_start_abs + content_end;
-                    // Replace the content
-                    result.replace_range(content_start_abs..content_end_abs, &html_content);
-                }
+            // Find the entire div element to replace
+            // We need to find where the div starts (before data-markdown)
+            let div_start = result[..start].rfind("<div").unwrap_or(0);
+            
+            // Find the corresponding closing div
+            if let Some(div_end_offset) = result[attr_start + end..].find("</div>") {
+                let div_end = attr_start + end + div_end_offset + 6; // +6 for "</div>"
+                
+                // Extract the div's classes if any
+                let div_content = &result[div_start..start];
+                let class_attr = if let Some(class_start) = div_content.find("class=\"") {
+                    let class_start = class_start + 7;
+                    if let Some(class_end) = div_content[class_start..].find('"') {
+                        Some(&div_content[class_start..class_start + class_end])
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+                
+                // Build the replacement div without data-markdown attribute
+                let replacement = if let Some(classes) = class_attr {
+                    format!(r#"<div class="{}">{}</div>"#, classes, html_content)
+                } else {
+                    format!(r#"<div>{}</div>"#, html_content)
+                };
+                
+                // Replace the entire div
+                result.replace_range(div_start..div_end, &replacement);
+            } else {
+                // If we can't find the closing div, break to avoid infinite loop
+                break;
             }
         } else {
             break;

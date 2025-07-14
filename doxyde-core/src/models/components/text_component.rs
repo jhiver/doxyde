@@ -16,11 +16,14 @@
 
 use crate::models::component::Component;
 use crate::models::component_trait::{escape_html, extract_text, ComponentRenderer};
+use crate::models::style_utils::{style_options_to_classes, style_options_to_css};
+use serde_json::Value;
 
 pub struct TextComponent {
     pub id: Option<i64>,
     pub text: String,
     pub title: Option<String>,
+    pub style_options: Option<Value>,
 }
 
 impl TextComponent {
@@ -29,6 +32,7 @@ impl TextComponent {
             id: component.id,
             text: extract_text(&component.content, "text"),
             title: component.title.clone(),
+            style_options: component.style_options.clone(),
         }
     }
 }
@@ -37,31 +41,52 @@ impl ComponentRenderer for TextComponent {
     fn render(&self, template: &str) -> String {
         let escaped_text = escape_html(&self.text);
 
+        // Get style classes and inline styles
+        let style_classes = style_options_to_classes(self.style_options.as_ref());
+        let inline_styles = style_options_to_css(self.style_options.as_ref());
+
         match template {
             "default" => {
-                format!(r#"<div class="text-component">{}</div>"#, escaped_text)
+                let mut classes = vec!["text-component"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+
+                format!(
+                    r#"<div class="{}"{}>{}</div>"#,
+                    class_str, inline_styles, escaped_text
+                )
             }
             "with_title" => {
+                let mut classes = vec!["text-component", "with-title"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+
                 if let Some(ref title) = self.title {
                     format!(
-                        r#"<div class="text-component with-title">
+                        r#"<div class="{}"{}>
     <h3 class="component-title">{}</h3>
     <div class="component-content">{}</div>
 </div>"#,
+                        class_str,
+                        inline_styles,
                         escape_html(title),
                         escaped_text
                     )
                 } else {
                     format!(
-                        r#"<div class="text-component with-title">
+                        r#"<div class="{}"{}>
     <div class="component-content">{}</div>
 </div>"#,
-                        escaped_text
+                        class_str, inline_styles, escaped_text
                     )
                 }
             }
             "card" => {
-                let mut html = String::from(r#"<div class="text-component card">"#);
+                let mut classes = vec!["text-component", "card"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+
+                let mut html = format!(r#"<div class="{}"{}>"#, class_str, inline_styles);
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -80,7 +105,11 @@ impl ComponentRenderer for TextComponent {
                 html
             }
             "highlight" => {
-                let mut html = String::from(r#"<div class="text-component highlight">"#);
+                let mut classes = vec!["text-component", "highlight"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+
+                let mut html = format!(r#"<div class="{}"{}>"#, class_str, inline_styles);
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -97,7 +126,11 @@ impl ComponentRenderer for TextComponent {
                 html
             }
             "quote" => {
-                let mut html = String::from(r#"<blockquote class="text-component quote">"#);
+                let mut classes = vec!["text-component", "quote"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+
+                let mut html = format!(r#"<blockquote class="{}"{}>"#, class_str, inline_styles);
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -109,6 +142,27 @@ impl ComponentRenderer for TextComponent {
                     r#"
     <div class="component-content">{}</div>
 </blockquote>"#,
+                    escaped_text
+                ));
+                html
+            }
+            "hero" => {
+                let mut classes = vec!["text-component", "hero"];
+                classes.extend(style_classes.iter().map(|s| s.as_str()));
+                let class_str = classes.join(" ");
+                
+                let mut html = format!(r#"<div class="{}"{}>"#, class_str, inline_styles);
+                if let Some(ref title) = self.title {
+                    html.push_str(&format!(
+                        r#"
+    <h1 class="hero-title">{}</h1>"#,
+                        escape_html(title)
+                    ));
+                }
+                html.push_str(&format!(
+                    r#"
+    <div class="hero-content">{}</div>
+</div>"#,
                     escaped_text
                 ));
                 html
@@ -125,6 +179,7 @@ impl ComponentRenderer for TextComponent {
             "card",
             "highlight",
             "quote",
+            "hero",
             "hidden",
         ]
     }
@@ -150,6 +205,7 @@ mod tests {
             id: Some(1),
             text: "Hello, world!".to_string(),
             title: None,
+            style_options: None,
         };
 
         let html = text_comp.render("default");
@@ -162,6 +218,7 @@ mod tests {
             id: Some(1),
             text: "Content here".to_string(),
             title: Some("My Title".to_string()),
+            style_options: None,
         };
 
         let html = text_comp.render("with_title");
@@ -176,6 +233,7 @@ mod tests {
             id: Some(1),
             text: "Hello <script>alert('xss')</script>".to_string(),
             title: None,
+            style_options: None,
         };
 
         let html = text_comp.render("default");
@@ -189,11 +247,65 @@ mod tests {
             id: Some(1),
             text: "Test".to_string(),
             title: None,
+            style_options: None,
         };
 
         let templates = text_comp.get_available_templates();
-        assert_eq!(templates.len(), 6);
+        assert_eq!(templates.len(), 7);
         assert!(templates.contains(&"default"));
         assert!(templates.contains(&"with_title"));
+        assert!(templates.contains(&"hero"));
+    }
+
+    #[test]
+    fn test_render_with_style_options() {
+        let text_comp = TextComponent {
+            id: Some(1),
+            text: "Styled text".to_string(),
+            title: None,
+            style_options: Some(json!({
+                "background": {
+                    "type": "color",
+                    "value": "#ff0000"
+                },
+                "effects": {
+                    "shadow": true
+                }
+            })),
+        };
+
+        let html = text_comp.render("default");
+        assert!(html.contains(r#"style="background-color: #ff0000""#));
+        assert!(html.contains("component-shadow"));
+    }
+    
+    #[test]
+    fn test_text_component_render_hero() {
+        let text_comp = TextComponent {
+            id: Some(1),
+            text: "Hero content here".to_string(),
+            title: Some("Welcome to Our Site".to_string()),
+            style_options: None,
+        };
+
+        let html = text_comp.render("hero");
+        assert!(html.contains("text-component hero"));
+        assert!(html.contains(r#"<h1 class="hero-title">Welcome to Our Site</h1>"#));
+        assert!(html.contains(r#"<div class="hero-content">Hero content here</div>"#));
+    }
+    
+    #[test]
+    fn test_text_component_render_hero_without_title() {
+        let text_comp = TextComponent {
+            id: Some(1),
+            text: "Just hero content".to_string(),
+            title: None,
+            style_options: None,
+        };
+
+        let html = text_comp.render("hero");
+        assert!(html.contains("text-component hero"));
+        assert!(!html.contains("hero-title"));
+        assert!(html.contains(r#"<div class="hero-content">Just hero content</div>"#));
     }
 }

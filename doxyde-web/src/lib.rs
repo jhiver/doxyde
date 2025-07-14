@@ -28,11 +28,13 @@ pub mod markdown;
 pub mod routes;
 pub mod state;
 pub mod template_context;
+pub mod template_utils;
 pub mod templates;
 pub mod uploads;
 
 #[cfg(test)]
 pub mod test_helpers;
+
 
 pub use config::Config;
 pub use state::AppState;

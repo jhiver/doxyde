@@ -135,14 +135,10 @@ impl Page {
     }
 
     pub fn validate_template(&self) -> Result<(), String> {
-        const VALID_TEMPLATES: &[&str] = &["default", "full_width", "landing", "blog"];
-
-        if !VALID_TEMPLATES.contains(&self.template.as_str()) {
-            return Err(format!(
-                "Invalid template '{}'. Valid templates are: {}",
-                self.template,
-                VALID_TEMPLATES.join(", ")
-            ));
+        // Since templates are now dynamic (discovered from files),
+        // we only validate that a template is specified
+        if self.template.trim().is_empty() {
+            return Err("Template cannot be empty".to_string());
         }
 
         Ok(())
@@ -578,7 +574,14 @@ mod tests {
 
     #[test]
     fn test_validate_template_valid() {
-        let valid_templates = vec!["default", "full_width", "landing", "blog"];
+        let valid_templates = vec![
+            "default",
+            "full_width",
+            "landing",
+            "blog",
+            "custom_template",
+            "my_special_template",
+        ];
 
         for template in valid_templates {
             let mut page = Page::new(1, "test".to_string(), "Test".to_string());
@@ -594,13 +597,19 @@ mod tests {
     #[test]
     fn test_validate_template_invalid() {
         let mut page = Page::new(1, "test".to_string(), "Test".to_string());
-        page.template = "custom_template".to_string();
+        page.template = "".to_string();
 
         let result = page.validate_template();
         assert!(result.is_err());
         let error = result.unwrap_err();
-        assert!(error.contains("Invalid template"));
-        assert!(error.contains("default, full_width, landing, blog"));
+        assert!(error.contains("Template cannot be empty"));
+
+        // Test with whitespace only - should fail as it's trimmed
+        page.template = "   ".to_string();
+        let result = page.validate_template();
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.contains("Template cannot be empty"));
     }
 
     #[test]

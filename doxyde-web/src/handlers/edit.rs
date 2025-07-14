@@ -56,6 +56,8 @@ pub struct SaveDraftForm {
     pub component_titles: Vec<String>,
     pub component_templates: Vec<String>,
     pub component_contents: Vec<String>,
+    #[serde(default)]
+    pub component_style_options: Vec<String>,
 }
 
 /// Display page content edit form (components only)
@@ -303,6 +305,12 @@ pub async fn add_component_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    // Normalize positions after adding component
+    component_repo
+        .normalize_positions(draft_version.id.unwrap())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // Redirect back to edit page
     let redirect_path = build_page_path(&state, &page).await?;
     let edit_path = if redirect_path == "/" {
@@ -527,6 +535,7 @@ pub async fn update_component_handler(
             content,
             form.title.clone(),
             form.template,
+            None, // TODO: Add style options support
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -601,7 +610,7 @@ pub async fn save_draft_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create a draft version
-    let _draft_version = get_or_create_draft(
+    let draft_version = get_or_create_draft(
         &state.db,
         page.id.unwrap(),
         Some(user.user.username.clone()),
@@ -609,7 +618,32 @@ pub async fn save_draft_handler(
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Update each component
+    // Get all existing components in the draft
+    let existing_components = component_repo
+        .list_by_page_version(draft_version.id.unwrap())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Create a set of submitted component IDs for quick lookup
+    let submitted_ids: std::collections::HashSet<i64> = form.component_ids.iter().cloned().collect();
+
+    // Delete components that exist in draft but weren't submitted (they were deleted in UI)
+    for component in &existing_components {
+        if let Some(component_id) = component.id {
+            if !submitted_ids.contains(&component_id) {
+                tracing::debug!(
+                    component_id = component_id,
+                    "Deleting component not present in form submission"
+                );
+                component_repo
+                    .delete(component_id)
+                    .await
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            }
+        }
+    }
+
+    // Update each submitted component
     for i in 0..form.component_ids.len() {
         let component_id = form.component_ids[i];
         let component_type = &form.component_types[i];
@@ -650,12 +684,36 @@ pub async fn save_draft_handler(
             }),
         };
 
+        // Parse style options
+        let style_options = if i < form.component_style_options.len() {
+            let style_str = &form.component_style_options[i];
+            if !style_str.is_empty() {
+                serde_json::from_str::<serde_json::Value>(style_str).ok()
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         // Update the component
         component_repo
-            .update_content(component_id, content, title, template.clone())
+            .update_content(
+                component_id,
+                content,
+                title,
+                template.clone(),
+                style_options,
+            )
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     }
+
+    // Normalize positions after all updates and deletions
+    component_repo
+        .normalize_positions(draft_version.id.unwrap())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect back to edit page
     let redirect_path = build_page_path(&state, &page).await?;
@@ -779,4 +837,189 @@ pub async fn move_component_handler(
         format!("{}/.edit", redirect_path)
     };
     Ok(Redirect::to(&edit_path).into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_helpers::{create_test_app_state, create_test_session, create_test_user};
+    use doxyde_core::{PageVersion, SiteUser};
+    use doxyde_db::repositories::{
+        ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        SiteUserRepository,
+    };
+
+    #[tokio::test]
+    async fn test_save_and_publish_with_deleted_components() -> anyhow::Result<()> {
+        // Create test app state which includes creating the schema
+        let test_state = create_test_app_state().await?;
+        let pool = test_state.db.clone();
+        // Setup test data
+        let site_repo = SiteRepository::new(pool.clone());
+        let page_repo = PageRepository::new(pool.clone());
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let component_repo = ComponentRepository::new(pool.clone());
+        let site_user_repo = SiteUserRepository::new(pool.clone());
+
+        // Create a site
+        let site = Site::new("localhost:3000".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        // Get the root page that was created with the site
+        let root_page = page_repo.get_root_page(site_id).await?.unwrap();
+        let page_id = root_page.id.unwrap();
+
+        // Create an initial published version with 3 components
+        let published_version = PageVersion::new(page_id, 1, Some("test-user".to_string()));
+        let mut published_version_copy = published_version.clone();
+        published_version_copy.is_published = true;
+        let published_version_id = version_repo.create(&published_version_copy).await?;
+
+        // Add 3 components to the published version
+        let comp1 = Component::new(
+            published_version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Component 1"}),
+        );
+        let _comp1_id = component_repo.create(&comp1).await?;
+
+        let comp2 = Component::new(
+            published_version_id,
+            "text".to_string(),
+            1,
+            serde_json::json!({"text": "Component 2"}),
+        );
+        let _comp2_id = component_repo.create(&comp2).await?;
+
+        let comp3 = Component::new(
+            published_version_id,
+            "text".to_string(),
+            2,
+            serde_json::json!({"text": "Component 3"}),
+        );
+        let _comp3_id = component_repo.create(&comp3).await?;
+
+        // Create a draft version by copying components
+        let draft_version = PageVersion::new(page_id, 2, Some("test-user".to_string()));
+        let draft_version_id = version_repo.create(&draft_version).await?;
+
+        // Copy components to draft
+        let draft_comp1 = Component::new(
+            draft_version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Component 1"}),
+        );
+        let draft_comp1_id = component_repo.create(&draft_comp1).await?;
+
+        let draft_comp2 = Component::new(
+            draft_version_id,
+            "text".to_string(),
+            1,
+            serde_json::json!({"text": "Component 2"}),
+        );
+        let draft_comp2_id = component_repo.create(&draft_comp2).await?;
+
+        let draft_comp3 = Component::new(
+            draft_version_id,
+            "text".to_string(),
+            2,
+            serde_json::json!({"text": "Component 3"}),
+        );
+        let draft_comp3_id = component_repo.create(&draft_comp3).await?;
+
+        // Create a user with edit permissions
+        let user = create_test_user(&pool, "editor", "editor@test.com", false).await?;
+        let site_user = SiteUser::new(site_id, user.id.unwrap(), SiteRole::Editor);
+        site_user_repo.create(&site_user).await?;
+
+        // Use the test app state
+        let app_state = test_state;
+
+        // Simulate form submission where component 2 is deleted
+        // (only components 1 and 3 are submitted)
+        let form = SaveDraftForm {
+            component_ids: vec![draft_comp1_id, draft_comp3_id],
+            component_types: vec!["text".to_string(), "text".to_string()],
+            component_titles: vec!["".to_string(), "".to_string()],
+            component_templates: vec!["default".to_string(), "default".to_string()],
+            component_contents: vec!["Component 1 Updated".to_string(), "Component 3 Updated".to_string()],
+            component_style_options: vec![],
+        };
+
+        // Use the root page
+        let page = root_page;
+
+        // Create session for current user
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
+
+        // Create current user
+        let current_user = CurrentUser { user, session };
+
+        // Get the site object
+        let site = site_repo.find_by_id(site_id).await?.unwrap();
+
+        // Call save_draft_handler (this is where the bug was)
+        let result = save_draft_handler(
+            app_state.clone(),
+            site.clone(),
+            page.clone(),
+            current_user.clone(),
+            Form(form),
+        )
+        .await;
+
+        assert!(result.is_ok(), "save_draft_handler should succeed");
+
+        // Check that component 2 was deleted from the draft (bug is fixed)
+        let draft_components = component_repo.list_by_page_version(draft_version_id).await?;
+        assert_eq!(
+            draft_components.len(),
+            2,
+            "After fix: deleted component should be removed from draft"
+        );
+
+        // The second component should not be there anymore
+        let comp2_still_exists = draft_components
+            .iter()
+            .any(|c| c.id == Some(draft_comp2_id));
+        assert!(
+            !comp2_still_exists,
+            "After fix: component 2 should be deleted from draft"
+        );
+
+        // Now publish the draft
+        let publish_result = publish_draft_handler(app_state, site, page, current_user).await;
+        assert!(publish_result.is_ok(), "publish_draft_handler should succeed");
+
+        // Get the new published version components
+        let new_published_id = version_repo
+            .get_published(page_id)
+            .await?
+            .unwrap()
+            .id
+            .unwrap();
+        let published_components = component_repo.list_by_page_version(new_published_id).await?;
+
+        // Should have exactly 2 components after publishing
+        assert_eq!(
+            published_components.len(),
+            2,
+            "Published version should have exactly 2 components"
+        );
+
+        // Verify the components are the correct ones
+        let has_comp1 = published_components
+            .iter()
+            .any(|c| c.content["text"] == "Component 1 Updated");
+        let has_comp3 = published_components
+            .iter()
+            .any(|c| c.content["text"] == "Component 3 Updated");
+
+        assert!(has_comp1, "Component 1 should be in published version");
+        assert!(has_comp3, "Component 3 should be in published version");
+
+        Ok(())
+    }
 }

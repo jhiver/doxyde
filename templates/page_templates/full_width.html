@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - {{ super() }}{% endblock %}
+
+{% block main %}
+<main class="content-full-width">
+    <article>
+        {% if breadcrumbs and breadcrumbs|length > 1 %}
+        <nav aria-label="breadcrumb" class="breadcrumb">
+            {% for crumb in breadcrumbs %}
+                {% if not loop.last %}
+                    <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+                    <span class="breadcrumb-separator">›</span>
+                {% else %}
+                    <span class="text-muted">{{ crumb.title }}</span>
+                {% endif %}
+            {% endfor %}
+        </nav>
+        {% endif %}
+
+        <div class="page-content">
+            {% for component in components %}
+                {{ render_component(component=component) | safe }}
+            {% endfor %}
+        </div>
+    </article>
+</main>
+{% endblock %}

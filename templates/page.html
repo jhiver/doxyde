@@ -2,66 +2,62 @@
 
 {% block title %}{{ page.title }} - {{ super() }}{% endblock %}
 
-{% block sidebar %}
-    {% if navigation_levels %}
-        {% for level in navigation_levels %}
-        <div class="sidebar-card">
-            <div class="sidebar-card-header">
-                <h3>{{ level.title }}</h3>
-            </div>
-            <div class="sidebar-card-body">
-                <ul class="sidebar-nav">
-                {% for page_item in level.pages %}
-                    <li>
-                        {% if page_item.is_current_page %}
-                            <span class="current-page">{{ page_item.title }}</span>
-                        {% else %}
-                            <a href="{{ page_item.url }}"{% if page_item.is_active %} class="active-path"{% endif %}>
-                                {{ page_item.title }}
-                            </a>
-                        {% endif %}
-                    </li>
-                {% endfor %}
-                </ul>
-            </div>
-        </div>
-        {% endfor %}
-    {% elif children %}
-        <!-- Fallback for backward compatibility -->
-        <div class="sidebar-card">
-            <div class="sidebar-card-header">
-                <h3>{{ page.title }}</h3>
-            </div>
-            <div class="sidebar-card-body">
-                <ul class="sidebar-nav">
-                {% for child in children %}
-                    <li><a href="{{ child.url }}">{{ child.title }}</a></li>
-                {% endfor %}
-                </ul>
-            </div>
-        </div>
-    {% endif %}
-{% endblock %}
-
 {% block content %}
 <article>
-    {% if breadcrumbs and breadcrumbs|length > 1 %}
-    <nav aria-label="breadcrumb" class="breadcrumb">
+    <h1>{{ page.title }}</h1>
+    
+    {% if breadcrumbs %}
+    <nav aria-label="breadcrumb">
         {% for crumb in breadcrumbs %}
             {% if not loop.last %}
-                <a href="{{ crumb.url }}">{{ crumb.title }}</a>
-                <span class="breadcrumb-separator">›</span>
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
             {% else %}
-                <span class="text-muted">{{ crumb.title }}</span>
+                {{ crumb.title }}
             {% endif %}
         {% endfor %}
     </nav>
     {% endif %}
 
-    <div class="page-content">
+    <div class="content">
+        {% if user %}
+        <div style="float: right; margin-bottom: 10px;">
+            <a href="{{ request_path | default(value="/") }}/.edit" style="text-decoration: none; color: #0066cc;">✏️ Edit Page</a>
+        </div>
+        <div style="clear: both;"></div>
+        {% endif %}
+        
         {% for component in components %}
-            {{ render_component(component=component) | safe }}
+            {% if component.component_type == "text" %}
+                <div class="text-component">
+                    {{ component.content.text | safe }}
+                </div>
+            {% elif component.component_type == "image" %}
+                <div class="image-component">
+                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
+                </div>
+            {% elif component.component_type == "code" %}
+                <pre><code>{{ component.content.code }}</code></pre>
+            {% else %}
+                <div class="custom-component">
+                    {{ component.content | json_encode }}
+                </div>
+            {% endif %}
         {% endfor %}
+        
+        {% if components|length == 0 %}
+            <p style="color: #666; font-style: italic;">This page has no content yet.</p>
+        {% endif %}
     </div>
+
+    {% if children %}
+    <div class="child-pages">
+        <h2>Pages</h2>
+        <ul>
+        {% for child in children %}
+            <li><a href="{{ child.url }}">{{ child.title }}</a></li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
 </article>
 {% endblock %}

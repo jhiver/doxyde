@@ -491,6 +491,160 @@ function moveComponent(componentId, direction) {
     // Submit the form
     form.submit();
 }
+
+// Style options handling
+function updateBackgroundFields(componentId) {
+    const bgType = document.getElementById(`bg_type_${componentId}`).value;
+    const bgFields = document.getElementById(`bg_fields_${componentId}`);
+    
+    switch(bgType) {
+        case 'none':
+            bgFields.innerHTML = '';
+            break;
+        case 'color':
+            bgFields.innerHTML = `
+                <label for="bg_color_${componentId}" style="display: block; font-weight: normal; margin-bottom: 5px;">Background Color</label>
+                <input type="color" id="bg_color_${componentId}" 
+                       value="#ffffff" 
+                       onchange="updateStyleOptions(${componentId})"
+                       style="width: 100%; height: 40px; cursor: pointer;">
+            `;
+            break;
+        case 'gradient':
+            bgFields.innerHTML = `
+                <label for="bg_gradient_${componentId}" style="display: block; font-weight: normal; margin-bottom: 5px;">Gradient CSS</label>
+                <input type="text" id="bg_gradient_${componentId}" 
+                       placeholder="linear-gradient(45deg, #ff0000, #00ff00)"
+                       onchange="updateStyleOptions(${componentId})"
+                       style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+            `;
+            break;
+        case 'image':
+            bgFields.innerHTML = `
+                <label for="bg_image_${componentId}" style="display: block; font-weight: normal; margin-bottom: 5px;">Image URL</label>
+                <input type="text" id="bg_image_${componentId}" 
+                       placeholder="/uploads/background.jpg"
+                       onchange="updateStyleOptions(${componentId})"
+                       style="width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px;">
+            `;
+            break;
+    }
+    
+    updateStyleOptions(componentId);
+}
+
+function updateStyleOptions(componentId) {
+    const styleOptions = {
+        background: {},
+        effects: {},
+        spacing: {}
+    };
+    
+    // Get background settings
+    const bgType = document.getElementById(`bg_type_${componentId}`).value;
+    if (bgType !== 'none') {
+        styleOptions.background.type = bgType;
+        
+        if (bgType === 'color') {
+            const colorInput = document.getElementById(`bg_color_${componentId}`);
+            if (colorInput) {
+                styleOptions.background.value = colorInput.value;
+            }
+        } else if (bgType === 'gradient') {
+            const gradientInput = document.getElementById(`bg_gradient_${componentId}`);
+            if (gradientInput && gradientInput.value) {
+                styleOptions.background.gradient = gradientInput.value;
+            }
+        } else if (bgType === 'image') {
+            const imageInput = document.getElementById(`bg_image_${componentId}`);
+            if (imageInput && imageInput.value) {
+                styleOptions.background.image_url = imageInput.value;
+            }
+        }
+    }
+    
+    // Get effects
+    const shadowCheck = document.getElementById(`shadow_${componentId}`);
+    const roundedCheck = document.getElementById(`rounded_${componentId}`);
+    const borderedCheck = document.getElementById(`bordered_${componentId}`);
+    
+    if (shadowCheck && shadowCheck.checked) {
+        styleOptions.effects.shadow = true;
+    }
+    if (roundedCheck && roundedCheck.checked) {
+        styleOptions.effects.rounded = true;
+    }
+    if (borderedCheck && borderedCheck.checked) {
+        styleOptions.effects.bordered = true;
+    }
+    
+    // Get spacing
+    const paddingSelect = document.getElementById(`padding_${componentId}`);
+    if (paddingSelect && paddingSelect.value) {
+        styleOptions.spacing.padding = paddingSelect.value;
+    }
+    
+    // Update hidden input
+    const hiddenInput = document.getElementById(`style_options_${componentId}`);
+    hiddenInput.value = JSON.stringify(styleOptions);
+}
+
+// Initialize style options on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Get all components and initialize their style options
+    document.querySelectorAll('[id^="style_options_"]').forEach(input => {
+        const match = input.id.match(/style_options_(\d+)/);
+        if (match) {
+            const componentId = match[1];
+            const styleOptions = JSON.parse(input.value || '{}');
+            
+            // Set background type
+            if (styleOptions.background && styleOptions.background.type) {
+                const bgTypeSelect = document.getElementById(`bg_type_${componentId}`);
+                if (bgTypeSelect) {
+                    bgTypeSelect.value = styleOptions.background.type;
+                    updateBackgroundFields(componentId);
+                    
+                    // Set background values
+                    setTimeout(() => {
+                        if (styleOptions.background.type === 'color' && styleOptions.background.value) {
+                            const colorInput = document.getElementById(`bg_color_${componentId}`);
+                            if (colorInput) colorInput.value = styleOptions.background.value;
+                        } else if (styleOptions.background.type === 'gradient' && styleOptions.background.gradient) {
+                            const gradientInput = document.getElementById(`bg_gradient_${componentId}`);
+                            if (gradientInput) gradientInput.value = styleOptions.background.gradient;
+                        } else if (styleOptions.background.type === 'image' && styleOptions.background.image_url) {
+                            const imageInput = document.getElementById(`bg_image_${componentId}`);
+                            if (imageInput) imageInput.value = styleOptions.background.image_url;
+                        }
+                    }, 100);
+                }
+            }
+            
+            // Set effects
+            if (styleOptions.effects) {
+                if (styleOptions.effects.shadow) {
+                    const shadowCheck = document.getElementById(`shadow_${componentId}`);
+                    if (shadowCheck) shadowCheck.checked = true;
+                }
+                if (styleOptions.effects.rounded) {
+                    const roundedCheck = document.getElementById(`rounded_${componentId}`);
+                    if (roundedCheck) roundedCheck.checked = true;
+                }
+                if (styleOptions.effects.bordered) {
+                    const borderedCheck = document.getElementById(`bordered_${componentId}`);
+                    if (borderedCheck) borderedCheck.checked = true;
+                }
+            }
+            
+            // Set spacing
+            if (styleOptions.spacing && styleOptions.spacing.padding) {
+                const paddingSelect = document.getElementById(`padding_${componentId}`);
+                if (paddingSelect) paddingSelect.value = styleOptions.spacing.padding;
+            }
+        }
+    });
+});
 </script>
 {% endblock %}
 
@@ -540,11 +694,16 @@ function moveComponent(componentId, direction) {
                         <span class="component-type">{{ component.component_type|title }} Component</span>
                         <div>
                             <span class="component-position">Position: {{ component.position }}</span>
+                            <!-- Debug: loop.index0={{ loop.index0 }}, loop.first={{ loop.first }}, loop.last={{ loop.last }}, total={{ components|length }} -->
                             {% if not loop.first %}
                             <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'up')" title="Move Up">↑</button>
+                            {% else %}
+                            <!-- Move up button hidden: loop.first is true -->
                             {% endif %}
                             {% if not loop.last %}
                             <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'down')" title="Move Down">↓</button>
+                            {% else %}
+                            <!-- Move down button hidden: loop.last is true -->
                             {% endif %}
                             <button type="button" class="button button-danger button-small" onclick="deleteComponent({{ component.id }})">Delete</button>
                         </div>
@@ -572,6 +731,55 @@ function moveComponent(componentId, direction) {
                                 </option>
                             {% endfor %}
                         </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Style Options</label>
+                        <div style="background: #f8f9fa; padding: 15px; border-radius: 4px;">
+                            <div style="margin-bottom: 10px;">
+                                <label for="bg_type_{{ component.id }}" style="display: block; font-weight: normal; margin-bottom: 5px;">Background Type</label>
+                                <select id="bg_type_{{ component.id }}" 
+                                        onchange="updateBackgroundFields({{ component.id }})"
+                                        style="width: 100%;">
+                                    <option value="none">None</option>
+                                    <option value="color">Solid Color</option>
+                                    <option value="gradient">Gradient</option>
+                                    <option value="image">Image</option>
+                                </select>
+                            </div>
+                            
+                            <div id="bg_fields_{{ component.id }}" style="margin-bottom: 10px;">
+                                <!-- Background fields will be shown/hidden based on type -->
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label style="display: block; font-weight: normal; margin-bottom: 5px;">
+                                    <input type="checkbox" id="shadow_{{ component.id }}"> Add Shadow
+                                </label>
+                                <label style="display: block; font-weight: normal; margin-bottom: 5px;">
+                                    <input type="checkbox" id="rounded_{{ component.id }}"> Rounded Corners
+                                </label>
+                                <label style="display: block; font-weight: normal; margin-bottom: 5px;">
+                                    <input type="checkbox" id="bordered_{{ component.id }}"> Add Border
+                                </label>
+                            </div>
+                            
+                            <div style="margin-bottom: 10px;">
+                                <label for="padding_{{ component.id }}" style="display: block; font-weight: normal; margin-bottom: 5px;">Padding</label>
+                                <select id="padding_{{ component.id }}" style="width: 100%;">
+                                    <option value="">Default</option>
+                                    <option value="1rem">Small</option>
+                                    <option value="2rem">Medium</option>
+                                    <option value="3rem">Large</option>
+                                    <option value="4rem">Extra Large</option>
+                                </select>
+                            </div>
+                            
+                            <input type="hidden" 
+                                   id="style_options_{{ component.id }}" 
+                                   name="component_style_options" 
+                                   value='{{ component.style_options|default(value='{}')|json_encode }}'>
+                        </div>
                     </div>
                     
                     <div class="form-group">

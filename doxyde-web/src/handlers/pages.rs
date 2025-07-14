@@ -267,11 +267,20 @@ pub async fn show_page_handler(
     };
     context.insert("can_delete", &can_delete);
 
-    // Render the template
-    let html = state
-        .templates
-        .render("page.html", &context)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    // Render the template based on page template type
+    let template_name = format!("page_templates/{}.html", page.template);
+
+    // Try to render with specific template, fall back to default if not found
+    let html = match state.templates.render(&template_name, &context) {
+        Ok(html) => html,
+        Err(_) => {
+            // Fall back to default template
+            state
+                .templates
+                .render("page_templates/default.html", &context)
+                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        }
+    };
 
     Ok(Html(html))
 }

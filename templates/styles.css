@@ -763,3 +763,295 @@ footer a:hover {
 .fade-in {
     animation: fadeIn 0.3s ease;
 }
+
+/* Component Styling Effects */
+
+/* Shadow Effects */
+.component-shadow {
+    box-shadow: var(--shadow-md);
+}
+
+.component-shadow-lg {
+    box-shadow: var(--shadow-lg);
+}
+
+/* Rounded Corners */
+.component-rounded {
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}
+
+.component-rounded-lg {
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
+
+/* Borders */
+.component-bordered {
+    border: 1px solid var(--gray-200);
+}
+
+/* Background Effects */
+.has-bg-image {
+    position: relative;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.has-bg-gradient {
+    position: relative;
+}
+
+/* Overlay for readability on background images */
+.bg-overlay {
+    position: relative;
+}
+
+.bg-overlay::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+}
+
+.bg-overlay > * {
+    position: relative;
+    z-index: 1;
+}
+
+/* Component spacing utilities */
+.component-spacing-sm {
+    padding: var(--space-md);
+}
+
+.component-spacing-md {
+    padding: var(--space-lg);
+}
+
+.component-spacing-lg {
+    padding: var(--space-xl);
+}
+
+.component-spacing-xl {
+    padding: var(--space-2xl);
+}
+
+/* Hero Text Component */
+.text-component.hero {
+    text-align: center;
+    padding: var(--space-2xl) var(--space-xl);
+}
+
+.hero-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: var(--space-xl);
+    letter-spacing: -0.03em;
+    color: var(--gray-900);
+}
+
+.hero-content {
+    font-size: 1.25rem;
+    line-height: 1.6;
+    color: var(--gray-700);
+    max-width: 65ch;
+    margin: 0 auto;
+}
+
+/* Responsive adjustments for hero */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2.5rem;
+    }
+    
+    .hero-content {
+        font-size: 1.125rem;
+    }
+    
+    .text-component.hero {
+        padding: var(--space-xl) var(--space-lg);
+    }
+}
+
+/* Full-width components */
+.component-full-width {
+    width: 100vw;
+    position: relative;
+    left: 50%;
+    right: 50%;
+    margin-left: -50vw;
+    margin-right: -50vw;
+}
+
+/* Center aligned content */
+.component-center {
+    text-align: center;
+}
+
+.component-center > * {
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Template-specific styles */
+
+/* Full Width Template */
+.content-full-width {
+    flex: 1;
+    padding: var(--space-2xl) var(--space-xl);
+    background-color: white;
+    min-height: calc(100vh - 120px);
+    max-width: 1200px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.content-full-width .page-content {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+/* Landing Page Template */
+.content-landing {
+    flex: 1;
+    background-color: var(--gray-50);
+    min-height: calc(100vh - 120px);
+}
+
+/* Hero section - full width, no default styling */
+.hero-section {
+    width: 100%;
+    position: relative;
+}
+
+/* Remove any default component margins in hero */
+.hero-section > .text-component,
+.hero-section > .image-component {
+    margin: 0;
+}
+
+/* Landing sections container */
+.landing-sections {
+    background-color: white;
+}
+
+/* Individual landing sections */
+.landing-section {
+    width: 100%;
+    position: relative;
+}
+
+.landing-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--space-2xl) var(--space-xl);
+}
+
+/* Empty state */
+.empty-landing {
+    padding: var(--space-2xl);
+    text-align: center;
+    color: var(--gray-600);
+}
+
+/* Blog Template */
+.main-container-blog {
+    flex: 1;
+    display: flex;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.content-blog {
+    flex: 1;
+    padding: var(--space-2xl);
+    background-color: white;
+    min-height: calc(100vh - 120px);
+}
+
+.blog-post {
+    max-width: 720px;
+    margin: 0 auto;
+}
+
+.blog-header {
+    margin-bottom: var(--space-2xl);
+    padding-bottom: var(--space-xl);
+    border-bottom: 2px solid var(--gray-200);
+    text-align: center;
+}
+
+.blog-title {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: var(--space-md);
+}
+
+.blog-meta {
+    font-size: 0.9375rem;
+    color: var(--gray-600);
+}
+
+.blog-meta-separator {
+    margin: 0 var(--space-sm);
+}
+
+.blog-content {
+    font-size: 1.125rem;
+    line-height: 1.8;
+}
+
+.blog-content p {
+    margin-bottom: var(--space-lg);
+}
+
+.sidebar-blog {
+    width: 300px;
+    background-color: var(--gray-50);
+    border-left: 1px solid var(--gray-200);
+    padding: var(--space-xl) var(--space-lg);
+    overflow-y: auto;
+    position: sticky;
+    top: 60px;
+    height: calc(100vh - 60px);
+}
+
+/* Responsive for new templates */
+@media (max-width: 768px) {
+    .content-full-width {
+        padding: var(--space-lg);
+    }
+    
+    .landing-section-inner {
+        padding: var(--space-xl) var(--space-lg);
+    }
+    
+    .main-container-blog {
+        flex-direction: column-reverse;
+    }
+    
+    .sidebar-blog {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-left: none;
+        border-bottom: 1px solid var(--gray-200);
+        padding: var(--space-lg);
+    }
+    
+    .blog-title {
+        font-size: 2rem;
+    }
+    
+    .blog-content {
+        font-size: 1rem;
+    }
+}

@@ -112,10 +112,17 @@
                 <select id="template" name="template">
                     {% for tmpl in available_templates %}
                         <option value="{{ tmpl }}" {% if page.template == tmpl %}selected{% endif %}>
-                            {% if tmpl == "default" %}Default{% endif %}
-                            {% if tmpl == "full_width" %}Full Width{% endif %}
-                            {% if tmpl == "landing" %}Landing{% endif %}
-                            {% if tmpl == "blog" %}Blog{% endif %}
+                            {% if tmpl == "default" %}
+                                Default
+                            {% elif tmpl == "full_width" %}
+                                Full Width
+                            {% elif tmpl == "landing" %}
+                                Landing
+                            {% elif tmpl == "blog" %}
+                                Blog
+                            {% else %}
+                                {{ tmpl | title }}
+                            {% endif %}
                         </option>
                     {% endfor %}
                 </select>

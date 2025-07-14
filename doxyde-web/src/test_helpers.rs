@@ -111,6 +111,7 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             title TEXT,
             template TEXT DEFAULT 'default',
             content TEXT NOT NULL,
+            style_options TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE

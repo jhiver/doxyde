@@ -101,8 +101,72 @@ pub async fn get_logo_data(db: &SqlitePool, site_id: i64) -> Result<Option<LogoD
 mod tests {
     use super::*;
 
+    async fn create_test_schema(pool: &SqlitePool) -> Result<()> {
+        // Create minimal schema for testing
+        sqlx::query(
+            r#"
+            CREATE TABLE sites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                domain TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+            
+            CREATE TABLE pages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                site_id INTEGER NOT NULL,
+                parent_page_id INTEGER,
+                slug TEXT NOT NULL,
+                title TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0,
+                description TEXT,
+                keywords TEXT,
+                template TEXT NOT NULL DEFAULT 'default',
+                meta_robots TEXT NOT NULL DEFAULT 'index,follow',
+                canonical_url TEXT,
+                og_image_url TEXT,
+                structured_data_type TEXT NOT NULL DEFAULT 'WebPage',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (site_id) REFERENCES sites(id),
+                FOREIGN KEY (parent_page_id) REFERENCES pages(id)
+            );
+            
+            CREATE TABLE page_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                page_id INTEGER NOT NULL,
+                version_number INTEGER NOT NULL,
+                created_by INTEGER,
+                comment TEXT,
+                is_published BOOLEAN NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
+            );
+            
+            CREATE TABLE components (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                page_version_id INTEGER NOT NULL,
+                component_type TEXT NOT NULL,
+                title TEXT,
+                content TEXT NOT NULL,
+                template TEXT NOT NULL DEFAULT 'default',
+                position INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE
+            );
+            "#,
+        )
+        .execute(pool)
+        .await?;
+
+        Ok(())
+    }
+
     #[sqlx::test]
     async fn test_get_logo_data_no_site(pool: SqlitePool) -> Result<()> {
+        create_test_schema(&pool).await?;
         let result = get_logo_data(&pool, 999).await?;
         assert!(result.is_none());
         Ok(())

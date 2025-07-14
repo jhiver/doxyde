@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - {{ super() }}{% endblock %}
+
+{% block main %}
+<main class="content-landing">
+    {% if components|length > 0 %}
+        <!-- Hero Section - First Component (full width, no container) -->
+        <section class="hero-section">
+            {{ render_component(component=components[0]) | safe }}
+        </section>
+
+        <!-- Rest of the content -->
+        {% if components|length > 1 %}
+        <div class="landing-sections">
+            {% for component in components %}
+                {% if not loop.first %}
+                    <section class="landing-section">
+                        <div class="landing-section-inner">
+                            {{ render_component(component=component) | safe }}
+                        </div>
+                    </section>
+                {% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% else %}
+        <!-- Empty state -->
+        <div class="empty-landing">
+            <p>Add components to build your landing page.</p>
+        </div>
+    {% endif %}
+</main>
+{% endblock %}

@@ -245,7 +245,7 @@ mod tests {
         };
         let state = AppState::new(pool, templates, config);
 
-        let response = login_form(State(state)).await;
+        let response = login_form(Host("localhost:3000".to_string()), State(state)).await;
         assert!(response.is_ok());
 
         Ok(())
@@ -283,7 +283,13 @@ mod tests {
         };
 
         let jar = CookieJar::new();
-        let response = login(State(state), jar, Form(form)).await;
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
         assert!(response.is_ok());
 
         // Verify session was created
@@ -326,7 +332,13 @@ mod tests {
         };
 
         let jar = CookieJar::new();
-        let response = login(State(state), jar, Form(form)).await;
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
         assert!(response.is_ok());
 
         Ok(())
@@ -364,7 +376,13 @@ mod tests {
         };
 
         let jar = CookieJar::new();
-        let response = login(State(state), jar, Form(form)).await;
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
         assert!(response.is_ok());
 
         // Verify no session was created
@@ -397,7 +415,13 @@ mod tests {
         };
 
         let jar = CookieJar::new();
-        let response = login(State(state), jar, Form(form)).await;
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
         assert!(response.is_ok());
 
         // The response should be an HTML page with an error (not a redirect)
@@ -438,7 +462,13 @@ mod tests {
         };
 
         let jar = CookieJar::new();
-        let response = login(State(state), jar, Form(form)).await;
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
         assert!(response.is_ok());
 
         // Verify no session was created for inactive user

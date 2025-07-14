@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - {{ super() }}{% endblock %}
+
+{% block main %}
+<div class="main-container-blog">
+    <main class="content-blog">
+        <article class="blog-post">
+            {% if breadcrumbs and breadcrumbs|length > 1 %}
+            <nav aria-label="breadcrumb" class="breadcrumb">
+                {% for crumb in breadcrumbs %}
+                    {% if not loop.last %}
+                        <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+                        <span class="breadcrumb-separator">›</span>
+                    {% else %}
+                        <span class="text-muted">{{ crumb.title }}</span>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+            {% endif %}
+
+            <header class="blog-header">
+                <h1 class="blog-title">{{ page.title }}</h1>
+                <div class="blog-meta">
+                    <time datetime="{{ page.created_at }}">{{ page.created_at | date(format="%B %d, %Y") }}</time>
+                    {% if page.updated_at != page.created_at %}
+                    <span class="blog-meta-separator">•</span>
+                    <span>Updated: <time datetime="{{ page.updated_at }}">{{ page.updated_at | date(format="%B %d, %Y") }}</time></span>
+                    {% endif %}
+                </div>
+            </header>
+
+            <div class="blog-content">
+                {% for component in components %}
+                    {{ render_component(component=component) | safe }}
+                {% endfor %}
+            </div>
+        </article>
+    </main>
+
+    <aside class="sidebar-blog">
+        {% if navigation_levels %}
+            {% for level in navigation_levels %}
+            <div class="sidebar-card">
+                <div class="sidebar-card-header">
+                    <h3>{{ level.title }}</h3>
+                </div>
+                <div class="sidebar-card-body">
+                    <ul class="sidebar-nav">
+                    {% for page_item in level.pages %}
+                        <li>
+                            {% if page_item.is_current_page %}
+                                <span class="current-page">{{ page_item.title }}</span>
+                            {% else %}
+                                <a href="{{ page_item.url }}"{% if page_item.is_active %} class="active-path"{% endif %}>
+                                    {{ page_item.title }}
+                                </a>
+                            {% endif %}
+                        </li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            {% endfor %}
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

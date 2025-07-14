@@ -137,6 +137,7 @@ pub async fn handle_action(
                         component_titles,
                         component_templates,
                         component_contents,
+                        component_style_options: vec![],
                     };
 
                     if action == "save_draft" {
@@ -259,6 +260,7 @@ pub async fn handle_action(
                         component_titles,
                         component_templates,
                         component_contents,
+                        component_style_options: vec![],
                     };
 
                     // Save remaining components
@@ -324,6 +326,7 @@ pub async fn handle_action(
                         component_titles,
                         component_templates,
                         component_contents,
+                        component_style_options: vec![],
                     };
 
                     // Save all components

@@ -27,6 +27,7 @@ pub struct Component {
     pub content: Value,
     pub title: Option<String>,
     pub template: String,
+    pub style_options: Option<Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -47,6 +48,7 @@ impl Component {
             content,
             title: None,
             template: "default".to_string(),
+            style_options: None,
             created_at: now,
             updated_at: now,
         }

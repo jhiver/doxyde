@@ -26,7 +26,10 @@ use serde::Deserialize;
 use tera::Context;
 
 use super::edit::can_edit_page;
-use crate::{auth::CurrentUser, template_context::add_base_context, AppState};
+use crate::{
+    auth::CurrentUser, template_context::add_base_context, template_utils::discover_page_templates,
+    AppState,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct PagePropertiesForm {
@@ -130,10 +133,10 @@ pub async fn page_properties_handler(
     };
     context.insert("can_delete", &can_delete);
 
-    context.insert(
-        "available_templates",
-        &["default", "full_width", "landing", "blog"],
-    );
+    // Discover available templates dynamically
+    let templates_path = std::path::Path::new(&state.config.templates_dir);
+    let available_templates = discover_page_templates(templates_path);
+    context.insert("available_templates", &available_templates);
     context.insert(
         "available_robots",
         &[

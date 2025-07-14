@@ -38,10 +38,17 @@ impl ComponentRepository {
         let content_json = serde_json::to_string(&component.content)
             .context("Failed to serialize component content")?;
 
+        let style_options_json = component
+            .style_options
+            .as_ref()
+            .map(|opts| serde_json::to_string(opts))
+            .transpose()
+            .context("Failed to serialize style options")?;
+
         let result = sqlx::query(
             r#"
-            INSERT INTO components (page_version_id, component_type, position, content, title, template, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO components (page_version_id, component_type, position, content, title, template, style_options, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#
         )
         .bind(component.page_version_id)
@@ -50,6 +57,7 @@ impl ComponentRepository {
         .bind(&content_json)
         .bind(&component.title)
         .bind(&component.template)
+        .bind(&style_options_json)
         .bind(component.created_at)
         .bind(component.updated_at)
         .execute(&self.pool)
@@ -70,6 +78,7 @@ impl ComponentRepository {
                 String,
                 Option<String>,
                 String,
+                Option<String>,
                 String,
                 String,
             ),
@@ -83,6 +92,7 @@ impl ComponentRepository {
                 content,
                 title,
                 template,
+                style_options,
                 created_at,
                 updated_at
             FROM components
@@ -103,11 +113,17 @@ impl ComponentRepository {
                 content_str,
                 title,
                 template,
+                style_options_str,
                 created_at_str,
                 updated_at_str,
             )) => {
                 let content = serde_json::from_str(&content_str)
                     .context("Failed to deserialize component content")?;
+
+                let style_options = style_options_str
+                    .map(|s| serde_json::from_str(&s))
+                    .transpose()
+                    .context("Failed to deserialize style options")?;
 
                 // Parse datetime strings
                 let created_at = if created_at_str.contains('T') {
@@ -138,6 +154,7 @@ impl ComponentRepository {
                     content,
                     title,
                     template,
+                    style_options,
                     created_at,
                     updated_at,
                 }))
@@ -157,6 +174,7 @@ impl ComponentRepository {
                 String,
                 Option<String>,
                 String,
+                Option<String>,
                 String,
                 String,
             ),
@@ -170,6 +188,7 @@ impl ComponentRepository {
                 content,
                 title,
                 template,
+                style_options,
                 created_at,
                 updated_at
             FROM components
@@ -192,12 +211,18 @@ impl ComponentRepository {
             content_str,
             title,
             template,
+            style_options_str,
             created_at_str,
             updated_at_str,
         ) in rows
         {
             let content = serde_json::from_str(&content_str)
                 .context("Failed to deserialize component content")?;
+
+            let style_options = style_options_str
+                .map(|s| serde_json::from_str(&s))
+                .transpose()
+                .context("Failed to deserialize style options")?;
 
             // Parse datetime strings
             let created_at = if created_at_str.contains('T') {
@@ -228,6 +253,7 @@ impl ComponentRepository {
                 content,
                 title,
                 template,
+                style_options,
                 created_at,
                 updated_at,
             });
@@ -251,6 +277,13 @@ impl ComponentRepository {
         let content_json = serde_json::to_string(&component.content)
             .context("Failed to serialize component content")?;
 
+        let style_options_json = component
+            .style_options
+            .as_ref()
+            .map(|opts| serde_json::to_string(opts))
+            .transpose()
+            .context("Failed to serialize style options")?;
+
         let rows_affected = sqlx::query(
             r#"
             UPDATE components
@@ -258,6 +291,9 @@ impl ComponentRepository {
                 component_type = ?,
                 position = ?,
                 content = ?,
+                title = ?,
+                template = ?,
+                style_options = ?,
                 updated_at = ?
             WHERE id = ?
             "#,
@@ -266,6 +302,9 @@ impl ComponentRepository {
         .bind(&component.component_type)
         .bind(component.position)
         .bind(&content_json)
+        .bind(&component.title)
+        .bind(&component.template)
+        .bind(&style_options_json)
         .bind(component.updated_at)
         .bind(component.id.unwrap())
         .execute(&self.pool)
@@ -281,11 +320,22 @@ impl ComponentRepository {
     }
 
     pub async fn delete(&self, id: i64) -> Result<()> {
+        // Get the component's page_version_id before deleting
+        let component = self
+            .find_by_id(id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+        
+        let page_version_id = component.page_version_id;
+        
         sqlx::query("DELETE FROM components WHERE id = ?")
             .bind(id)
             .execute(&self.pool)
             .await
             .context("Failed to delete component")?;
+
+        // Normalize positions after deletion
+        self.normalize_positions(page_version_id).await?;
 
         Ok(())
     }
@@ -309,27 +359,35 @@ impl ComponentRepository {
         Ok(())
     }
 
-    /// Update a component's content, title, and template
+    /// Update a component's content, title, template, and style options
     pub async fn update_content(
         &self,
         id: i64,
         content: serde_json::Value,
         title: Option<String>,
         template: String,
+        style_options: Option<serde_json::Value>,
     ) -> Result<()> {
         let content_json =
             serde_json::to_string(&content).context("Failed to serialize component content")?;
 
+        let style_options_json = style_options
+            .as_ref()
+            .map(|opts| serde_json::to_string(opts))
+            .transpose()
+            .context("Failed to serialize style options")?;
+
         sqlx::query(
             r#"
             UPDATE components 
-            SET content = ?, title = ?, template = ?, updated_at = datetime('now')
+            SET content = ?, title = ?, template = ?, style_options = ?, updated_at = datetime('now')
             WHERE id = ?
             "#,
         )
         .bind(&content_json)
         .bind(&title)
         .bind(&template)
+        .bind(&style_options_json)
         .bind(id)
         .execute(&self.pool)
         .await
@@ -377,6 +435,10 @@ impl ComponentRepository {
         }
 
         tx.commit().await?;
+        
+        // Normalize positions after move
+        self.normalize_positions(component.page_version_id).await?;
+        
         Ok(())
     }
 
@@ -415,6 +477,10 @@ impl ComponentRepository {
         }
 
         tx.commit().await?;
+        
+        // Normalize positions after move
+        self.normalize_positions(component.page_version_id).await?;
+        
         Ok(())
     }
 
@@ -435,6 +501,49 @@ impl ComponentRepository {
         .await
         .context("Failed to copy components")?;
 
+        // Normalize positions in the new version
+        self.normalize_positions(to_version_id).await?;
+
+        Ok(())
+    }
+
+    /// Normalize component positions to ensure they are sequential (0, 1, 2, ...)
+    pub async fn normalize_positions(&self, page_version_id: i64) -> Result<()> {
+        // Get all components for this version ordered by current position
+        let components = sqlx::query!(
+            r#"
+            SELECT id as "id: i64", position as "position: i32"
+            FROM components 
+            WHERE page_version_id = ?
+            ORDER BY position, id
+            "#,
+            page_version_id
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch components for normalization")?;
+
+        // Update positions to be sequential
+        let mut tx = self.pool.begin().await?;
+        
+        for (new_position, component) in components.iter().enumerate() {
+            let new_pos = new_position as i32;
+            if component.position != new_pos {
+                sqlx::query!(
+                    "UPDATE components SET position = ? WHERE id = ?",
+                    new_pos,
+                    component.id
+                )
+                .execute(&mut *tx)
+                .await
+                .context("Failed to update component position during normalization")?;
+            }
+        }
+        
+        tx.commit()
+            .await
+            .context("Failed to commit position normalization")?;
+        
         Ok(())
     }
 }
@@ -515,6 +624,7 @@ mod tests {
                 content TEXT NOT NULL,
                 title TEXT,
                 template TEXT NOT NULL DEFAULT 'default',
+                style_options TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE
@@ -1160,6 +1270,240 @@ mod tests {
         assert_eq!(components[0].component_type, "code"); // was position 2, now 0
         assert_eq!(components[1].component_type, "image"); // unchanged
         assert_eq!(components[2].component_type, "text"); // was position 0, now 2
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_normalize_positions() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        // Manually insert components with non-sequential positions
+        sqlx::query("INSERT INTO components (page_version_id, component_type, position, content) VALUES (?, 'text', 0, '{}')")
+            .bind(version_id)
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO components (page_version_id, component_type, position, content) VALUES (?, 'text', 2, '{}')")
+            .bind(version_id)
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO components (page_version_id, component_type, position, content) VALUES (?, 'text', 5, '{}')")
+            .bind(version_id)
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO components (page_version_id, component_type, position, content) VALUES (?, 'text', 5, '{}')")
+            .bind(version_id)
+            .execute(&pool)
+            .await?;
+
+        let repo = ComponentRepository::new(pool);
+
+        // Normalize positions
+        repo.normalize_positions(version_id).await?;
+
+        // Verify positions are now sequential
+        let components = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components.len(), 4);
+        
+        for (i, component) in components.iter().enumerate() {
+            assert_eq!(component.position, i as i32, "Component at index {} should have position {}", i, i);
+        }
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_up() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create three components
+        let comp1 = Component::new(version_id, "text".to_string(), 0, json!({"text": "First"}));
+        let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
+        let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+        let id3 = repo.create(&comp3).await?;
+
+        // Move the second component up
+        repo.move_up(id2).await?;
+
+        // Verify positions after move
+        let components = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components.len(), 3);
+        
+        // Find components by their content to verify positions
+        let first_comp = components.iter().find(|c| {
+            if let Ok(content) = serde_json::from_value::<serde_json::Value>(c.content.clone()) {
+                content.get("text").and_then(|t| t.as_str()) == Some("First")
+            } else {
+                false
+            }
+        }).unwrap();
+        
+        let second_comp = components.iter().find(|c| {
+            if let Ok(content) = serde_json::from_value::<serde_json::Value>(c.content.clone()) {
+                content.get("text").and_then(|t| t.as_str()) == Some("Second")
+            } else {
+                false
+            }
+        }).unwrap();
+
+        assert_eq!(second_comp.position, 0, "Second component should now be at position 0");
+        assert_eq!(first_comp.position, 1, "First component should now be at position 1");
+
+        // Try to move the first component (now at position 0) up - should do nothing
+        repo.move_up(id2).await?;
+        let components_after = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components_after[0].id, Some(id2), "Component at position 0 should still be id2");
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_down() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create three components
+        let comp1 = Component::new(version_id, "text".to_string(), 0, json!({"text": "First"}));
+        let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
+        let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+        let id3 = repo.create(&comp3).await?;
+
+        // Move the second component down
+        repo.move_down(id2).await?;
+
+        // Verify positions after move
+        let components = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components.len(), 3);
+        
+        // Find components by their content to verify positions
+        let second_comp = components.iter().find(|c| {
+            if let Ok(content) = serde_json::from_value::<serde_json::Value>(c.content.clone()) {
+                content.get("text").and_then(|t| t.as_str()) == Some("Second")
+            } else {
+                false
+            }
+        }).unwrap();
+        
+        let third_comp = components.iter().find(|c| {
+            if let Ok(content) = serde_json::from_value::<serde_json::Value>(c.content.clone()) {
+                content.get("text").and_then(|t| t.as_str()) == Some("Third")
+            } else {
+                false
+            }
+        }).unwrap();
+
+        assert_eq!(second_comp.position, 2, "Second component should now be at position 2");
+        assert_eq!(third_comp.position, 1, "Third component should now be at position 1");
+
+        // Try to move the last component down - should do nothing
+        repo.move_down(id2).await?;
+        let components_after = repo.list_by_page_version(version_id).await?;
+        let last_comp = components_after.iter().find(|c| c.position == 2).unwrap();
+        assert_eq!(last_comp.id, Some(id2), "Component at position 2 should still be id2");
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_up_with_two_components() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create only two components (matching the reported issue)
+        let comp1 = Component::new(version_id, "text".to_string(), 0, json!({"text": "First"}));
+        let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+
+        // Initial state verification
+        let components_before = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components_before.len(), 2);
+        assert_eq!(components_before[0].position, 0);
+        assert_eq!(components_before[1].position, 1);
+        assert_eq!(components_before[0].id, Some(id1));
+        assert_eq!(components_before[1].id, Some(id2));
+
+        // Move the second component up
+        repo.move_up(id2).await?;
+
+        // Verify positions after move
+        let components_after = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components_after.len(), 2);
+        
+        // The second component should now be first
+        assert_eq!(components_after[0].id, Some(id2), "Component 2 should be at position 0");
+        assert_eq!(components_after[0].position, 0);
+        
+        // The first component should now be second
+        assert_eq!(components_after[1].id, Some(id1), "Component 1 should be at position 1");
+        assert_eq!(components_after[1].position, 1);
 
         Ok(())
     }
