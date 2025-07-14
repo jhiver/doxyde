@@ -1,0 +1,6 @@
+<div class="html-component with-title">
+    {% if component.title %}
+        <h3>{{ component.title }}</h3>
+    {% endif %}
+    {{ component.content.html | safe }}
+</div>

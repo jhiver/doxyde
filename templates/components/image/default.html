@@ -1,0 +1,10 @@
+<div class="image-component">
+    {% if component.content.file_path %}
+        <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
+             alt="{{ component.content.description | default(value=component.content.title) }}"
+             {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
+             {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}>
+    {% else %}
+        <img src="{{ component.content.src }}" alt="{{ component.content.alt | default(value='') }}">
+    {% endif %}
+</div>

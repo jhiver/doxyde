@@ -195,13 +195,6 @@ pub async fn handle_action(
                     .await
                 }
                 "delete_component" => {
-                    // First save all components except the one to delete
-                    let mut component_ids = Vec::new();
-                    let mut component_types = Vec::new();
-                    let mut component_titles = Vec::new();
-                    let mut component_templates = Vec::new();
-                    let mut component_contents = Vec::new();
-
                     // Get the component to delete
                     let delete_component_id = form_data
                         .iter()
@@ -209,71 +202,7 @@ pub async fn handle_action(
                         .and_then(|(_, v)| v.parse::<i64>().ok())
                         .ok_or(StatusCode::BAD_REQUEST)?;
 
-                    // We need to maintain the order of components
-                    // First, collect all the component IDs to maintain order
-                    let all_ids: Vec<i64> = form_data
-                        .iter()
-                        .filter(|(k, _)| k == "component_ids")
-                        .filter_map(|(_, v)| v.parse::<i64>().ok())
-                        .collect();
-
-                    // Now collect the data in the same order, skipping the deleted component
-                    let mut idx = 0;
-                    for (key, value) in &form_data {
-                        match key.as_str() {
-                            "component_ids" => {
-                                if let Ok(id) = value.parse::<i64>() {
-                                    if id == delete_component_id {
-                                        idx += 1; // Skip this component's data
-                                    }
-                                }
-                            }
-                            "component_types" => {
-                                if idx < all_ids.len() && all_ids[idx] != delete_component_id {
-                                    component_types.push(value.clone());
-                                }
-                            }
-                            "component_titles" => {
-                                if idx < all_ids.len() && all_ids[idx] != delete_component_id {
-                                    component_titles.push(value.clone());
-                                }
-                            }
-                            "component_templates" => {
-                                if idx < all_ids.len() && all_ids[idx] != delete_component_id {
-                                    component_templates.push(value.clone());
-                                }
-                            }
-                            "component_contents" => {
-                                if idx < all_ids.len() && all_ids[idx] != delete_component_id {
-                                    component_contents.push(value.clone());
-                                    component_ids.push(all_ids[idx]); // Add the ID after we've collected all data
-                                    idx += 1;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-
-                    let save_form = SaveDraftForm {
-                        component_ids,
-                        component_types,
-                        component_titles,
-                        component_templates,
-                        component_contents,
-                        component_style_options: vec![],
-                    };
-
-                    // Save remaining components
-                    crate::handlers::save_draft_handler(
-                        state.clone(),
-                        site.clone(),
-                        page.clone(),
-                        user.clone(),
-                        axum::extract::Form(save_form),
-                    )
-                    .await?;
-
-                    // Delete the component
+                    // Delete the component directly
                     crate::handlers::delete_component_handler(
                         state,
                         site,

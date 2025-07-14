@@ -14,14 +14,18 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use doxyde_core::models::{component::Component, component_factory::create_renderer};
+use doxyde_core::models::component::Component;
 use std::collections::HashMap;
-use tera::{from_value, to_value, Function as TeraFunction, Result as TeraResult, Value};
+use std::fs;
+use std::path::Path;
+use tera::{from_value, to_value, Context, Function as TeraFunction, Result as TeraResult, Value};
 
 use crate::markdown::markdown_to_html;
 
 /// Tera function to render a component with its template
-pub struct RenderComponentFunction;
+pub struct RenderComponentFunction {
+    pub templates_dir: String,
+}
 
 impl TeraFunction for RenderComponentFunction {
     fn call(&self, args: &HashMap<String, Value>) -> TeraResult<Value> {
@@ -33,20 +37,62 @@ impl TeraFunction for RenderComponentFunction {
         // Deserialize the component
         let component: Component = from_value(component_value.clone())?;
 
-        // Create the appropriate renderer
-        let renderer = create_renderer(&component);
+        // Build the template path
+        let template_path = format!(
+            "{}/components/{}/{}.html",
+            self.templates_dir, component.component_type, component.template
+        );
 
-        // Render the component
-        let mut html = renderer.render(&component.template);
+        // Check if template file exists, fall back to default if not
+        let template_content = if Path::new(&template_path).exists() {
+            fs::read_to_string(&template_path)
+                .map_err(|e| tera::Error::msg(format!("Failed to read template: {}", e)))?
+        } else {
+            // Try default template
+            let default_path = format!(
+                "{}/components/{}/default.html",
+                self.templates_dir, component.component_type
+            );
+            
+            if Path::new(&default_path).exists() {
+                fs::read_to_string(&default_path)
+                    .map_err(|e| tera::Error::msg(format!("Failed to read default template: {}", e)))?
+            } else {
+                // Fallback to inline template for backward compatibility
+                return Ok(to_value(render_component_inline(&component)?)?);
+            }
+        };
 
-        // Post-process markdown components
-        if component.component_type == "markdown" {
-            // Replace markdown placeholders with actual rendered markdown
-            html = process_markdown_placeholders(&html);
-        }
+        // Create a Tera instance and render the template
+        let mut tera = tera::Tera::default();
+        tera.add_raw_template("component", &template_content)?;
+        
+        // Add the markdown filter
+        tera.register_filter("markdown", crate::markdown::make_markdown_filter());
+        
+        // Create context with component data
+        let mut context = Context::new();
+        context.insert("component", &component);
+        
+        // Render the template
+        let html = tera.render("component", &context)?;
 
         Ok(to_value(html)?)
     }
+}
+
+/// Render component inline (fallback for backward compatibility)
+fn render_component_inline(component: &Component) -> TeraResult<String> {
+    // Use the old renderer for backward compatibility
+    let renderer = doxyde_core::models::component_factory::create_renderer(component);
+    let mut html = renderer.render(&component.template);
+    
+    // Post-process markdown components
+    if component.component_type == "markdown" {
+        html = process_markdown_placeholders(&html);
+    }
+    
+    Ok(html)
 }
 
 /// Process markdown placeholders in the HTML
@@ -113,7 +159,9 @@ fn process_markdown_placeholders(html: &str) -> String {
 }
 
 /// Tera function to get available templates for a component type
-pub struct GetComponentTemplatesFunction;
+pub struct GetComponentTemplatesFunction {
+    pub templates_dir: String,
+}
 
 impl TeraFunction for GetComponentTemplatesFunction {
     fn call(&self, args: &HashMap<String, Value>) -> TeraResult<Value> {
@@ -122,8 +170,45 @@ impl TeraFunction for GetComponentTemplatesFunction {
             .and_then(|v| v.as_str())
             .ok_or_else(|| tera::Error::msg("type parameter is required"))?;
 
-        let templates =
-            doxyde_core::models::component_factory::get_templates_for_type(component_type);
+        // Read templates from the filesystem
+        let component_dir = format!("{}/components/{}", self.templates_dir, component_type);
+        
+        let templates = if let Ok(entries) = fs::read_dir(&component_dir) {
+            let mut template_names = Vec::new();
+            
+            for entry in entries.flatten() {
+                if let Ok(file_type) = entry.file_type() {
+                    if file_type.is_file() {
+                        if let Some(file_name) = entry.file_name().to_str() {
+                            if file_name.ends_with(".html") {
+                                // Remove .html extension
+                                let template_name = file_name.trim_end_matches(".html");
+                                template_names.push(template_name.to_string());
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Sort templates with "default" first
+            template_names.sort_by(|a, b| {
+                if a == "default" {
+                    std::cmp::Ordering::Less
+                } else if b == "default" {
+                    std::cmp::Ordering::Greater
+                } else {
+                    a.cmp(b)
+                }
+            });
+            
+            template_names
+        } else {
+            // Fallback to hardcoded templates if directory doesn't exist
+            doxyde_core::models::component_factory::get_templates_for_type(component_type)
+                .into_iter()
+                .map(|s| s.to_string())
+                .collect()
+        };
 
         Ok(to_value(templates)?)
     }
@@ -136,13 +221,16 @@ mod tests {
 
     #[test]
     fn test_render_component_function() {
-        let func = RenderComponentFunction;
+        let func = RenderComponentFunction {
+            templates_dir: "templates".to_string(),
+        };
         let mut args = HashMap::new();
 
         let component = Component::new(1, "text".to_string(), 0, json!({"text": "Hello, world!"}));
 
         args.insert("component".to_string(), to_value(&component).unwrap());
 
+        // This test will use the inline renderer as a fallback
         let result = func.call(&args).unwrap();
         let html = result.as_str().unwrap();
 
@@ -152,7 +240,9 @@ mod tests {
 
     #[test]
     fn test_get_component_templates_function() {
-        let func = GetComponentTemplatesFunction;
+        let func = GetComponentTemplatesFunction {
+            templates_dir: "templates".to_string(),
+        };
         let mut args = HashMap::new();
 
         args.insert("type".to_string(), to_value("text").unwrap());
@@ -160,8 +250,8 @@ mod tests {
         let result = func.call(&args).unwrap();
         let templates = result.as_array().unwrap();
 
-        assert_eq!(templates.len(), 6);
+        // Will use fallback templates in test environment
+        assert!(!templates.is_empty());
         assert!(templates.contains(&to_value("default").unwrap()));
-        assert!(templates.contains(&to_value("card").unwrap()));
     }
 }

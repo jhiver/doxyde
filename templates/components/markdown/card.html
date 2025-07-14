@@ -1,0 +1,8 @@
+<div class="markdown-component card">
+    {% if component.title %}
+        <h3 class="card-title">{{ component.title }}</h3>
+    {% endif %}
+    <div class="card-content" data-markdown="{{ component.content.text | escape }}">
+        {{ component.content.text | markdown }}
+    </div>
+</div>

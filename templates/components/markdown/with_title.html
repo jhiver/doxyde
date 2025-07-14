@@ -1,0 +1,8 @@
+<div class="markdown-component with-title">
+    {% if component.title %}
+        <h3>{{ component.title }}</h3>
+    {% endif %}
+    <div data-markdown="{{ component.content.text | escape }}">
+        {{ component.content.text | markdown }}
+    </div>
+</div>

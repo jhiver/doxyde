@@ -1,0 +1,8 @@
+<blockquote class="markdown-component quote">
+    {% if component.title %}
+        <h3 class="quote-title">{{ component.title }}</h3>
+    {% endif %}
+    <div data-markdown="{{ component.content.text | escape }}">
+        {{ component.content.text | markdown }}
+    </div>
+</blockquote>

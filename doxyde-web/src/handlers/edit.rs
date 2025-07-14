@@ -1022,4 +1022,104 @@ mod tests {
 
         Ok(())
     }
+
+    #[sqlx::test]
+    async fn test_add_and_delete_component() -> anyhow::Result<()> {
+        // Create test app state
+        let test_state = create_test_app_state().await?;
+        let pool = test_state.db.clone();
+
+        // Setup test data
+        let site_repo = SiteRepository::new(pool.clone());
+        let page_repo = PageRepository::new(pool.clone());
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let component_repo = ComponentRepository::new(pool.clone());
+        let site_user_repo = SiteUserRepository::new(pool.clone());
+
+        // Create a site
+        let site = Site::new("localhost:3000".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        // Get the root page
+        let root_page = page_repo.get_root_page(site_id).await?.unwrap();
+        let page_id = root_page.id.unwrap();
+
+        // Create an initial published version with no components
+        let published_version = PageVersion::new(page_id, 1, Some("test-user".to_string()));
+        let mut published_version_copy = published_version.clone();
+        published_version_copy.is_published = true;
+        let _published_version_id = version_repo.create(&published_version_copy).await?;
+
+        // Create a user with edit permissions
+        let user = create_test_user(&pool, "editor", "editor@test.com", false).await?;
+        let site_user = SiteUser::new(site_id, user.id.unwrap(), SiteRole::Editor);
+        site_user_repo.create(&site_user).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
+        let current_user = CurrentUser {
+            user: user.clone(),
+            session,
+        };
+
+        let app_state = test_state;
+        let site = site_repo.find_by_id(site_id).await?.unwrap();
+
+        // Add a component
+        let add_form = AddComponentForm {
+            content: "New test component".to_string(),
+            component_type: "text".to_string(),
+        };
+
+        let response = add_component_handler(
+            app_state.clone(),
+            site.clone(),
+            root_page.clone(),
+            current_user.clone(),
+            axum::extract::Form(add_form),
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to add component"))?;
+
+        // Check that we got a redirect
+        assert_eq!(response.status(), StatusCode::SEE_OTHER);
+
+        // Get the draft version and verify component was added
+        let draft_version = version_repo
+            .get_draft(page_id)
+            .await?
+            .expect("Draft should exist");
+
+        let components = component_repo
+            .list_by_page_version(draft_version.id.unwrap())
+            .await?;
+
+        assert_eq!(components.len(), 1, "Should have 1 component");
+        let component_id = components[0].id.unwrap();
+
+        // Now delete the component
+        let delete_response = delete_component_handler(
+            app_state.clone(),
+            site.clone(),
+            root_page.clone(),
+            current_user.clone(),
+            component_id,
+        )
+        .await
+        .map_err(|_| anyhow::anyhow!("Failed to delete component"))?;
+
+        // Check that we got a redirect
+        assert_eq!(delete_response.status(), StatusCode::SEE_OTHER);
+
+        // Verify component was deleted
+        let components_after_delete = component_repo
+            .list_by_page_version(draft_version.id.unwrap())
+            .await?;
+
+        assert_eq!(components_after_delete.len(), 0, "Should have 0 components after deletion");
+
+        // Verify positions are normalized (even though there are no components)
+        // This is just to ensure normalize_positions doesn't error on empty set
+        component_repo.normalize_positions(draft_version.id.unwrap()).await?;
+
+        Ok(())
+    }
 }

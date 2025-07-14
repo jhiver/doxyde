@@ -64,8 +64,12 @@ impl TemplateEngine {
         tera.register_filter("round", make_round_filter());
 
         // Register component rendering functions
-        tera.register_function("render_component", RenderComponentFunction);
-        tera.register_function("get_component_templates", GetComponentTemplatesFunction);
+        tera.register_function("render_component", RenderComponentFunction {
+            templates_dir: templates_dir.to_string(),
+        });
+        tera.register_function("get_component_templates", GetComponentTemplatesFunction {
+            templates_dir: templates_dir.to_string(),
+        });
 
         Ok(tera)
     }
