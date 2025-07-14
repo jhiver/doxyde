@@ -66,11 +66,22 @@
                 </a>
             </div>
             <div class="nav-right">
+                {% if nav_items %}
+                    <nav class="top-nav">
+                        {% for item in nav_items %}
+                            {% if item.is_current %}
+                                <span class="nav-item nav-current">{{ item.title }}</span>
+                            {% else %}
+                                <a href="{{ item.url }}" class="nav-item">{{ item.title }}</a>
+                            {% endif %}
+                        {% endfor %}
+                    </nav>
+                {% endif %}
+                
                 {% if user %}
-                    <span class="auth-info">
-                        Welcome, <strong>{{ user.username }}</strong>
-                    </span>
-                    <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
+                    <div class="auth-controls">
+                        <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
+                    </div>
                 {% else %}
                     <a href="/.login" class="btn btn-sm btn-primary">Login</a>
                 {% endif %}

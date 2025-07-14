@@ -50,6 +50,7 @@ pub fn get_templates_for_type(component_type: &str) -> Vec<&'static str> {
             "highlight",
             "quote",
             "hidden",
+            "hero",
         ],
         "html" => vec!["default"],
         "code" => vec!["default", "with_title"],

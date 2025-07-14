@@ -2,7 +2,7 @@
     {% if component.title %}
         <h3 class="card-title">{{ component.title }}</h3>
     {% endif %}
-    <div class="card-content" data-markdown="{{ component.content.text | escape }}">
+    <div class="card-content">
         {{ component.content.text | markdown }}
     </div>
 </div>

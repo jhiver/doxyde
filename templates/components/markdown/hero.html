@@ -1,0 +1,8 @@
+<div class="markdown-component hero">
+    {% if component.title %}
+        <h1 class="hero-title">{{ component.title }}</h1>
+    {% endif %}
+    <div class="hero-content">
+        {{ component.content.text | markdown }}
+    </div>
+</div>

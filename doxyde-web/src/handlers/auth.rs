@@ -42,7 +42,7 @@ async fn create_login_context(state: &AppState, host: &str, error: Option<&str>)
     let site_repo = SiteRepository::new(state.db.clone());
     if let Ok(Some(site)) = site_repo.find_by_domain(host).await {
         // Add base context with logo support
-        if let Err(e) = add_base_context(&mut context, state, &site).await {
+        if let Err(e) = add_base_context(&mut context, state, &site, None).await {
             tracing::warn!("Failed to add base context: {:?}", e);
             // Fall back to just site title
             context.insert("site_title", &site.title);

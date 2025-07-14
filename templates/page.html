@@ -27,21 +27,7 @@
         {% endif %}
         
         {% for component in components %}
-            {% if component.component_type == "text" %}
-                <div class="text-component">
-                    {{ component.content.text | safe }}
-                </div>
-            {% elif component.component_type == "image" %}
-                <div class="image-component">
-                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
-                </div>
-            {% elif component.component_type == "code" %}
-                <pre><code>{{ component.content.code }}</code></pre>
-            {% else %}
-                <div class="custom-component">
-                    {{ component.content | json_encode }}
-                </div>
-            {% endif %}
+            {{ render_component(component=component) }}
         {% endfor %}
         
         {% if components|length == 0 %}

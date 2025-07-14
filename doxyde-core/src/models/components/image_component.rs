@@ -16,8 +16,6 @@
 
 use crate::models::component::Component;
 use crate::models::component_trait::{escape_html, extract_text, ComponentRenderer};
-use crate::models::style_utils::{style_options_to_classes, style_options_to_css};
-use serde_json::Value;
 
 pub struct ImageComponent {
     pub id: Option<i64>,
@@ -28,7 +26,6 @@ pub struct ImageComponent {
     pub height: Option<u32>,
     pub display_width: Option<String>,
     pub display_height: Option<String>,
-    pub style_options: Option<Value>,
 }
 
 impl ImageComponent {
@@ -92,7 +89,6 @@ impl ImageComponent {
                 height,
                 display_width,
                 display_height,
-                style_options: component.style_options.clone(),
             }
         } else {
             // Old format
@@ -105,7 +101,6 @@ impl ImageComponent {
                 height: None,
                 display_width: None,
                 display_height: None,
-                style_options: component.style_options.clone(),
             }
         }
     }
@@ -113,9 +108,6 @@ impl ImageComponent {
 
 impl ComponentRenderer for ImageComponent {
     fn render(&self, template: &str) -> String {
-        // Get style classes and inline styles
-        let style_classes = style_options_to_classes(self.style_options.as_ref());
-        let inline_styles = style_options_to_css(self.style_options.as_ref());
 
         // Build img tag with width/height if available
         let mut img_attrs = vec![
@@ -158,13 +150,9 @@ impl ComponentRenderer for ImageComponent {
 
         match template {
             "default" => {
-                let mut classes = vec!["image-component"];
-                classes.extend(style_classes.iter().map(|s| s.as_str()));
-                let class_str = classes.join(" ");
-
                 format!(
-                    r#"<div class="{}"{}>{}</div>"#,
-                    class_str, inline_styles, img_tag
+                    r#"<div class="image-component">{}</div>"#,
+                    img_tag
                 )
             }
             "figure" => {
@@ -181,30 +169,10 @@ impl ComponentRenderer for ImageComponent {
                 )
             }
             "hero" => {
-                let mut classes = vec!["image-component", "hero"];
-                classes.extend(style_classes.iter().map(|s| s.as_str()));
-                let class_str = classes.join(" ");
-
-                let container_style = if inline_styles.is_empty() {
-                    r#" style="width: 100%; overflow: hidden;""#.to_string()
-                } else {
-                    // Merge inline styles with hero defaults
-                    let style_content = inline_styles
-                        .strip_prefix(" style=\"")
-                        .and_then(|s| s.strip_suffix("\""))
-                        .unwrap_or("");
-                    format!(
-                        r#" style="width: 100%; overflow: hidden; {}""#,
-                        style_content
-                    )
-                };
-
                 format!(
-                    r#"<div class="{}"{}">
+                    r#"<div class="image-component hero" style="width: 100%; overflow: hidden;">
     <img src="{}" alt="{}" style="width: 100%; height: auto; display: block;">
 </div>"#,
-                    class_str,
-                    container_style,
                     escape_html(&self.src),
                     escape_html(&self.alt)
                 )

@@ -523,7 +523,6 @@ pub async fn upload_component_image_handler(
             content.clone(),
             title,
             component.template.clone(),
-            None, // TODO: Add style options support
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

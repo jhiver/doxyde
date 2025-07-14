@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{content, handlers, AppState};
+use crate::{content, handlers, AppState, debug_middleware::debug_form_middleware};
 use axum::extract::DefaultBodyLimit;
-use axum::{routing::get, Router};
+use axum::{routing::get, Router, middleware};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
@@ -32,6 +32,7 @@ pub fn create_router(state: AppState) -> Router {
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
+        .layer(middleware::from_fn(debug_form_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(DefaultBodyLimit::max(max_upload_size))

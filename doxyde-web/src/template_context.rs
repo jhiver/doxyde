@@ -15,27 +15,68 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::Result;
-use doxyde_core::models::site::Site;
+use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::PageRepository;
 use tera::Context;
 
 use crate::{logo::get_logo_data, AppState};
 
 /// Add common base template context variables
-/// This includes site_title, root_page_title, and logo information
-pub async fn add_base_context(context: &mut Context, state: &AppState, site: &Site) -> Result<()> {
+/// This includes site_title, root_page_title, logo information, and navigation
+pub async fn add_base_context(
+    context: &mut Context,
+    state: &AppState,
+    site: &Site,
+    current_page: Option<&Page>,
+) -> Result<()> {
     // Add site title
     context.insert("site_title", &site.title);
 
-    // Get root page title
+    // Get root page and its children for navigation
     let page_repo = PageRepository::new(state.db.clone());
-    let root_page_title =
+    let (root_page_title, root_children) =
         if let Ok(Some(root_page)) = page_repo.get_root_page(site.id.unwrap()).await {
-            root_page.title
+            let title = root_page.title.clone();
+            
+            // Get children of root page for top navigation
+            let children = page_repo
+                .list_children(root_page.id.unwrap())
+                .await
+                .unwrap_or_default();
+            
+            (title, children)
         } else {
-            site.title.clone()
+            (site.title.clone(), Vec::new())
         };
+    
     context.insert("root_page_title", &root_page_title);
+    
+    // Build navigation data with active state
+    // For nested pages, we need to check if the current page is under one of the root children
+    let current_page_id = current_page.and_then(|p| p.id);
+    let mut nav_items: Vec<serde_json::Value> = Vec::new();
+    
+    for child in root_children {
+        let mut is_current = false;
+        
+        // Check if this is the current page
+        if child.id == current_page_id {
+            is_current = true;
+        } else if let Some(current) = current_page {
+            // Check if current page is a descendant of this child
+            if let Ok(is_desc) = page_repo.is_descendant_of(current.id.unwrap(), child.id.unwrap()).await {
+                is_current = is_desc;
+            }
+        }
+        
+        nav_items.push(serde_json::json!({
+            "title": child.title,
+            "url": format!("/{}", child.slug),
+            "is_current": is_current
+        }));
+    }
+    
+    context.insert("nav_items", &nav_items);
 
     // Get logo data
     if let Ok(Some((logo_url, logo_width, logo_height))) =

@@ -27,7 +27,6 @@ pub struct Component {
     pub content: Value,
     pub title: Option<String>,
     pub template: String,
-    pub style_options: Option<Value>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -48,7 +47,6 @@ impl Component {
             content,
             title: None,
             template: "default".to_string(),
-            style_options: None,
             created_at: now,
             updated_at: now,
         }
@@ -156,18 +154,14 @@ impl Component {
             return Err("Template cannot exceed 50 characters".to_string());
         }
 
-        let valid_templates = [
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hidden",
-        ];
+        // Get valid templates for this component type using component_factory
+        let valid_templates = crate::models::component_factory::get_templates_for_type(&self.component_type);
+        
         if !valid_templates.contains(&self.template.as_str()) {
             return Err(format!(
-                "Invalid template '{}'. Must be one of: {}",
+                "Invalid template '{}' for component type '{}'. Must be one of: {}",
                 self.template,
+                self.component_type,
                 valid_templates.join(", ")
             ));
         }
@@ -552,7 +546,8 @@ mod tests {
 
     #[test]
     fn test_validate_template_valid() {
-        let valid_templates = [
+        // Test text component templates
+        let text_templates = [
             "default",
             "with_title",
             "card",
@@ -561,11 +556,21 @@ mod tests {
             "hidden",
         ];
 
-        for template in &valid_templates {
+        for template in &text_templates {
             let mut component = Component::new(1, "text".to_string(), 0, json!({"text": "test"}));
             component.template = template.to_string();
             assert!(component.validate_template().is_ok());
         }
+
+        // Test markdown component can use hero template
+        let mut markdown_component = Component::new(1, "markdown".to_string(), 0, json!({"text": "# Hero"}));
+        markdown_component.template = "hero".to_string();
+        assert!(markdown_component.validate_template().is_ok());
+
+        // Test that text component cannot use hero template
+        let mut text_component = Component::new(1, "text".to_string(), 0, json!({"text": "test"}));
+        text_component.template = "hero".to_string();
+        assert!(text_component.validate_template().is_err());
     }
 
     #[test]
@@ -582,7 +587,7 @@ mod tests {
         component.template = "invalid".to_string();
         let result = component.validate_template();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid template 'invalid'"));
+        assert!(result.unwrap_err().contains("Invalid template 'invalid' for component type 'text'"));
 
         // Too long template
         component.template = "a".repeat(51);

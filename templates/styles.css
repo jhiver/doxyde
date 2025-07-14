@@ -177,6 +177,37 @@ a:hover {
     color: var(--gray-300);
 }
 
+/* Top Navigation */
+.top-nav {
+    display: flex;
+    align-items: center;
+    gap: var(--space-lg);
+}
+
+.nav-item {
+    font-size: 0.9375rem;
+    color: var(--gray-300);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.nav-item:hover {
+    color: white;
+    text-decoration: underline;
+}
+
+.nav-item.nav-current {
+    color: white;
+    font-weight: 700;
+    cursor: default;
+}
+
+.auth-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+}
+
 /* Main Container */
 .main-container {
     flex: 1;
@@ -711,6 +742,12 @@ footer a:hover {
     min-height: calc(100vh - 140px);
     padding: var(--space-xl);
     background-color: var(--gray-50);
+    width: 100%;
+}
+
+/* When login container is inside main-container */
+.main-container > .login-container {
+    flex: 1;
 }
 
 .login-box {
@@ -842,7 +879,8 @@ footer a:hover {
 }
 
 /* Hero Text Component */
-.text-component.hero {
+.text-component.hero,
+.markdown-component.hero {
     text-align: center;
     padding: var(--space-2xl) var(--space-xl);
 }
@@ -854,6 +892,7 @@ footer a:hover {
     margin-bottom: var(--space-xl);
     letter-spacing: -0.03em;
     color: var(--gray-900);
+    text-align: center;
 }
 
 .hero-content {
@@ -862,6 +901,7 @@ footer a:hover {
     color: var(--gray-700);
     max-width: 65ch;
     margin: 0 auto;
+    text-align: center;
 }
 
 /* Responsive adjustments for hero */

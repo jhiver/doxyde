@@ -2,7 +2,7 @@
     {% if component.title %}
         <h3 class="quote-title">{{ component.title }}</h3>
     {% endif %}
-    <div data-markdown="{{ component.content.text | escape }}">
+    <div>
         {{ component.content.text | markdown }}
     </div>
 </blockquote>

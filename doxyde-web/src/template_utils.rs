@@ -3,7 +3,7 @@ use std::path::Path;
 /// Discovers available page templates by scanning the page_templates subdirectory
 pub fn discover_page_templates(template_dir: &Path) -> Vec<String> {
     let page_templates_dir = template_dir.join("page_templates");
-    
+
     // Try to read the page_templates directory
     if let Ok(entries) = std::fs::read_dir(page_templates_dir) {
         let mut found_templates: Vec<String> = Vec::new();
@@ -22,7 +22,7 @@ pub fn discover_page_templates(template_dir: &Path) -> Vec<String> {
 
         // Sort templates alphabetically
         found_templates.sort();
-        
+
         // If we found templates, return them; otherwise return just default
         if !found_templates.is_empty() {
             found_templates
@@ -59,7 +59,7 @@ mod tests {
         fs::write(page_templates_dir.join("blog.html"), "").unwrap();
         fs::write(page_templates_dir.join("landing.html"), "").unwrap();
         fs::write(page_templates_dir.join("full_width.html"), "").unwrap();
-        
+
         // Create files in main templates directory that should be ignored
         fs::write(temp_dir.path().join("page_edit.html"), "").unwrap();
         fs::write(temp_dir.path().join("not_a_template.html"), "").unwrap();
@@ -78,4 +78,5 @@ mod tests {
         let templates = discover_page_templates(Path::new("/nonexistent/path"));
         assert_eq!(templates, vec!["default"]);
     }
+
 }

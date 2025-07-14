@@ -20,6 +20,7 @@ pub mod component_render;
 pub mod config;
 pub mod content;
 pub mod db;
+pub mod debug_middleware;
 pub mod draft;
 pub mod error;
 pub mod handlers;
@@ -34,7 +35,6 @@ pub mod uploads;
 
 #[cfg(test)]
 pub mod test_helpers;
-
 
 pub use config::Config;
 pub use state::AppState;

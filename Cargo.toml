@@ -5,6 +5,7 @@ members = [
     "doxyde-web",
     "doxyde-ai",
     "doxyde-cli",
+    "doxyde-tagger",
 ]
 resolver = "2"
 

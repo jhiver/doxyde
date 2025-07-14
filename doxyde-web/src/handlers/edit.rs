@@ -56,8 +56,7 @@ pub struct SaveDraftForm {
     pub component_titles: Vec<String>,
     pub component_templates: Vec<String>,
     pub component_contents: Vec<String>,
-    #[serde(default)]
-    pub component_style_options: Vec<String>,
+    pub action: Option<String>,
 }
 
 /// Display page content edit form (components only)
@@ -96,6 +95,10 @@ pub async fn edit_page_content_handler(
     let page_repo = PageRepository::new(state.db.clone());
     let component_repo = ComponentRepository::new(state.db.clone());
 
+    tracing::info!("=== EDIT PAGE HANDLER START ===");
+    tracing::info!("Page: {} (ID: {:?})", page.title, page.id);
+    tracing::info!("User: {}", user.user.username);
+    
     // Get or create a draft version
     let draft_version = match get_or_create_draft(
         &state.db,
@@ -104,7 +107,10 @@ pub async fn edit_page_content_handler(
     )
     .await
     {
-        Ok(draft) => draft,
+        Ok(draft) => {
+            tracing::info!("Got draft version ID: {:?}", draft.id);
+            draft
+        },
         Err(e) => {
             tracing::error!(
                 error = ?e,
@@ -120,7 +126,19 @@ pub async fn edit_page_content_handler(
         .list_by_page_version(draft_version.id.unwrap())
         .await
     {
-        Ok(comps) => comps,
+        Ok(comps) => {
+            tracing::info!("Retrieved {} components from draft", comps.len());
+            for (idx, comp) in comps.iter().enumerate() {
+                tracing::info!(
+                    "  Component [{}]: ID={:?}, type={}, template={}",
+                    idx,
+                    comp.id,
+                    comp.component_type,
+                    comp.template
+                );
+            }
+            comps
+        }
         Err(e) => {
             tracing::error!(
                 error = ?e,
@@ -171,8 +189,8 @@ pub async fn edit_page_content_handler(
     // Prepare template context
     let mut context = Context::new();
 
-    // Add base context (site_title, root_page_title, logo data)
-    add_base_context(&mut context, &state, &site)
+    // Add base context (site_title, root_page_title, logo data, navigation)
+    add_base_context(&mut context, &state, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("page", &page);
@@ -410,8 +428,8 @@ pub async fn new_page_handler(
     // Prepare template context
     let mut context = Context::new();
 
-    // Add base context (site_title, root_page_title, logo data)
-    add_base_context(&mut context, &state, &site)
+    // Add base context (site_title, root_page_title, logo data, navigation)
+    add_base_context(&mut context, &state, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("parent_page", &page);
@@ -535,7 +553,6 @@ pub async fn update_component_handler(
             content,
             form.title.clone(),
             form.template,
-            None, // TODO: Add style options support
         )
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -602,6 +619,14 @@ pub async fn save_draft_handler(
     user: CurrentUser,
     Form(form): Form<SaveDraftForm>,
 ) -> Result<Response, StatusCode> {
+    tracing::info!("=== SAVE DRAFT HANDLER START ===");
+    tracing::info!("Page: {} (ID: {:?})", page.title, page.id);
+    tracing::info!("User: {}", user.user.username);
+    
+    // Debug: Log the parsed form structure
+    tracing::info!("=== PARSED FORM DEBUG ===");
+    tracing::info!("Form struct: {:?}", form);
+    
     // Check permissions
     if !can_edit_page(&state, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
@@ -617,6 +642,8 @@ pub async fn save_draft_handler(
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    tracing::info!("Draft version ID: {:?}", draft_version.id);
 
     // Get all existing components in the draft
     let existing_components = component_repo
@@ -625,7 +652,8 @@ pub async fn save_draft_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Create a set of submitted component IDs for quick lookup
-    let submitted_ids: std::collections::HashSet<i64> = form.component_ids.iter().cloned().collect();
+    let submitted_ids: std::collections::HashSet<i64> =
+        form.component_ids.iter().cloned().collect();
 
     // Delete components that exist in draft but weren't submitted (they were deleted in UI)
     for component in &existing_components {
@@ -643,6 +671,27 @@ pub async fn save_draft_handler(
         }
     }
 
+    tracing::info!(
+        "Form data lengths - ids: {}, types: {}, titles: {}, templates: {}, contents: {}",
+        form.component_ids.len(),
+        form.component_types.len(),
+        form.component_titles.len(),
+        form.component_templates.len(),
+        form.component_contents.len()
+    );
+    
+    // Log the actual form data
+    tracing::info!("Component IDs submitted: {:?}", form.component_ids);
+    
+    // Validate form data consistency
+    if form.component_ids.len() != form.component_types.len() ||
+       form.component_ids.len() != form.component_titles.len() ||
+       form.component_ids.len() != form.component_templates.len() ||
+       form.component_ids.len() != form.component_contents.len() {
+        tracing::error!("Form data arrays have inconsistent lengths!");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    
     // Update each submitted component
     for i in 0..form.component_ids.len() {
         let component_id = form.component_ids[i];
@@ -654,6 +703,16 @@ pub async fn save_draft_handler(
         };
         let template = &form.component_templates[i];
         let content_str = &form.component_contents[i];
+        
+        tracing::info!(
+            "=== Processing component {} (index: {}) ===",
+            component_id,
+            i
+        );
+        tracing::info!("  Type: {}", component_type);
+        tracing::info!("  Template: {}", template);
+        tracing::info!("  Title: {:?}", title);
+        tracing::info!("  Content: {}", content_str);
 
         // Parse content based on component type
         let content = match component_type.as_str() {
@@ -684,29 +743,28 @@ pub async fn save_draft_handler(
             }),
         };
 
-        // Parse style options
-        let style_options = if i < form.component_style_options.len() {
-            let style_str = &form.component_style_options[i];
-            if !style_str.is_empty() {
-                serde_json::from_str::<serde_json::Value>(style_str).ok()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         // Update the component
-        component_repo
+        match component_repo
             .update_content(
                 component_id,
                 content,
                 title,
                 template.clone(),
-                style_options,
             )
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        {
+            Ok(_) => {
+                tracing::info!("  ✓ Successfully updated component {}", component_id);
+            }
+            Err(e) => {
+                tracing::error!(
+                    "  ✗ Failed to update component {}: {:?}",
+                    component_id,
+                    e
+                );
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
     }
 
     // Normalize positions after all updates and deletions
@@ -715,6 +773,8 @@ pub async fn save_draft_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
+    tracing::info!("=== SAVE DRAFT HANDLER COMPLETE ===");
+    
     // Redirect back to edit page
     let redirect_path = build_page_path(&state, &page).await?;
     let edit_path = if redirect_path == "/" {
@@ -722,6 +782,9 @@ pub async fn save_draft_handler(
     } else {
         format!("{}/.edit", redirect_path)
     };
+    
+    tracing::info!("Redirecting to: {}", edit_path);
+    
     Ok(Redirect::to(&edit_path).into_response())
 }
 
@@ -848,6 +911,7 @@ mod tests {
         ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
         SiteUserRepository,
     };
+    use serde_json::json;
 
     #[tokio::test]
     async fn test_save_and_publish_with_deleted_components() -> anyhow::Result<()> {
@@ -944,8 +1008,11 @@ mod tests {
             component_types: vec!["text".to_string(), "text".to_string()],
             component_titles: vec!["".to_string(), "".to_string()],
             component_templates: vec!["default".to_string(), "default".to_string()],
-            component_contents: vec!["Component 1 Updated".to_string(), "Component 3 Updated".to_string()],
-            component_style_options: vec![],
+            component_contents: vec![
+                "Component 1 Updated".to_string(),
+                "Component 3 Updated".to_string(),
+            ],
+            action: Some("save_draft".to_string()),
         };
 
         // Use the root page
@@ -973,7 +1040,9 @@ mod tests {
         assert!(result.is_ok(), "save_draft_handler should succeed");
 
         // Check that component 2 was deleted from the draft (bug is fixed)
-        let draft_components = component_repo.list_by_page_version(draft_version_id).await?;
+        let draft_components = component_repo
+            .list_by_page_version(draft_version_id)
+            .await?;
         assert_eq!(
             draft_components.len(),
             2,
@@ -991,7 +1060,10 @@ mod tests {
 
         // Now publish the draft
         let publish_result = publish_draft_handler(app_state, site, page, current_user).await;
-        assert!(publish_result.is_ok(), "publish_draft_handler should succeed");
+        assert!(
+            publish_result.is_ok(),
+            "publish_draft_handler should succeed"
+        );
 
         // Get the new published version components
         let new_published_id = version_repo
@@ -1000,7 +1072,9 @@ mod tests {
             .unwrap()
             .id
             .unwrap();
-        let published_components = component_repo.list_by_page_version(new_published_id).await?;
+        let published_components = component_repo
+            .list_by_page_version(new_published_id)
+            .await?;
 
         // Should have exactly 2 components after publishing
         assert_eq!(
@@ -1114,11 +1188,17 @@ mod tests {
             .list_by_page_version(draft_version.id.unwrap())
             .await?;
 
-        assert_eq!(components_after_delete.len(), 0, "Should have 0 components after deletion");
+        assert_eq!(
+            components_after_delete.len(),
+            0,
+            "Should have 0 components after deletion"
+        );
 
         // Verify positions are normalized (even though there are no components)
         // This is just to ensure normalize_positions doesn't error on empty set
-        component_repo.normalize_positions(draft_version.id.unwrap()).await?;
+        component_repo
+            .normalize_positions(draft_version.id.unwrap())
+            .await?;
 
         Ok(())
     }

@@ -1,0 +1,16 @@
+[package]
+name = "doxyde-tagger"
+version = "0.1.0"
+edition = "2021"
+authors = ["Doxyde Contributors"]
+description = "HTML auto-tagging library for Doxyde CMS"
+license = "AGPL-3.0"
+
+[dependencies]
+regex = "1.10"
+once_cell = "1.19"
+thiserror = "1.0"
+
+[dev-dependencies]
+pretty_assertions = "1.4"
+proptest = "1.4"

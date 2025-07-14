@@ -53,10 +53,11 @@ impl TeraFunction for RenderComponentFunction {
                 "{}/components/{}/default.html",
                 self.templates_dir, component.component_type
             );
-            
+
             if Path::new(&default_path).exists() {
-                fs::read_to_string(&default_path)
-                    .map_err(|e| tera::Error::msg(format!("Failed to read default template: {}", e)))?
+                fs::read_to_string(&default_path).map_err(|e| {
+                    tera::Error::msg(format!("Failed to read default template: {}", e))
+                })?
             } else {
                 // Fallback to inline template for backward compatibility
                 return Ok(to_value(render_component_inline(&component)?)?);
@@ -66,14 +67,14 @@ impl TeraFunction for RenderComponentFunction {
         // Create a Tera instance and render the template
         let mut tera = tera::Tera::default();
         tera.add_raw_template("component", &template_content)?;
-        
-        // Add the markdown filter
+
+        // Add filters
         tera.register_filter("markdown", crate::markdown::make_markdown_filter());
-        
+
         // Create context with component data
         let mut context = Context::new();
         context.insert("component", &component);
-        
+
         // Render the template
         let html = tera.render("component", &context)?;
 
@@ -86,12 +87,12 @@ fn render_component_inline(component: &Component) -> TeraResult<String> {
     // Use the old renderer for backward compatibility
     let renderer = doxyde_core::models::component_factory::create_renderer(component);
     let mut html = renderer.render(&component.template);
-    
+
     // Post-process markdown components
     if component.component_type == "markdown" {
         html = process_markdown_placeholders(&html);
     }
-    
+
     Ok(html)
 }
 
@@ -119,11 +120,11 @@ fn process_markdown_placeholders(html: &str) -> String {
             // Find the entire div element to replace
             // We need to find where the div starts (before data-markdown)
             let div_start = result[..start].rfind("<div").unwrap_or(0);
-            
+
             // Find the corresponding closing div
             if let Some(div_end_offset) = result[attr_start + end..].find("</div>") {
                 let div_end = attr_start + end + div_end_offset + 6; // +6 for "</div>"
-                
+
                 // Extract the div's classes if any
                 let div_content = &result[div_start..start];
                 let class_attr = if let Some(class_start) = div_content.find("class=\"") {
@@ -136,14 +137,14 @@ fn process_markdown_placeholders(html: &str) -> String {
                 } else {
                     None
                 };
-                
+
                 // Build the replacement div without data-markdown attribute
                 let replacement = if let Some(classes) = class_attr {
                     format!(r#"<div class="{}">{}</div>"#, classes, html_content)
                 } else {
                     format!(r#"<div>{}</div>"#, html_content)
                 };
-                
+
                 // Replace the entire div
                 result.replace_range(div_start..div_end, &replacement);
             } else {
@@ -172,10 +173,10 @@ impl TeraFunction for GetComponentTemplatesFunction {
 
         // Read templates from the filesystem
         let component_dir = format!("{}/components/{}", self.templates_dir, component_type);
-        
+
         let templates = if let Ok(entries) = fs::read_dir(&component_dir) {
             let mut template_names = Vec::new();
-            
+
             for entry in entries.flatten() {
                 if let Ok(file_type) = entry.file_type() {
                     if file_type.is_file() {
@@ -189,7 +190,7 @@ impl TeraFunction for GetComponentTemplatesFunction {
                     }
                 }
             }
-            
+
             // Sort templates with "default" first
             template_names.sort_by(|a, b| {
                 if a == "default" {
@@ -200,7 +201,7 @@ impl TeraFunction for GetComponentTemplatesFunction {
                     a.cmp(b)
                 }
             });
-            
+
             template_names
         } else {
             // Fallback to hardcoded templates if directory doesn't exist

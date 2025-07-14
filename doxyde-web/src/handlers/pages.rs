@@ -181,8 +181,8 @@ pub async fn show_page_handler(
     // Prepare template context
     let mut context = Context::new();
 
-    // Add base context (site_title, root_page_title, logo data)
-    add_base_context(&mut context, &state, &site)
+    // Add base context (site_title, root_page_title, logo data, navigation)
+    add_base_context(&mut context, &state, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("page", &page);
