@@ -78,5 +78,4 @@ mod tests {
         let templates = discover_page_templates(Path::new("/nonexistent/path"));
         assert_eq!(templates, vec!["default"]);
     }
-
 }

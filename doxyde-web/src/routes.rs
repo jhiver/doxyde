@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::{content, handlers, AppState, debug_middleware::debug_form_middleware};
+use crate::{content, debug_middleware::debug_form_middleware, handlers, AppState};
 use axum::extract::DefaultBodyLimit;
-use axum::{routing::get, Router, middleware};
+use axum::{middleware, routing, routing::get, Router};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
@@ -29,6 +29,12 @@ pub fn create_router(state: AppState) -> Router {
         // System routes (dot-prefixed)
         .route("/.login", get(handlers::login_form).post(handlers::login))
         .route("/.logout", get(handlers::logout).post(handlers::logout))
+        // MCP Token management
+        .route("/.settings/mcp", get(handlers::list_tokens_handler).post(handlers::create_token_handler))
+        .route("/.settings/mcp/:token_id", get(handlers::show_token_handler))
+        .route("/.settings/mcp/:token_id/revoke", get(handlers::revoke_token_handler).post(handlers::revoke_token_handler))
+        // MCP Server endpoint (supports both regular JSON-RPC and SSE)
+        .route("/.mcp/:token_id", routing::post(handlers::mcp_http_handler))
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware

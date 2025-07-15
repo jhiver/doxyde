@@ -98,7 +98,7 @@ pub async fn edit_page_content_handler(
     tracing::info!("=== EDIT PAGE HANDLER START ===");
     tracing::info!("Page: {} (ID: {:?})", page.title, page.id);
     tracing::info!("User: {}", user.user.username);
-    
+
     // Get or create a draft version
     let draft_version = match get_or_create_draft(
         &state.db,
@@ -110,7 +110,7 @@ pub async fn edit_page_content_handler(
         Ok(draft) => {
             tracing::info!("Got draft version ID: {:?}", draft.id);
             draft
-        },
+        }
         Err(e) => {
             tracing::error!(
                 error = ?e,
@@ -622,11 +622,11 @@ pub async fn save_draft_handler(
     tracing::info!("=== SAVE DRAFT HANDLER START ===");
     tracing::info!("Page: {} (ID: {:?})", page.title, page.id);
     tracing::info!("User: {}", user.user.username);
-    
+
     // Debug: Log the parsed form structure
     tracing::info!("=== PARSED FORM DEBUG ===");
     tracing::info!("Form struct: {:?}", form);
-    
+
     // Check permissions
     if !can_edit_page(&state, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
@@ -642,7 +642,7 @@ pub async fn save_draft_handler(
     )
     .await
     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     tracing::info!("Draft version ID: {:?}", draft_version.id);
 
     // Get all existing components in the draft
@@ -679,19 +679,20 @@ pub async fn save_draft_handler(
         form.component_templates.len(),
         form.component_contents.len()
     );
-    
+
     // Log the actual form data
     tracing::info!("Component IDs submitted: {:?}", form.component_ids);
-    
+
     // Validate form data consistency
-    if form.component_ids.len() != form.component_types.len() ||
-       form.component_ids.len() != form.component_titles.len() ||
-       form.component_ids.len() != form.component_templates.len() ||
-       form.component_ids.len() != form.component_contents.len() {
+    if form.component_ids.len() != form.component_types.len()
+        || form.component_ids.len() != form.component_titles.len()
+        || form.component_ids.len() != form.component_templates.len()
+        || form.component_ids.len() != form.component_contents.len()
+    {
         tracing::error!("Form data arrays have inconsistent lengths!");
         return Err(StatusCode::BAD_REQUEST);
     }
-    
+
     // Update each submitted component
     for i in 0..form.component_ids.len() {
         let component_id = form.component_ids[i];
@@ -703,7 +704,7 @@ pub async fn save_draft_handler(
         };
         let template = &form.component_templates[i];
         let content_str = &form.component_contents[i];
-        
+
         tracing::info!(
             "=== Processing component {} (index: {}) ===",
             component_id,
@@ -745,23 +746,14 @@ pub async fn save_draft_handler(
 
         // Update the component
         match component_repo
-            .update_content(
-                component_id,
-                content,
-                title,
-                template.clone(),
-            )
+            .update_content(component_id, content, title, template.clone())
             .await
         {
             Ok(_) => {
                 tracing::info!("  ✓ Successfully updated component {}", component_id);
             }
             Err(e) => {
-                tracing::error!(
-                    "  ✗ Failed to update component {}: {:?}",
-                    component_id,
-                    e
-                );
+                tracing::error!("  ✗ Failed to update component {}: {:?}", component_id, e);
                 return Err(StatusCode::INTERNAL_SERVER_ERROR);
             }
         }
@@ -774,7 +766,7 @@ pub async fn save_draft_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tracing::info!("=== SAVE DRAFT HANDLER COMPLETE ===");
-    
+
     // Redirect back to edit page
     let redirect_path = build_page_path(&state, &page).await?;
     let edit_path = if redirect_path == "/" {
@@ -782,9 +774,9 @@ pub async fn save_draft_handler(
     } else {
         format!("{}/.edit", redirect_path)
     };
-    
+
     tracing::info!("Redirecting to: {}", edit_path);
-    
+
     Ok(Redirect::to(&edit_path).into_response())
 }
 
@@ -911,7 +903,6 @@ mod tests {
         ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
         SiteUserRepository,
     };
-    use serde_json::json;
 
     #[tokio::test]
     async fn test_save_and_publish_with_deleted_components() -> anyhow::Result<()> {

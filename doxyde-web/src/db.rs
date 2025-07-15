@@ -59,7 +59,7 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
             .await
             .context("Failed to query schema version")?;
 
-    let expected_version = "20250713_add_component_styles";
+    let expected_version = "20250715_add_mcp_tokens";
 
     if last_version.as_deref() != Some(expected_version) {
         tracing::info!("Running migrations...");

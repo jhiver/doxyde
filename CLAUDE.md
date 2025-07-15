@@ -35,7 +35,17 @@ Doxyde is a modern, AI-native content management system built with Rust. It's de
 
 **🚀 Ready to Use:** See README.md for quick start guide
 
-### Latest Updates (July 13, 2025)
+### Latest Updates (July 15, 2025)
+
+**MCP Integration:**
+- **MCP Token System**: Users can generate secure tokens to connect Doxyde with Claude Code
+- **Token Management UI**: Available at `/.settings/mcp` for creating and revoking tokens
+- **HTTP MCP Server**: Integrated directly into doxyde-web at `/.mcp/:token_id`
+- **Per-Site Access**: Each token is limited to a specific site for security
+- **Usage Tracking**: Last usage time is tracked for each token
+- **Simple Integration**: Users just copy the generated URL into Claude Code as a custom connector
+
+### Previous Updates (July 13, 2025)
 
 **Image Upload System:**
 - **Full image upload functionality**: Support for uploading images to components
@@ -80,7 +90,7 @@ Doxyde is a modern, AI-native content management system built with Rust. It's de
 ### Progress Summary
 
 #### ✅ Phase 1: Project Setup (Complete)
-- Initialized Rust workspace with 4 crates (doxyde-core, doxyde-db, doxyde-web, doxyde-ai)
+- Initialized Rust workspace with 4 crates (doxyde-core, doxyde-db, doxyde-web, doxyde-mcp)
 - Set up dependencies and project structure
 - Created initial SQLite migration schema
 - Added .env and .gitignore files
@@ -540,7 +550,7 @@ The main content handler (`fallback` route) parses the URL to:
 - **doxyde-core**: Domain models, business logic, and services
 - **doxyde-db**: Database layer with SQLite and sqlx
 - **doxyde-web**: Web server using Axum framework  
-- **doxyde-ai**: AI command interface for MCP integration
+- **doxyde-mcp**: MCP server for AI integration
 
 ## Quick Commands
 
@@ -637,7 +647,7 @@ The minimum viable product is now functional with:
    - Search filters
 
 #### Low Priority
-1. **AI Integration** (doxyde-ai):
+1. **AI Integration** (doxyde-mcp):
    - MCP server implementation
    - AI-assisted content creation
    - Content suggestions

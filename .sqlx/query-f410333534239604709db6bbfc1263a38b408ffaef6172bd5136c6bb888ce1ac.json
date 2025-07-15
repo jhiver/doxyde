@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM components \n            WHERE page_version_id IN (\n                SELECT id FROM page_versions WHERE page_id = ?\n            )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "f410333534239604709db6bbfc1263a38b408ffaef6172bd5136c6bb888ce1ac"
+}

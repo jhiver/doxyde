@@ -73,7 +73,7 @@ mod tests {
         assert_eq!(version.page_id, 1);
         assert_eq!(version.version_number, 1);
         assert_eq!(version.created_by, Some("user@example.com".to_string()));
-        assert_eq!(version.is_published, false);
+        assert!(!version.is_published);
         assert!(version.created_at <= Utc::now());
     }
 
@@ -85,7 +85,7 @@ mod tests {
         assert_eq!(version.page_id, 5);
         assert_eq!(version.version_number, 3);
         assert_eq!(version.created_by, None);
-        assert_eq!(version.is_published, false);
+        assert!(!version.is_published);
         assert!(version.created_at <= Utc::now());
     }
 

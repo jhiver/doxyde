@@ -26,6 +26,7 @@ pub mod error;
 pub mod handlers;
 pub mod logo;
 pub mod markdown;
+pub mod mcp_simple;
 pub mod routes;
 pub mod state;
 pub mod template_context;

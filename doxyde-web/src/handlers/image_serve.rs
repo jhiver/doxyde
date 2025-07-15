@@ -133,7 +133,6 @@ async fn serve_image_file(file_path: &str, format: &str) -> Result<Response, Sta
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_content_type_mapping() {

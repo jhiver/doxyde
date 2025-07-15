@@ -317,7 +317,7 @@ pub async fn upload_image_ajax_handler(
 
     // Generate a suggested slug from the filename
     let suggested_slug = sanitize_slug(
-        &PathBuf::from(&original_filename)
+        PathBuf::from(&original_filename)
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("image"),
@@ -547,8 +547,6 @@ pub async fn upload_component_image_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use doxyde_core::models::{page::Page, session::Session, user::User};
-    use sqlx::SqlitePool;
 
     #[test]
     fn test_sanitize_slug_for_filenames() {

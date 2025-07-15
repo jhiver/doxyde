@@ -108,7 +108,6 @@ impl ImageComponent {
 
 impl ComponentRenderer for ImageComponent {
     fn render(&self, template: &str) -> String {
-
         // Build img tag with width/height if available
         let mut img_attrs = vec![
             format!(r#"src="{}""#, escape_html(&self.src)),
@@ -150,10 +149,7 @@ impl ComponentRenderer for ImageComponent {
 
         match template {
             "default" => {
-                format!(
-                    r#"<div class="image-component">{}</div>"#,
-                    img_tag
-                )
+                format!(r#"<div class="image-component">{}</div>"#, img_tag)
             }
             "figure" => {
                 format!(

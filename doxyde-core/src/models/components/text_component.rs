@@ -39,10 +39,7 @@ impl ComponentRenderer for TextComponent {
 
         match template {
             "default" => {
-                format!(
-                    r#"<div class="text-component">{}</div>"#,
-                    escaped_text
-                )
+                format!(r#"<div class="text-component">{}</div>"#, escaped_text)
             }
             "with_title" => {
                 if let Some(ref title) = self.title {
@@ -64,7 +61,7 @@ impl ComponentRenderer for TextComponent {
                 }
             }
             "card" => {
-                let mut html = format!(r#"<div class="text-component card">"#);
+                let mut html = r#"<div class="text-component card">"#.to_string();
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -83,7 +80,7 @@ impl ComponentRenderer for TextComponent {
                 html
             }
             "highlight" => {
-                let mut html = format!(r#"<div class="text-component highlight">"#);
+                let mut html = r#"<div class="text-component highlight">"#.to_string();
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -100,7 +97,7 @@ impl ComponentRenderer for TextComponent {
                 html
             }
             "quote" => {
-                let mut html = format!(r#"<blockquote class="text-component quote">"#);
+                let mut html = r#"<blockquote class="text-component quote">"#.to_string();
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -117,7 +114,7 @@ impl ComponentRenderer for TextComponent {
                 html
             }
             "hero" => {
-                let mut html = format!(r#"<div class="text-component hero">"#);
+                let mut html = r#"<div class="text-component hero">"#.to_string();
                 if let Some(ref title) = self.title {
                     html.push_str(&format!(
                         r#"
@@ -218,7 +215,6 @@ mod tests {
         assert!(templates.contains(&"with_title"));
         assert!(templates.contains(&"hero"));
     }
-
 
     #[test]
     fn test_text_component_render_hero() {

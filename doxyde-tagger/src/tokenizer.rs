@@ -74,9 +74,9 @@ pub fn tokenize(html: &str) -> Result<Vec<Token>> {
             }
 
             // Parse the tag type
-            if tag_content.starts_with("</") {
+            if let Some(stripped) = tag_content.strip_prefix("</") {
                 // Closing tag
-                let name = extract_tag_name(&tag_content[2..]);
+                let name = extract_tag_name(stripped);
                 tokens.push(Token::CloseTag {
                     name: name.to_string(),
                     raw: tag_content,

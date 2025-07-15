@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}MCP Token: {{ token.name }} - Settings{% endblock %}
+
+{% block content %}
+<div class="container">
+    <nav class="breadcrumb">
+        <a href="/.settings/mcp">MCP Tokens</a>
+        <span class="separator">/</span>
+        <span>{{ token.name }}</span>
+    </nav>
+
+    <h1>MCP Token Created</h1>
+    
+    <div class="warning-box">
+        <h3>⚠️ Important: Save this URL now!</h3>
+        <p>This is the only time you'll see the complete MCP URL. Copy it now and save it securely.</p>
+    </div>
+
+    <div class="token-info">
+        <h2>Token Details</h2>
+        <dl>
+            <dt>Name:</dt>
+            <dd>{{ token.name }}</dd>
+            
+            <dt>Site:</dt>
+            <dd>{{ site.title }} ({{ site.domain }})</dd>
+            
+            <dt>Created:</dt>
+            <dd>{{ token.created_at | date(format="%Y-%m-%d %H:%M") }}</dd>
+            
+            <dt>Status:</dt>
+            <dd>
+                {% if token.revoked_at %}
+                    <span class="badge badge-danger">Revoked</span>
+                {% else %}
+                    <span class="badge badge-success">Active</span>
+                {% endif %}
+            </dd>
+        </dl>
+    </div>
+
+    {% if not token.revoked_at %}
+    <div class="url-section">
+        <h2>MCP Server URL</h2>
+        <p>Use this URL to add Doxyde as a custom connector in Claude Code:</p>
+        
+        <div class="url-container">
+            <input type="text" id="mcp-url" value="https://{{ mcp_url }}" readonly>
+            <button type="button" class="btn btn-primary" onclick="copyToClipboard()">Copy URL</button>
+        </div>
+        
+        <div class="instructions">
+            <h3>How to use in Claude Code</h3>
+            <ol>
+                <li>Open Claude Code</li>
+                <li>Click on "Add custom connector" (Ajouter un connecteur personnalisé)</li>
+                <li>Enter a name (e.g., "{{ site.title }}")</li>
+                <li>Paste the URL above</li>
+                <li>Click "Add" to connect</li>
+            </ol>
+            
+            <p>Once connected, you can ask Claude to create pages, add content, and manage your {{ site.title }} site.</p>
+        </div>
+    </div>
+
+    <div class="actions">
+        <a href="/.settings/mcp" class="btn">Back to Tokens</a>
+        {% if not token.revoked_at %}
+            <form method="post" action="/.settings/mcp/{{ token.id }}/revoke" style="display: inline;">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to revoke this token? This cannot be undone.')">Revoke Token</button>
+            </form>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="info-box">
+        <p>This token has been revoked and can no longer be used.</p>
+    </div>
+    
+    <div class="actions">
+        <a href="/.settings/mcp" class="btn">Back to Tokens</a>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function copyToClipboard() {
+    const urlInput = document.getElementById('mcp-url');
+    urlInput.select();
+    urlInput.setSelectionRange(0, 99999); // For mobile devices
+    
+    try {
+        document.execCommand('copy');
+        
+        // Show feedback
+        const button = event.target;
+        const originalText = button.textContent;
+        button.textContent = 'Copied!';
+        button.classList.add('btn-success');
+        
+        setTimeout(() => {
+            button.textContent = originalText;
+            button.classList.remove('btn-success');
+        }, 2000);
+    } catch (err) {
+        alert('Failed to copy URL. Please copy it manually.');
+    }
+}
+</script>
+
+<style>
+.breadcrumb {
+    margin-bottom: var(--space-4);
+    color: var(--color-text-secondary);
+}
+
+.breadcrumb a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.breadcrumb a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumb .separator {
+    margin: 0 var(--space-2);
+}
+
+.warning-box {
+    background: #FEF3C7;
+    border: 1px solid #F59E0B;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.warning-box h3 {
+    margin: 0 0 var(--space-2) 0;
+    color: #D97706;
+}
+
+.warning-box p {
+    margin: 0;
+    color: #92400E;
+}
+
+.info-box {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.token-info {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-bottom: var(--space-6);
+}
+
+.token-info h2 {
+    margin-top: 0;
+}
+
+.token-info dl {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: var(--space-2);
+    margin: 0;
+}
+
+.token-info dt {
+    font-weight: var(--font-weight-semibold);
+}
+
+.token-info dd {
+    margin: 0;
+}
+
+.badge {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+}
+
+.badge-success {
+    background: var(--color-success);
+    color: white;
+}
+
+.badge-danger {
+    background: var(--color-danger);
+    color: white;
+}
+
+.url-section {
+    margin-bottom: var(--space-6);
+}
+
+.url-container {
+    display: flex;
+    gap: var(--space-2);
+    margin: var(--space-4) 0;
+}
+
+.url-container input {
+    flex: 1;
+    padding: var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-family-mono);
+    font-size: var(--font-size-base);
+    background: var(--color-bg-secondary);
+}
+
+.instructions {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.instructions h3 {
+    margin-top: 0;
+}
+
+.instructions ol {
+    margin-left: var(--space-4);
+}
+
+.instructions li {
+    margin-bottom: var(--space-2);
+}
+
+.actions {
+    display: flex;
+    gap: var(--space-3);
+    margin-top: var(--space-6);
+}
+
+.btn-success {
+    background: var(--color-success) !important;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT id as \"id: i64\", position as \"position: i32\"\n            FROM components \n            WHERE page_version_id = ?\n            ORDER BY position, id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id: i64",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "position: i32",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false
+    ]
+  },
+  "hash": "8e3d2e03439092fd46e288bfa2a08b8a48ddb91c3ee5e3de97f92ecf12744709"
+}

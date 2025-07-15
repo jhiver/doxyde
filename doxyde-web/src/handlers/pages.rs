@@ -121,7 +121,7 @@ pub async fn show_page_handler(
 
         // Find which child (if any) is in our breadcrumb path
         let next_in_path = if i < breadcrumb.len() - 1 {
-            breadcrumb.get(i + 1).map(|p| p.id).flatten()
+            breadcrumb.get(i + 1).and_then(|p| p.id)
         } else {
             None
         };

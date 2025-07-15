@@ -202,7 +202,7 @@ mod tests {
 
         assert_eq!(draft.page_id, page_id);
         assert_eq!(draft.version_number, 1);
-        assert_eq!(draft.is_published, false);
+        assert!(!draft.is_published);
         assert_eq!(draft.created_by, Some("test@example.com".to_string()));
 
         Ok(())
@@ -245,7 +245,7 @@ mod tests {
         assert!(published.is_some());
         let published = published.unwrap();
         assert_eq!(published.id, draft.id);
-        assert_eq!(published.is_published, true);
+        assert!(published.is_published);
 
         Ok(())
     }

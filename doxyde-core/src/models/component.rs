@@ -155,8 +155,9 @@ impl Component {
         }
 
         // Get valid templates for this component type using component_factory
-        let valid_templates = crate::models::component_factory::get_templates_for_type(&self.component_type);
-        
+        let valid_templates =
+            crate::models::component_factory::get_templates_for_type(&self.component_type);
+
         if !valid_templates.contains(&self.template.as_str()) {
             return Err(format!(
                 "Invalid template '{}' for component type '{}'. Must be one of: {}",
@@ -563,7 +564,8 @@ mod tests {
         }
 
         // Test markdown component can use hero template
-        let mut markdown_component = Component::new(1, "markdown".to_string(), 0, json!({"text": "# Hero"}));
+        let mut markdown_component =
+            Component::new(1, "markdown".to_string(), 0, json!({"text": "# Hero"}));
         markdown_component.template = "hero".to_string();
         assert!(markdown_component.validate_template().is_ok());
 
@@ -587,7 +589,9 @@ mod tests {
         component.template = "invalid".to_string();
         let result = component.validate_template();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("Invalid template 'invalid' for component type 'text'"));
+        assert!(result
+            .unwrap_err()
+            .contains("Invalid template 'invalid' for component type 'text'"));
 
         // Too long template
         component.template = "a".repeat(51);

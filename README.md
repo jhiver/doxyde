@@ -62,7 +62,7 @@ doxyde/
 ├── doxyde-core/     # Domain models and business logic
 ├── doxyde-db/       # Database layer with SQLite
 ├── doxyde-web/      # Web server (Axum framework)
-├── doxyde-ai/       # AI integration (planned)
+├── doxyde-mcp/      # MCP server for AI integration
 ├── doxyde-cli/      # Command-line interface
 ├── migrations/     # Database migrations
 └── templates/      # HTML templates
@@ -147,6 +147,7 @@ Doxyde uses a hierarchical URL structure with dot-prefixed system actions:
 - **System Actions**:
   - `/.login` - User login
   - `/.logout` - User logout
+  - `/.settings/mcp` - MCP token management
   - `/about/.edit` - Edit page content
   - `/about/.properties` - Edit page properties
   - `/about/.new` - Create child page
@@ -193,6 +194,38 @@ Pages are built from components:
 - **Text**: Markdown content with multiple display templates (default, card, highlight, quote)
 - **Image**: Upload and display images with dimension control and templates
 
+### AI Integration (MCP)
+
+Doxyde supports the Model Context Protocol (MCP) for AI assistants like Claude. This allows you to manage your Doxyde sites directly from Claude Code.
+
+#### Setting up MCP
+
+1. **Generate a token**: Go to `/.settings/mcp` on your site
+2. **Create new token**: Give it a name and select the site
+3. **Copy the URL**: The system will show you a unique URL
+4. **Add to Claude Code**: 
+   - Click "Add custom connector" (Ajouter un connecteur personnalisé)
+   - Enter a name (e.g., "My Site")
+   - Paste the URL
+   - Click "Add"
+
+#### Using with Claude
+
+Once connected, you can ask Claude to:
+- Create new pages
+- Edit existing content
+- Add components
+- Manage site structure
+
+Example: "Create a new page about our products with a description and some images"
+
+#### Managing Tokens
+
+- View all tokens at `/.settings/mcp`
+- Each token is limited to one site
+- Tokens can be revoked at any time
+- Last usage is tracked for security
+
 ### Security
 
 - Session-based authentication with secure cookies
@@ -200,6 +233,7 @@ Pages are built from components:
 - Role-based permissions at site level
 - HTML sanitization for user content
 - CSRF protection on forms
+- MCP tokens for secure AI access
 
 ### Database
 

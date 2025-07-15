@@ -73,10 +73,7 @@ pub fn expression_to_regex(expression: &str) -> Result<Regex> {
     }
 
     // Split by whitespace and escape each word
-    let words: Vec<String> = trimmed
-        .split_whitespace()
-        .map(regex::escape)
-        .collect();
+    let words: Vec<String> = trimmed.split_whitespace().map(regex::escape).collect();
 
     // Join with the ignorable pattern
     let pattern = words.join(IGNORABLE_RE.as_str());

@@ -338,7 +338,7 @@ impl ComponentRepository {
         );
         tracing::info!("  - title: {:?}", title);
         tracing::info!("  - template: {}", template);
-        
+
         let content_json =
             serde_json::to_string(&content).context("Failed to serialize component content")?;
 
@@ -347,7 +347,7 @@ impl ComponentRepository {
         tracing::info!("    - title: {:?}", title);
         tracing::info!("    - template: {}", template);
         tracing::info!("    - id: {}", id);
-        
+
         let result = sqlx::query(
             r#"
             UPDATE components 
@@ -362,7 +362,7 @@ impl ComponentRepository {
         .execute(&self.pool)
         .await
         .context("Failed to update component")?;
-        
+
         tracing::info!(
             "  - UPDATE result: {} rows affected",
             result.rows_affected()
@@ -1329,9 +1329,9 @@ mod tests {
         let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
         let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
 
-        let id1 = repo.create(&comp1).await?;
+        let _id1 = repo.create(&comp1).await?;
         let id2 = repo.create(&comp2).await?;
-        let id3 = repo.create(&comp3).await?;
+        let _id3 = repo.create(&comp3).await?;
 
         // Move the second component up
         repo.move_up(id2).await?;
@@ -1411,9 +1411,9 @@ mod tests {
         let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
         let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
 
-        let id1 = repo.create(&comp1).await?;
+        let _id1 = repo.create(&comp1).await?;
         let id2 = repo.create(&comp2).await?;
-        let id3 = repo.create(&comp3).await?;
+        let _id3 = repo.create(&comp3).await?;
 
         // Move the second component down
         repo.move_down(id2).await?;
@@ -1530,7 +1530,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_copy_all() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -1543,14 +1542,14 @@ mod tests {
         sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
             .execute(&pool)
             .await?;
-        
-        let version1_id = 
+
+        let version1_id =
             sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
                 .execute(&pool)
                 .await?
                 .last_insert_rowid();
-                
-        let version2_id = 
+
+        let version2_id =
             sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 2)")
                 .execute(&pool)
                 .await?
@@ -1586,7 +1585,7 @@ mod tests {
         assert_eq!(copied_components[0].component_type, "text");
         assert_eq!(copied_components[0].title, Some("Title 1".to_string()));
         assert_eq!(copied_components[0].template, "hero");
-        
+
         assert_eq!(copied_components[1].component_type, "markdown");
         assert_eq!(copied_components[1].title, Some("Title 2".to_string()));
         assert_eq!(copied_components[1].template, "card");
@@ -1612,12 +1611,7 @@ mod tests {
         let repo = ComponentRepository::new(pool);
 
         // Create a component
-        let comp = Component::new(
-            1,
-            "text".to_string(),
-            0,
-            json!({"text": "Original text"}),
-        );
+        let comp = Component::new(1, "text".to_string(), 0, json!({"text": "Original text"}));
         let comp_id = repo.create(&comp).await?;
 
         // Verify initial state

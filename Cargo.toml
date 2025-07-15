@@ -3,7 +3,7 @@ members = [
     "doxyde-core",
     "doxyde-db",
     "doxyde-web",
-    "doxyde-ai",
+    "doxyde-mcp",
     "doxyde-cli",
     "doxyde-tagger",
 ]
@@ -56,3 +56,7 @@ ammonia = "4"
 # File uploads
 multer = "3.0"
 image = "0.25"
+
+# Async utilities
+futures = "0.3"
+url = "2.5"

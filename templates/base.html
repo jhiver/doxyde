@@ -80,6 +80,7 @@
                 
                 {% if user %}
                     <div class="auth-controls">
+                        <a href="/.settings/mcp" class="btn btn-sm btn-secondary">MCP Tokens</a>
                         <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
                     </div>
                 {% else %}
@@ -101,7 +102,7 @@
     </div>
 
     <footer>
-        <p>&copy; 2025 {{ site_title | default(value="Doxyde") }}. Powered by <a href="https://github.com/jhiver/doxyde">Doxyde</a></p>
+        <p>Powered by <a href="https://github.com/jhiver/doxyde">{% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default(value="Doxyde") }}{% endif %}</a></p>
     </footer>
 </body>
 </html>
