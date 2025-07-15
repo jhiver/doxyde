@@ -58,8 +58,12 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
-            FOREIGN KEY (parent_page_id) REFERENCES pages(id) ON DELETE CASCADE
+            FOREIGN KEY (parent_page_id) REFERENCES pages(id) ON DELETE CASCADE,
+            UNIQUE(site_id, parent_page_id, slug)
         );
+        
+        CREATE INDEX idx_pages_site_id ON pages(site_id);
+        CREATE INDEX idx_pages_parent_page_id ON pages(parent_page_id);
         
         CREATE TABLE users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -172,7 +176,7 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         </html>
     "#,
     )?;
-    
+
     // Add MCP templates for tests
     tera.add_raw_template(
         "mcp/list.html",
@@ -204,7 +208,7 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         </html>
     "#,
     )?;
-    
+
     tera.add_raw_template(
         "mcp/show.html",
         r#"
@@ -265,42 +269,6 @@ pub async fn create_test_site(
     let site = Site::new(domain.to_string(), title.to_string());
 
     let site_id = site_repo.create(&site).await?;
-
-    // Create root page for the site (mimicking what happens in real site creation)
-    let root_page = doxyde_core::models::page::Page {
-        id: None,
-        site_id,
-        parent_page_id: None,
-        slug: "home".to_string(),
-        title: "Home".to_string(),
-        description: None,
-        keywords: None,
-        template: "default".to_string(),
-        meta_robots: "index,follow".to_string(),
-        canonical_url: None,
-        og_image_url: None,
-        structured_data_type: "WebPage".to_string(),
-        position: 0,
-        created_at: chrono::Utc::now(),
-        updated_at: chrono::Utc::now(),
-    };
-
-    // Insert root page directly
-    sqlx::query(
-        r#"
-        INSERT INTO pages (site_id, parent_page_id, slug, title, template, meta_robots, structured_data_type, position)
-        VALUES (?, NULL, ?, ?, ?, ?, ?, ?)
-        "#
-    )
-    .bind(site_id)
-    .bind(&root_page.slug)
-    .bind(&root_page.title)
-    .bind(&root_page.template)
-    .bind(&root_page.meta_robots)
-    .bind(&root_page.structured_data_type)
-    .bind(root_page.position)
-    .execute(pool)
-    .await?;
 
     let site = site_repo.find_by_id(site_id).await?.unwrap();
 

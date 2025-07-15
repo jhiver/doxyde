@@ -32,8 +32,10 @@ pub async fn mcp_server_handler_simple(
     let _ = token_repo.update_last_used(&token_id).await;
 
     // Create MCP server and handle request
-    let server = SimpleMcpServer::new();
-    let response = server.handle_request(request).await
+    let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
+    let response = server
+        .handle_request(request)
+        .await
         .map_err(|e| AppError::internal_server_error(&format!("MCP processing error: {}", e)))?;
 
     Ok((StatusCode::OK, Json(response)).into_response())

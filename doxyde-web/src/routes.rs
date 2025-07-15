@@ -30,9 +30,18 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.login", get(handlers::login_form).post(handlers::login))
         .route("/.logout", get(handlers::logout).post(handlers::logout))
         // MCP Token management
-        .route("/.settings/mcp", get(handlers::list_tokens_handler).post(handlers::create_token_handler))
-        .route("/.settings/mcp/:token_id", get(handlers::show_token_handler))
-        .route("/.settings/mcp/:token_id/revoke", get(handlers::revoke_token_handler).post(handlers::revoke_token_handler))
+        .route(
+            "/.settings/mcp",
+            get(handlers::list_tokens_handler).post(handlers::create_token_handler),
+        )
+        .route(
+            "/.settings/mcp/:token_id",
+            get(handlers::show_token_handler),
+        )
+        .route(
+            "/.settings/mcp/:token_id/revoke",
+            get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
+        )
         // MCP Server endpoint (supports both regular JSON-RPC and SSE)
         .route("/.mcp/:token_id", routing::post(handlers::mcp_http_handler))
         // Dynamic content routes (last, to catch all)

@@ -34,7 +34,7 @@ pub async fn mcp_server_handler(
 
     // For now, return a simple response that shows the MCP server is working
     let method = request.get("method").and_then(|v| v.as_str()).unwrap_or("");
-    
+
     let response = match method {
         "initialize" => {
             json!({
@@ -97,7 +97,7 @@ pub async fn mcp_server_handler(
                 .and_then(|p| p.get("name"))
                 .and_then(|n| n.as_str())
                 .unwrap_or("");
-                
+
             let result = match tool_name {
                 "list_sites" => {
                     vec![json!({
@@ -112,7 +112,7 @@ pub async fn mcp_server_handler(
                     })]
                 }
             };
-            
+
             json!({
                 "jsonrpc": "2.0",
                 "id": request.get("id").cloned().unwrap_or(json!(null)),
@@ -169,7 +169,6 @@ pub async fn mcp_server_handler(
 
     Ok((StatusCode::OK, headers, Json(response)).into_response())
 }
-
 
 #[cfg(test)]
 mod tests {

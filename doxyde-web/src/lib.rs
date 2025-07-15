@@ -28,6 +28,7 @@ pub mod logo;
 pub mod markdown;
 pub mod mcp_simple;
 pub mod routes;
+pub mod services;
 pub mod state;
 pub mod template_context;
 pub mod template_utils;

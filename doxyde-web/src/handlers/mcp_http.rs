@@ -46,11 +46,11 @@ pub async fn mcp_http_handler(
 
     if accept_header.contains("text/event-stream") {
         // Return SSE response
-        let server = SimpleMcpServer::new();
-        
+        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
+
         // Process the request
         let response_result = server.handle_request(request).await;
-        
+
         // Create a stream that sends the response
         let stream = stream::once(match response_result {
             Ok(response) => {
@@ -74,17 +74,15 @@ pub async fn mcp_http_handler(
             }
         });
 
-        let sse = Sse::new(stream)
-            .keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
+        let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
 
         Ok(sse.into_response())
     } else {
         // Return regular JSON response
-        let server = SimpleMcpServer::new();
-        let response = server
-            .handle_request(request)
-            .await
-            .map_err(|e| AppError::internal_server_error(&format!("MCP processing error: {}", e)))?;
+        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
+        let response = server.handle_request(request).await.map_err(|e| {
+            AppError::internal_server_error(&format!("MCP processing error: {}", e))
+        })?;
 
         Ok(Json(response).into_response())
     }
@@ -129,7 +127,7 @@ mod tests {
             ))?;
 
         let response = app.oneshot(request).await?;
-        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.status(), axum::http::StatusCode::OK);
 
         Ok(())
     }

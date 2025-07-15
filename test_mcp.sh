@@ -47,14 +47,23 @@ curl -X POST "$BASE_URL" \
 
 echo ""
 
-# Test 5: Test with SSE Accept header
-echo "5. Testing SSE transport..."
+# Test 5: List pages
+echo "5. Testing list_pages tool..."
 curl -X POST "$BASE_URL" \
   -H "Content-Type: application/json" \
-  -H "Accept: text/event-stream" \
-  -d '{"jsonrpc":"2.0","id":5,"method":"tools/list"}' \
-  --no-buffer \
-  2>/dev/null
+  -H "Accept: application/json" \
+  -d '{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"list_pages","arguments":{}}}' \
+  2>/dev/null | jq .
+
+echo ""
+
+# Test 6: Search pages
+echo "6. Testing search_pages tool..."
+curl -X POST "$BASE_URL" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"search_pages","arguments":{"query":"home"}}}' \
+  2>/dev/null | jq .
 
 echo ""
 echo "Done!"
