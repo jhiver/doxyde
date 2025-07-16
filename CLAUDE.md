@@ -660,6 +660,20 @@ Visit http://localhost:3000 and login at http://localhost:3000/.login
 11. **Image Management**: Upload and serve images with automatic metadata extraction
 12. **Modern UI**: Professional design with Inter font and dark header/footer theme
 
+### 🔧 Current MCP Development Tasks
+
+**In Progress:**
+- **delete_page MCP tool**: Implement page deletion functionality with safety checks
+  - Prevent deletion of root pages
+  - Prevent deletion of pages with children
+  - Cascade delete all components and versions
+  - Return proper JSON-RPC errors for all failure cases
+
+**Pending MCP Tools:**
+- Component management (create, update, delete, reorder)
+- Page hierarchy management (move/reorder)
+- Draft/publish workflow tools
+
 ## Next Implementation Tasks
 
 ### 🎉 MVP COMPLETE! 🎉

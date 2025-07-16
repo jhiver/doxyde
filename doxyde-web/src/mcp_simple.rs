@@ -171,6 +171,7 @@ impl SimpleMcpServer {
             self.create_search_pages_tool(),
             self.create_create_page_tool(),
             self.create_update_page_tool(),
+            self.create_delete_page_tool(),
         ]
     }
 
@@ -186,6 +187,7 @@ impl SimpleMcpServer {
             "search_pages" => self.handle_search_pages(arguments).await,
             "create_page" => self.handle_create_page(arguments).await,
             "update_page" => self.handle_update_page(arguments).await,
+            "delete_page" => self.handle_delete_page(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
         }
     }
@@ -381,6 +383,23 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_delete_page_tool(&self) -> Value {
+        json!({
+            "name": "delete_page",
+            "description": "Delete a page (cannot delete root pages or pages with children)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page to delete"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
         let times = extract_flip_times(&arguments);
@@ -507,6 +526,18 @@ impl SimpleMcpServer {
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&page_info)?
+        })])
+    }
+
+    async fn handle_delete_page(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        service.delete_page(page_id).await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": format!("Successfully deleted page with ID {}", page_id)
         })])
     }
 }
@@ -917,7 +948,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 10); // 2 demo + 6 Phase 1 tools + 2 write tools
+        assert_eq!(tools.len(), 11); // 2 demo + 6 Phase 1 tools + 3 write tools
 
         Ok(())
     }
@@ -1071,6 +1102,218 @@ mod tests {
         assert_eq!(updated_page["title"], "Updated Title");
         assert_eq!(updated_page["path"], "/updated-slug");
         assert_eq!(updated_page["template"], "full_width");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_page() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First, get the root page to create test pages under
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create a page to delete
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "page-to-delete",
+                    "title": "Page to Delete",
+                    "template": "default"
+                }
+            }
+        });
+
+        let create_response = server.handle_request(create_request).await?;
+        let page_text = create_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let created_page: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = created_page["id"].as_i64().unwrap();
+
+        // Now delete the page
+        let delete_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "delete_page",
+                "arguments": {
+                    "page_id": page_id
+                }
+            }
+        });
+
+        let delete_response = server.handle_request(delete_request).await?;
+        let content = &delete_response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+        assert!(content["text"]
+            .as_str()
+            .unwrap()
+            .contains("Successfully deleted"));
+
+        // Verify page is deleted by trying to get it
+        let get_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "get_page",
+                "arguments": {
+                    "page_id": page_id
+                }
+            }
+        });
+
+        let get_response = server.handle_request(get_request).await?;
+        assert!(get_response.get("error").is_some());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_page_with_children_fails() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create parent page
+        let create_parent_request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "parent-page",
+                    "title": "Parent Page",
+                    "template": "default"
+                }
+            }
+        });
+
+        let create_parent_response = server.handle_request(create_parent_request).await?;
+        let parent_text = create_parent_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let parent_page: serde_json::Value = serde_json::from_str(parent_text)?;
+        let parent_id = parent_page["id"].as_i64().unwrap();
+
+        // Create child page
+        let create_child_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": parent_id,
+                    "slug": "child-page",
+                    "title": "Child Page",
+                    "template": "default"
+                }
+            }
+        });
+
+        server.handle_request(create_child_request).await?;
+
+        // Try to delete parent page - should fail
+        let delete_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "delete_page",
+                "arguments": {
+                    "page_id": parent_id
+                }
+            }
+        });
+
+        let delete_response = server.handle_request(delete_request).await?;
+        assert!(delete_response.get("error").is_some());
+        let error_msg = delete_response["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("Cannot delete page") && error_msg.contains("child"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_root_page_fails() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Try to delete root page - should fail
+        let delete_request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "delete_page",
+                "arguments": {
+                    "page_id": root_page_id
+                }
+            }
+        });
+
+        let delete_response = server.handle_request(delete_request).await?;
+        assert!(delete_response.get("error").is_some());
+        let error_msg = delete_response["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("Cannot delete root page"));
 
         Ok(())
     }

@@ -24,10 +24,6 @@ pub async fn mcp_http_handler(
     Json(request): Json<Value>,
 ) -> Result<Response, AppError> {
     // Debug log the incoming request
-    tracing::info!(
-        "MCP RAW REQUEST BODY: {}",
-        serde_json::to_string(&request).unwrap_or_default()
-    );
     tracing::debug!(
         "MCP request received: {}",
         serde_json::to_string_pretty(&request).unwrap_or_default()

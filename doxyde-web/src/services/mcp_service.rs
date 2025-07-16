@@ -345,6 +345,19 @@ impl McpService {
         self.page_to_info(&all_pages, &page).await
     }
 
+    /// Delete a page (with safety checks)
+    pub async fn delete_page(&self, page_id: i64) -> Result<()> {
+        let page_repo = PageRepository::new(self.pool.clone());
+
+        // Verify page exists and belongs to this site
+        let _page = self.get_page(page_id).await?;
+
+        // Use the repository's delete method which handles all safety checks
+        page_repo.delete(page_id).await?;
+
+        Ok(())
+    }
+
     // Helper methods
 
     async fn build_page_path(&self, all_pages: &[Page], page: &Page) -> Result<String> {
@@ -807,6 +820,80 @@ mod tests {
         assert_eq!(infos[1].template, "full_width");
         assert_eq!(infos[1].title, None);
         assert_eq!(infos[1].content, json!({"url": "test.jpg"}));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_page_success() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create a child page to delete
+        let page_info = service
+            .create_page(
+                Some(root_page_id),
+                "delete-me".to_string(),
+                "Delete Me".to_string(),
+                None,
+            )
+            .await?;
+
+        // Delete the page
+        service.delete_page(page_info.id).await?;
+
+        // Verify it's deleted - get_page should fail
+        let result = service.get_page(page_info.id).await;
+        assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_page_wrong_site() -> Result<()> {
+        let state = create_test_app_state().await?;
+        let other_site = create_test_site(&state.db, "other.com", "Other Site").await?;
+        let service = McpService::new(state.db.clone(), other_site.id.unwrap());
+
+        // Create a page in a different site
+        let main_site = create_test_site(&state.db, "main.com", "Main Site").await?;
+        let main_service = McpService::new(state.db.clone(), main_site.id.unwrap());
+        
+        // Get root page of main site
+        let pages = main_service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+        
+        // Create a page in main site
+        let page_info = main_service
+            .create_page(
+                Some(root_page_id),
+                "test-page".to_string(),
+                "Test Page".to_string(),
+                None,
+            )
+            .await?;
+
+        // Try to delete it from other site - should fail
+        let result = service.delete_page(page_info.id).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not belong to this site"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_nonexistent_page() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Try to delete a non-existent page
+        let result = service.delete_page(9999).await;
+        assert!(result.is_err());
 
         Ok(())
     }
