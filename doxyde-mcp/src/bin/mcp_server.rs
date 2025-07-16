@@ -1,28 +1,16 @@
 use anyhow::{Context, Result};
 use clap::Parser;
-use doxyde_mcp::{
-    auth::{AuthClient, AuthCredentials},
-    server::McpServer,
-    tools::ToolHandler,
-};
+use doxyde_mcp::server::McpProxyServer;
 use reqwest::Url;
 use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[command(name = "doxyde-mcp-server")]
-#[command(about = "MCP server for Doxyde CMS", long_about = None)]
+#[command(about = "MCP proxy server for Doxyde CMS", long_about = None)]
 struct Args {
-    /// Base URL of the Doxyde server
-    #[arg(long, env = "DOXYDE_BASE_URL", default_value = "http://localhost:3000")]
-    base_url: String,
-
-    /// Username for authentication
-    #[arg(long, env = "DOXYDE_USERNAME")]
-    username: String,
-
-    /// Password for authentication
-    #[arg(long, env = "DOXYDE_PASSWORD")]
-    password: String,
+    /// MCP URL including token (e.g., http://localhost:3000/.mcp/token-id)
+    #[arg(long, env = "DOXYDE_MCP_URL")]
+    mcp_url: String,
 
     /// Log level
     #[arg(long, env = "RUST_LOG", default_value = "info")]
@@ -41,24 +29,14 @@ async fn main() -> Result<()> {
         .with_writer(std::io::stderr) // Log to stderr so stdout is clean for JSON-RPC
         .init();
 
-    tracing::info!("Starting Doxyde MCP server");
-    tracing::info!("Connecting to Doxyde at: {}", args.base_url);
+    tracing::info!("Starting Doxyde MCP proxy server");
+    tracing::info!("Proxying to: {}", args.mcp_url);
 
-    // Parse base URL
-    let base_url = Url::parse(&args.base_url).context("Invalid base URL")?;
+    // Parse MCP URL
+    let mcp_url = Url::parse(&args.mcp_url).context("Invalid MCP URL")?;
 
-    // Create authentication client
-    let credentials = AuthCredentials {
-        username: args.username,
-        password: args.password,
-    };
-    let auth_client = AuthClient::new(base_url, credentials)?;
-
-    // Create tool handler
-    let tool_handler = ToolHandler::new(auth_client.clone());
-
-    // Create and run MCP server
-    let server = McpServer::new(auth_client, tool_handler);
+    // Create and run MCP proxy server
+    let server = McpProxyServer::new(mcp_url);
     server.run().await?;
 
     Ok(())
@@ -72,19 +50,14 @@ mod tests {
     fn test_args_parsing() {
         let args = vec![
             "doxyde-mcp-server",
-            "--username",
-            "test",
-            "--password",
-            "pass",
-            "--base-url",
-            "http://localhost:8080",
+            "--mcp-url",
+            "http://localhost:3000/.mcp/test-token",
         ];
 
         let parsed = Args::try_parse_from(args);
         assert!(parsed.is_ok());
 
         let args = parsed.unwrap();
-        assert_eq!(args.username, "test");
-        assert_eq!(args.base_url, "http://localhost:8080");
+        assert_eq!(args.mcp_url, "http://localhost:3000/.mcp/test-token");
     }
 }

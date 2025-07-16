@@ -1,18 +1,21 @@
-# Doxyde MCP Server
+# Doxyde MCP Proxy Server
 
-The Doxyde MCP (Model Context Protocol) server enables AI assistants like Claude to interact directly with Doxyde CMS instances.
+The Doxyde MCP proxy server enables AI assistants like Claude to interact with Doxyde CMS instances through the Model Context Protocol (MCP).
+
+## Overview
+
+This is a lightweight proxy server that forwards MCP requests from Claude Desktop to the Doxyde web server's built-in MCP endpoint. The Doxyde web server already implements all MCP tools at `/.mcp/:token_id`, so this proxy simply forwards stdin/stdout JSON-RPC communication to HTTP requests.
 
 ## Features
 
-- **Authentication**: Secure session-based authentication with Doxyde
-- **Site Management**: List and manage sites
-- **Page Operations**: Create, read, update pages
-- **Component Management**: Add and modify page components
-- **Content Search**: Search across sites and pages
+- **Simple Proxy**: Forwards JSON-RPC requests from stdin to HTTP endpoint
+- **Token-based Authentication**: Uses MCP tokens generated in Doxyde
+- **Lightweight**: No duplicate tool implementations, just forwards requests
+- **Compatible**: Works with Claude Desktop's MCP configuration
 
 ## Installation
 
-1. Build the MCP server:
+1. Build the MCP proxy server:
    ```bash
    cargo build --release -p doxyde-mcp
    ```
@@ -24,21 +27,16 @@ The Doxyde MCP (Model Context Protocol) server enables AI assistants like Claude
 
 ## Setup
 
-### 1. Create MCP User
+### 1. Generate MCP Token in Doxyde
 
-First, create a dedicated user for the MCP server in your Doxyde instance:
-
-```bash
-# Create the MCP user
-./target/release/doxyde user create mcp@system.local mcp_agent --password secure-password
-
-# Grant permissions (replace localhost:3000 with your domain)
-./target/release/doxyde user grant mcp_agent localhost:3000 owner
-```
+1. Login to your Doxyde instance
+2. Navigate to `/.settings/mcp`
+3. Click "Generate New Token"
+4. Copy the generated MCP URL (e.g., `http://localhost:3000/.mcp/45a8ae64-3ad7-49b6-b9a8-0d1e2e097fa4`)
 
 ### 2. Configure Claude Desktop
 
-Copy `claude_desktop_config.example.json` and update it with your settings:
+Create or update your Claude Desktop configuration:
 
 ```json
 {
@@ -47,9 +45,7 @@ Copy `claude_desktop_config.example.json` and update it with your settings:
       "command": "/absolute/path/to/doxyde-mcp-server",
       "args": [],
       "env": {
-        "DOXYDE_BASE_URL": "http://localhost:3000",
-        "DOXYDE_USERNAME": "mcp_agent",
-        "DOXYDE_PASSWORD": "your-secure-password",
+        "DOXYDE_MCP_URL": "http://localhost:3000/.mcp/your-token-id",
         "RUST_LOG": "info"
       }
     }
@@ -57,16 +53,16 @@ Copy `claude_desktop_config.example.json` and update it with your settings:
 }
 ```
 
-Add this configuration to Claude Desktop's settings.
+Replace:
+- `/absolute/path/to/doxyde-mcp-server` with the actual path to your built binary
+- `your-token-id` with the token ID from the MCP URL you generated
 
-### 3. Test the Server
+### 3. Test the Proxy Server
 
-You can test the MCP server manually:
+You can test the MCP proxy server manually:
 
 ```bash
-export DOXYDE_BASE_URL="http://localhost:3000"
-export DOXYDE_USERNAME="mcp_agent"
-export DOXYDE_PASSWORD="your-password"
+export DOXYDE_MCP_URL="http://localhost:3000/.mcp/your-token-id"
 ./target/release/doxyde-mcp-server
 ```
 
@@ -78,31 +74,37 @@ Then send a JSON-RPC request via stdin:
 
 ## Available Tools
 
-The MCP server provides the following tools:
+The proxy forwards requests to the Doxyde MCP endpoint, which provides:
+
+### Information Tools
+- `flip_coin` - Flip a coin one or more times
+- `get_current_time` - Get the current time in UTC or a specified timezone
 
 ### Site Management
-- `list_sites` - List all accessible sites
-- `get_site` - Get details about a specific site
+- `list_pages` - Get all pages in the site with hierarchy
+- `get_page` - Get full page details by ID
+- `get_page_by_path` - Find page by URL path
+- `search_pages` - Search pages by title or content
 
-### Page Management
-- `list_pages` - List all pages in a site
-- `get_page` - Get page details including components
+### Content Access
+- `get_published_content` - Get published content of a page
+- `get_draft_content` - Get draft content of a page (if exists)
+
+### Write Operations
 - `create_page` - Create a new page
-- `update_page` - Update page properties
-
-### Content Management
-- `add_markdown_component` - Add markdown content to a page
-  - Supports full Markdown syntax
-  - Template options: default, card, highlight, quote, hero, with_title
-  - Optional title parameter for components
-- `search_content` - Search across all content
+- `update_page` - Update page title, slug, or template
 
 ## Security
 
-- The MCP server uses session-based authentication
-- Sessions expire after 24 hours
+- MCP tokens are tied to specific sites for security
+- Each token has limited permissions based on the site
+- Tokens can be revoked at any time from the Doxyde interface
 - All operations respect Doxyde's permission model
-- Credentials should be stored securely (environment variables)
+
+## Environment Variables
+
+- `DOXYDE_MCP_URL` (required): The full MCP URL including token
+- `RUST_LOG` (optional): Log level (debug, info, warn, error)
 
 ## Development
 
@@ -125,18 +127,9 @@ Logs are written to stderr, keeping stdout clean for JSON-RPC communication.
 
 ## Architecture
 
-The MCP server consists of:
+The MCP proxy server is a simple forwarder:
 
-1. **Authentication Module** (`auth.rs`) - Handles login and session management
-2. **Message Types** (`messages.rs`) - MCP protocol message definitions
-3. **Server Core** (`server.rs`) - JSON-RPC server implementation
-4. **Tools** (`tools.rs`) - Doxyde-specific tool implementations
-
-## Future Enhancements
-
-- [ ] Real API integration (currently using mock responses)
-- [ ] Image upload support
-- [ ] Component reordering
-- [ ] Bulk operations
-- [ ] WebSocket transport option
-- [ ] API token authentication
+1. Reads JSON-RPC requests from stdin
+2. Forwards them to the HTTP MCP endpoint
+3. Returns responses to stdout
+4. All tool implementations are in the Doxyde web server

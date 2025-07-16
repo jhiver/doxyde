@@ -168,7 +168,9 @@ pub async fn revoke_token_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::{create_test_app_state, create_test_site, create_test_user, create_test_session};
+    use crate::test_helpers::{
+        create_test_app_state, create_test_session, create_test_site, create_test_user,
+    };
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use tower::ServiceExt;

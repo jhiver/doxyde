@@ -24,9 +24,16 @@ pub async fn mcp_http_handler(
     Json(request): Json<Value>,
 ) -> Result<Response, AppError> {
     // Debug log the incoming request
-    tracing::debug!("MCP request received: {}", serde_json::to_string_pretty(&request).unwrap_or_default());
+    tracing::info!(
+        "MCP RAW REQUEST BODY: {}",
+        serde_json::to_string(&request).unwrap_or_default()
+    );
+    tracing::debug!(
+        "MCP request received: {}",
+        serde_json::to_string_pretty(&request).unwrap_or_default()
+    );
     tracing::debug!("Request headers: {:?}", headers);
-    
+
     // Validate token
     let token_repo = McpTokenRepository::new(state.db.clone());
     let token = token_repo
@@ -84,13 +91,16 @@ pub async fn mcp_http_handler(
     } else {
         // Return regular JSON response
         let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
-        
+
         let response = match server.handle_request(request.clone()).await {
             Ok(response) => response,
             Err(e) => {
                 // Extract the request ID if possible
-                let id = request.get("id").cloned().unwrap_or(serde_json::Value::Null);
-                
+                let id = request
+                    .get("id")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+
                 serde_json::json!({
                     "jsonrpc": "2.0",
                     "id": id,

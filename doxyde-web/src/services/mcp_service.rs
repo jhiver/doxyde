@@ -216,7 +216,10 @@ impl McpService {
             }
 
             // Search in content
-            if self.page_content_matches(page.id.unwrap(), &query_lower).await? {
+            if self
+                .page_content_matches(page.id.unwrap(), &query_lower)
+                .await?
+            {
                 results.push(self.page_to_info(&pages, page).await?);
                 found_pages.insert(page.id.unwrap());
             }
@@ -247,7 +250,9 @@ impl McpService {
         }
 
         // Calculate position for new page
-        let position = self.calculate_page_position(&page_repo, parent_page_id).await?;
+        let position = self
+            .calculate_page_position(&page_repo, parent_page_id)
+            .await?;
 
         // Create the page object
         let new_page = if let Some(parent_id) = parent_page_id {
@@ -262,7 +267,8 @@ impl McpService {
         page_with_metadata.position = position;
 
         // Validate using the model's validation
-        page_with_metadata.is_valid()
+        page_with_metadata
+            .is_valid()
             .map_err(|e| anyhow::anyhow!(e))?;
 
         let page_id = page_repo.create(&page_with_metadata).await?;
@@ -287,6 +293,56 @@ impl McpService {
             has_children: false, // New page has no children
             template: Some(created_page.template.clone()),
         })
+    }
+
+    /// Update an existing page
+    pub async fn update_page(
+        &self,
+        page_id: i64,
+        title: Option<String>,
+        slug: Option<String>,
+        template: Option<String>,
+    ) -> Result<PageInfo> {
+        let page_repo = PageRepository::new(self.pool.clone());
+
+        // Get the existing page
+        let mut page = page_repo
+            .find_by_id(page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        // Verify page belongs to this site
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Update fields if provided
+        if let Some(new_title) = title {
+            page.title = new_title;
+        }
+
+        if let Some(new_slug) = slug {
+            page.slug = new_slug;
+        }
+
+        if let Some(new_template) = template {
+            page.template = new_template;
+        }
+
+        // Update timestamp
+        page.updated_at = chrono::Utc::now();
+
+        // Validate the updated page
+        page.is_valid().map_err(|e| anyhow::anyhow!(e))?;
+
+        // Save the updates
+        page_repo.update(&page).await?;
+
+        // Get all pages to build info
+        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+
+        // Return updated page info
+        self.page_to_info(&all_pages, &page).await
     }
 
     // Helper methods
@@ -346,7 +402,7 @@ impl McpService {
         parent_page_id: Option<i64>,
     ) -> Result<i32> {
         let pages = page_repo.list_by_site_id(self.site_id).await?;
-        
+
         let position = if let Some(parent_id) = parent_page_id {
             // Get max position among siblings
             pages
@@ -354,7 +410,8 @@ impl McpService {
                 .filter(|p| p.parent_page_id == Some(parent_id))
                 .map(|p| p.position)
                 .max()
-                .unwrap_or(0) + 1
+                .unwrap_or(0)
+                + 1
         } else {
             // Get max position among root pages
             pages
@@ -362,9 +419,10 @@ impl McpService {
                 .filter(|p| p.parent_page_id.is_none())
                 .map(|p| p.position)
                 .max()
-                .unwrap_or(0) + 1
+                .unwrap_or(0)
+                + 1
         };
-        
+
         Ok(position)
     }
 
@@ -401,7 +459,10 @@ impl McpService {
         Ok(false)
     }
 
-    fn components_to_info(&self, components: Vec<doxyde_core::models::Component>) -> Vec<ComponentInfo> {
+    fn components_to_info(
+        &self,
+        components: Vec<doxyde_core::models::Component>,
+    ) -> Vec<ComponentInfo> {
         components
             .into_iter()
             .map(|component| ComponentInfo {
@@ -647,7 +708,9 @@ mod tests {
         let root_page_id = pages[0].page.id;
 
         // Test position for child page
-        let position = service.calculate_page_position(&page_repo, Some(root_page_id)).await?;
+        let position = service
+            .calculate_page_position(&page_repo, Some(root_page_id))
+            .await?;
         assert!(position >= 0);
 
         Ok(())
@@ -658,12 +721,12 @@ mod tests {
         let (service, site_id) = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
         let pages = page_repo.list_by_site_id(site_id).await?;
-        
+
         assert!(!pages.is_empty());
         let page = &pages[0];
-        
+
         let info = service.page_to_info(&pages, page).await?;
-        
+
         assert_eq!(info.id, page.id.unwrap());
         assert_eq!(info.slug, page.slug);
         assert_eq!(info.title, page.title);
@@ -671,25 +734,27 @@ mod tests {
         assert_eq!(info.position, page.position);
         assert_eq!(info.template, Some(page.template.clone()));
         assert_eq!(info.path, "/"); // Root page should have "/" path
-        
+
         Ok(())
     }
 
     #[tokio::test]
     async fn test_page_content_matches() -> Result<()> {
         let (service, _) = create_test_service().await?;
-        
+
         // Get a page
         let pages = service.list_pages().await?;
         let page_id = pages[0].page.id;
-        
+
         // Test with non-matching query
-        let matches = service.page_content_matches(page_id, "nonexistentcontent").await?;
+        let matches = service
+            .page_content_matches(page_id, "nonexistentcontent")
+            .await?;
         assert!(!matches);
-        
+
         // Note: We can't test positive matches without first adding content to the page
         // This would require creating components, which is beyond the scope of this unit test
-        
+
         Ok(())
     }
 
@@ -697,9 +762,9 @@ mod tests {
     async fn test_components_to_info() -> Result<()> {
         use chrono::Utc;
         use doxyde_core::models::Component;
-        
+
         let (service, _) = create_test_service().await?;
-        
+
         let components = vec![
             Component {
                 id: Some(1),
@@ -724,25 +789,25 @@ mod tests {
                 updated_at: Utc::now(),
             },
         ];
-        
+
         let infos = service.components_to_info(components.clone());
-        
+
         assert_eq!(infos.len(), 2);
-        
+
         assert_eq!(infos[0].id, 1);
         assert_eq!(infos[0].component_type, "text");
         assert_eq!(infos[0].position, 0);
         assert_eq!(infos[0].template, "default");
         assert_eq!(infos[0].title, Some("Test Title".to_string()));
         assert_eq!(infos[0].content, json!({"text": "Test content"}));
-        
+
         assert_eq!(infos[1].id, 2);
         assert_eq!(infos[1].component_type, "image");
         assert_eq!(infos[1].position, 1);
         assert_eq!(infos[1].template, "full_width");
         assert_eq!(infos[1].title, None);
         assert_eq!(infos[1].content, json!({"url": "test.jpg"}));
-        
+
         Ok(())
     }
 }

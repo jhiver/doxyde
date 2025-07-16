@@ -1,12 +1,10 @@
 {
   "mcpServers": {
     "doxyde": {
-      "command": "/path/to/doxyde-mcp-server",
+      "command": "/absolute/path/to/doxyde-mcp-server",
       "args": [],
       "env": {
-        "DOXYDE_BASE_URL": "http://localhost:3000",
-        "DOXYDE_USERNAME": "mcp_agent",
-        "DOXYDE_PASSWORD": "your-secure-password",
+        "DOXYDE_MCP_URL": "http://localhost:3000/.mcp/your-token-id",
         "RUST_LOG": "info"
       }
     }

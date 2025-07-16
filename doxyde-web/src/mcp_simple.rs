@@ -50,13 +50,21 @@ impl SimpleMcpServer {
     }
 
     pub async fn handle_request(&self, request: Value) -> Result<Value> {
-        tracing::debug!("SimpleMcpServer handling request: {}", serde_json::to_string_pretty(&request).unwrap_or_default());
-        
+        tracing::debug!(
+            "SimpleMcpServer handling request: {}",
+            serde_json::to_string_pretty(&request).unwrap_or_default()
+        );
+
         let method = extract_method(&request);
         let id = extract_id(&request);
         let params = extract_params(&request);
-        
-        tracing::debug!("Extracted method: {}, id: {:?}, params: {:?}", method, id, params);
+
+        tracing::debug!(
+            "Extracted method: {}, id: {:?}, params: {:?}",
+            method,
+            id,
+            params
+        );
 
         match method {
             "initialize" => self.handle_initialize(id),
@@ -95,32 +103,39 @@ impl SimpleMcpServer {
     }
 
     async fn handle_tools_call(&self, id: Value, params: Option<Value>) -> Result<Value> {
-        tracing::debug!("handle_tools_call called with id: {:?}, params: {:?}", id, params);
-        
+        tracing::debug!(
+            "handle_tools_call called with id: {:?}, params: {:?}",
+            id,
+            params
+        );
+
         let tool_name = match extract_tool_name(&params) {
             Ok(name) => {
                 tracing::debug!("Extracted tool name: {}", name);
                 name
-            },
+            }
             Err(e) => {
                 tracing::error!("Failed to extract tool name: {}", e);
                 return Ok(create_error_response(id, -32602, &e.to_string()));
             }
         };
-        
+
         let arguments = match extract_tool_arguments(&params) {
             Ok(args) => {
-                tracing::debug!("Extracted arguments: {}", serde_json::to_string_pretty(&args).unwrap_or_default());
+                tracing::debug!(
+                    "Extracted arguments: {}",
+                    serde_json::to_string_pretty(&args).unwrap_or_default()
+                );
                 args
-            },
+            }
             Err(e) => {
                 tracing::error!("Failed to extract arguments: {}", e);
                 return Ok(create_error_response(id, -32602, &e.to_string()));
             }
         };
-        
+
         tracing::debug!("Calling tool '{}' with arguments", tool_name);
-        
+
         match self.call_tool(tool_name, arguments).await {
             Ok(content) => {
                 tracing::debug!("Tool call successful");
@@ -131,7 +146,7 @@ impl SimpleMcpServer {
                         "content": content
                     }
                 }))
-            },
+            }
             Err(e) => {
                 tracing::error!("Tool call failed: {}", e);
                 Ok(create_error_response(id, -32603, &e.to_string()))
@@ -155,6 +170,7 @@ impl SimpleMcpServer {
             self.create_get_draft_content_tool(),
             self.create_search_pages_tool(),
             self.create_create_page_tool(),
+            self.create_update_page_tool(),
         ]
     }
 
@@ -169,6 +185,7 @@ impl SimpleMcpServer {
             "get_draft_content" => self.handle_get_draft_content(arguments).await,
             "search_pages" => self.handle_search_pages(arguments).await,
             "create_page" => self.handle_create_page(arguments).await,
+            "update_page" => self.handle_update_page(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
         }
     }
@@ -335,11 +352,40 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_update_page_tool(&self) -> Value {
+        json!({
+            "name": "update_page",
+            "description": "Update page title, slug, or template",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": ["integer", "null"],
+                        "description": "ID of the page to update (required)"
+                    },
+                    "title": {
+                        "type": ["string", "null"],
+                        "description": "New page title (optional)"
+                    },
+                    "slug": {
+                        "type": ["string", "null"],
+                        "description": "New URL-friendly identifier (optional)"
+                    },
+                    "template": {
+                        "type": ["string", "null"],
+                        "description": "New page template (optional)"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
         let times = extract_flip_times(&arguments);
         let results = flip_coins(times);
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": format_flip_results(&results)
@@ -349,7 +395,7 @@ impl SimpleMcpServer {
     fn handle_get_current_time(&self, arguments: Value) -> Result<Vec<Value>> {
         let timezone = extract_timezone(&arguments);
         let time = get_time_in_timezone(&timezone)?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": time
@@ -359,7 +405,7 @@ impl SimpleMcpServer {
     async fn handle_list_pages(&self) -> Result<Vec<Value>> {
         let service = McpService::new(self.pool.clone(), self.site_id);
         let pages = service.list_pages().await?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&pages)?
@@ -370,7 +416,7 @@ impl SimpleMcpServer {
         let page_id = extract_page_id(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
         let page = service.get_page(page_id).await?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&page)?
@@ -381,7 +427,7 @@ impl SimpleMcpServer {
         let path = extract_path(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
         let page = service.get_page_by_path(&path).await?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&page)?
@@ -392,7 +438,7 @@ impl SimpleMcpServer {
         let page_id = extract_page_id(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
         let content = service.get_published_content(page_id).await?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&content)?
@@ -402,7 +448,7 @@ impl SimpleMcpServer {
     async fn handle_get_draft_content(&self, arguments: Value) -> Result<Vec<Value>> {
         let page_id = extract_page_id(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
-        
+
         match service.get_draft_content(page_id).await? {
             Some(content) => Ok(vec![json!({
                 "type": "text",
@@ -419,7 +465,7 @@ impl SimpleMcpServer {
         let query = extract_query(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
         let results = service.search_pages(&query).await?;
-        
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&results)?
@@ -429,14 +475,35 @@ impl SimpleMcpServer {
     async fn handle_create_page(&self, arguments: Value) -> Result<Vec<Value>> {
         let params = extract_create_page_params(&arguments)?;
         let service = McpService::new(self.pool.clone(), self.site_id);
-        
-        let page_info = service.create_page(
-            params.parent_page_id,
-            params.slug,
-            params.title,
-            params.template
-        ).await?;
-        
+
+        let page_info = service
+            .create_page(
+                params.parent_page_id,
+                params.slug,
+                params.title,
+                params.template,
+            )
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&page_info)?
+        })])
+    }
+
+    async fn handle_update_page(&self, arguments: Value) -> Result<Vec<Value>> {
+        tracing::info!(
+            "handle_update_page called with arguments: {}",
+            serde_json::to_string_pretty(&arguments).unwrap_or_default()
+        );
+
+        let params = extract_update_page_params(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let page_info = service
+            .update_page(params.page_id, params.title, params.slug, params.template)
+            .await?;
+
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&page_info)?
@@ -483,7 +550,13 @@ fn extract_flip_times(arguments: &Value) -> usize {
 
 fn flip_coins(times: usize) -> Vec<&'static str> {
     (0..times)
-        .map(|_| if rand::random::<bool>() { "heads" } else { "tails" })
+        .map(|_| {
+            if rand::random::<bool>() {
+                "heads"
+            } else {
+                "tails"
+            }
+        })
         .collect()
 }
 
@@ -508,17 +581,24 @@ fn extract_timezone(arguments: &Value) -> Option<String> {
 
 fn get_time_in_timezone(timezone: &Option<String>) -> Result<String> {
     use chrono::Utc;
-    
+
     match timezone {
-        None => Ok(format!("Current UTC time: {}", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"))),
+        None => Ok(format!(
+            "Current UTC time: {}",
+            Utc::now().format("%Y-%m-%d %H:%M:%S UTC")
+        )),
         Some(tz_str) => {
             use chrono_tz::Tz;
             use std::str::FromStr;
-            
+
             let tz = Tz::from_str(tz_str)
                 .map_err(|_| anyhow::anyhow!("Invalid timezone: {}", tz_str))?;
             let now = Utc::now().with_timezone(&tz);
-            Ok(format!("Current time in {}: {}", tz_str, now.format("%Y-%m-%d %H:%M:%S %Z")))
+            Ok(format!(
+                "Current time in {}: {}",
+                tz_str,
+                now.format("%Y-%m-%d %H:%M:%S %Z")
+            ))
         }
     }
 }
@@ -553,32 +633,68 @@ struct CreatePageParams {
     template: Option<String>,
 }
 
+struct UpdatePageParams {
+    page_id: i64,
+    title: Option<String>,
+    slug: Option<String>,
+    template: Option<String>,
+}
+
 fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
-    let parent_page_id = arguments
-        .get("parent_page_id")
-        .and_then(|v| v.as_i64());
-    
+    let parent_page_id = arguments.get("parent_page_id").and_then(|v| v.as_i64());
+
     let slug = arguments
         .get("slug")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("slug is required"))?
         .to_string();
-    
+
     let title = arguments
         .get("title")
         .and_then(|v| v.as_str())
         .ok_or_else(|| anyhow::anyhow!("title is required"))?
         .to_string();
-    
+
     let template = arguments
         .get("template")
         .and_then(|v| v.as_str())
         .map(String::from);
-    
+
     Ok(CreatePageParams {
         parent_page_id,
         slug,
         title,
+        template,
+    })
+}
+
+fn extract_update_page_params(arguments: &Value) -> Result<UpdatePageParams> {
+    tracing::info!(
+        "extract_update_page_params - Raw arguments: {}",
+        serde_json::to_string_pretty(arguments).unwrap_or_default()
+    );
+
+    let page_id = extract_page_id(&arguments)?;
+
+    let title = arguments
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let slug = arguments
+        .get("slug")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let template = arguments
+        .get("template")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Ok(UpdatePageParams {
+        page_id,
+        title,
+        slug,
         template,
     })
 }
@@ -602,10 +718,10 @@ mod tests {
     fn test_extract_method() {
         let request = json!({"method": "test_method"});
         assert_eq!(extract_method(&request), "test_method");
-        
+
         let request = json!({});
         assert_eq!(extract_method(&request), "");
-        
+
         let request = json!({"method": 123});
         assert_eq!(extract_method(&request), "");
     }
@@ -614,10 +730,10 @@ mod tests {
     fn test_extract_id() {
         let request = json!({"id": 123});
         assert_eq!(extract_id(&request), json!(123));
-        
+
         let request = json!({"id": "test"});
         assert_eq!(extract_id(&request), json!("test"));
-        
+
         let request = json!({});
         assert_eq!(extract_id(&request), json!(null));
     }
@@ -626,7 +742,7 @@ mod tests {
     fn test_extract_params() {
         let request = json!({"params": {"key": "value"}});
         assert_eq!(extract_params(&request), Some(json!({"key": "value"})));
-        
+
         let request = json!({});
         assert_eq!(extract_params(&request), None);
     }
@@ -635,10 +751,10 @@ mod tests {
     fn test_extract_tool_name() {
         let params = Some(json!({"name": "test_tool"}));
         assert_eq!(extract_tool_name(&params).unwrap(), "test_tool");
-        
+
         let params = Some(json!({}));
         assert!(extract_tool_name(&params).is_err());
-        
+
         let params = None;
         assert!(extract_tool_name(&params).is_err());
     }
@@ -647,13 +763,13 @@ mod tests {
     fn test_extract_flip_times() {
         let args = json!({"times": 5});
         assert_eq!(extract_flip_times(&args), 5);
-        
+
         let args = json!({"times": 0});
         assert_eq!(extract_flip_times(&args), 1);
-        
+
         let args = json!({"times": 20});
         assert_eq!(extract_flip_times(&args), 10);
-        
+
         let args = json!({});
         assert_eq!(extract_flip_times(&args), 1);
     }
@@ -662,7 +778,7 @@ mod tests {
     fn test_format_flip_results() {
         let results = vec!["heads"];
         assert_eq!(format_flip_results(&results), "The coin landed on: heads");
-        
+
         let results = vec!["heads", "tails"];
         let formatted = format_flip_results(&results);
         assert!(formatted.contains("Flipped 2 times:"));
@@ -674,10 +790,10 @@ mod tests {
     fn test_extract_page_id() {
         let args = json!({"page_id": 123});
         assert_eq!(extract_page_id(&args).unwrap(), 123);
-        
+
         let args = json!({});
         assert!(extract_page_id(&args).is_err());
-        
+
         let args = json!({"page_id": "not_a_number"});
         assert!(extract_page_id(&args).is_err());
     }
@@ -686,7 +802,7 @@ mod tests {
     fn test_extract_path() {
         let args = json!({"path": "/about"});
         assert_eq!(extract_path(&args).unwrap(), "/about");
-        
+
         let args = json!({});
         assert!(extract_path(&args).is_err());
     }
@@ -695,7 +811,7 @@ mod tests {
     fn test_extract_query() {
         let args = json!({"query": "search term"});
         assert_eq!(extract_query(&args).unwrap(), "search term");
-        
+
         let args = json!({});
         assert!(extract_query(&args).is_err());
     }
@@ -713,7 +829,7 @@ mod tests {
         assert_eq!(params.slug, "test-page");
         assert_eq!(params.title, "Test Page");
         assert_eq!(params.template, Some("default".to_string()));
-        
+
         let args = json!({
             "slug": "test-page",
             "title": "Test Page"
@@ -721,9 +837,36 @@ mod tests {
         let params = extract_create_page_params(&args).unwrap();
         assert_eq!(params.parent_page_id, None);
         assert_eq!(params.template, None);
-        
+
         let args = json!({"title": "Test Page"});
         assert!(extract_create_page_params(&args).is_err());
+    }
+
+    #[test]
+    fn test_extract_update_page_params() {
+        let args = json!({
+            "page_id": 1,
+            "title": "New Title",
+            "slug": "new-slug",
+            "template": "blog"
+        });
+        let params = extract_update_page_params(&args).unwrap();
+        assert_eq!(params.page_id, 1);
+        assert_eq!(params.title, Some("New Title".to_string()));
+        assert_eq!(params.slug, Some("new-slug".to_string()));
+        assert_eq!(params.template, Some("blog".to_string()));
+
+        // Test with only page_id
+        let args = json!({"page_id": 2});
+        let params = extract_update_page_params(&args).unwrap();
+        assert_eq!(params.page_id, 2);
+        assert_eq!(params.title, None);
+        assert_eq!(params.slug, None);
+        assert_eq!(params.template, None);
+
+        // Test missing page_id
+        let args = json!({"title": "New Title"});
+        assert!(extract_update_page_params(&args).is_err());
     }
 
     #[test]
@@ -774,7 +917,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 9); // 2 demo + 6 Phase 1 tools + 1 create_page
+        assert_eq!(tools.len(), 10); // 2 demo + 6 Phase 1 tools + 2 write tools
 
         Ok(())
     }
@@ -851,6 +994,83 @@ mod tests {
         assert_eq!(page_info["path"], "/test-page");
         assert_eq!(page_info["parent_id"], root_page_id);
         assert_eq!(page_info["template"], "default");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_page() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First, get the root page and create a test page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create a page to update
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "page-to-update",
+                    "title": "Original Title",
+                    "template": "default"
+                }
+            }
+        });
+
+        let create_response = server.handle_request(create_request).await?;
+        let page_text = create_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let created_page: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = created_page["id"].as_i64().unwrap();
+
+        // Now update the page
+        let update_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "update_page",
+                "arguments": {
+                    "page_id": page_id,
+                    "title": "Updated Title",
+                    "slug": "updated-slug",
+                    "template": "full_width"
+                }
+            }
+        });
+
+        let update_response = server.handle_request(update_request).await?;
+        let content = &update_response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+
+        let updated_page_text = content["text"].as_str().unwrap();
+        let updated_page: serde_json::Value = serde_json::from_str(updated_page_text)?;
+
+        assert_eq!(updated_page["id"], page_id);
+        assert_eq!(updated_page["slug"], "updated-slug");
+        assert_eq!(updated_page["title"], "Updated Title");
+        assert_eq!(updated_page["path"], "/updated-slug");
+        assert_eq!(updated_page["template"], "full_width");
 
         Ok(())
     }
