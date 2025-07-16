@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}MCP Token: {{ token.name }} - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    <h1>MCP Token: {{ token.name }}</h1>
+    
+    <div class="token-details">
+        <p><strong>Site:</strong> {{ site.domain }}</p>
+        <p><strong>Created:</strong> {{ token.created_at | date(format="%Y-%m-%d %H:%M:%S UTC") }}</p>
+        <p><strong>Last Used:</strong> 
+            {% if token.last_used_at %}
+                {{ token.last_used_at | date(format="%Y-%m-%d %H:%M:%S UTC") }}
+            {% else %}
+                Never
+            {% endif %}
+        </p>
+        <p><strong>Status:</strong> 
+            {% if token.revoked_at %}
+                <span class="status-revoked">Revoked on {{ token.revoked_at | date(format="%Y-%m-%d %H:%M:%S UTC") }}</span>
+            {% else %}
+                <span class="status-active">Active</span>
+            {% endif %}
+        </p>
+    </div>
+    
+    {% if not token.revoked_at %}
+    <div class="mcp-url-section">
+        <h2>MCP Server URL</h2>
+        <p>Use this URL to connect Claude Code to your site:</p>
+        <div class="url-box">
+            <code id="mcp-url">{{ mcp_url }}</code>
+            <button onclick="copyToClipboard()" class="copy-btn">Copy</button>
+        </div>
+        
+        <h3>How to use:</h3>
+        <ol>
+            <li>Open Claude Code</li>
+            <li>Go to Settings → MCP Servers</li>
+            <li>Click "Add Custom Server"</li>
+            <li>Paste the URL above and select "HTTP" as the transport</li>
+            <li>Save and restart Claude Code</li>
+        </ol>
+    </div>
+    
+    <div class="actions">
+        <form method="post" action="/.settings/mcp/{{ token.id }}/revoke" style="display: inline;">
+            <button type="submit" class="btn-danger" onclick="return confirm('Are you sure you want to revoke this token? This action cannot be undone.')">Revoke Token</button>
+        </form>
+    </div>
+    {% else %}
+    <p class="warning">This token has been revoked and can no longer be used.</p>
+    {% endif %}
+    
+    <div class="actions">
+        <a href="/.settings/mcp" class="btn-secondary">Back to Tokens</a>
+    </div>
+</div>
+
+<style>
+.content-wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.token-details {
+    background-color: #f5f5f5;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin: 2rem 0;
+}
+
+.token-details p {
+    margin: 0.5rem 0;
+}
+
+.status-active {
+    color: #28a745;
+    font-weight: bold;
+}
+
+.status-revoked {
+    color: #dc3545;
+    font-weight: bold;
+}
+
+.mcp-url-section {
+    margin: 2rem 0;
+}
+
+.url-box {
+    display: flex;
+    align-items: center;
+    background-color: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+
+.url-box code {
+    flex: 1;
+    font-family: 'Courier New', monospace;
+    word-break: break-all;
+}
+
+.copy-btn {
+    margin-left: 1rem;
+    padding: 0.5rem 1rem;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.copy-btn:hover {
+    background-color: #0056b3;
+}
+
+.actions {
+    margin: 2rem 0;
+}
+
+.btn-danger {
+    background-color: #dc3545;
+    color: white;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.btn-danger:hover {
+    background-color: #c82333;
+}
+
+.btn-secondary {
+    background-color: #6c757d;
+    color: white;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-secondary:hover {
+    background-color: #5a6268;
+}
+
+.warning {
+    color: #dc3545;
+    font-weight: bold;
+    padding: 1rem;
+    background-color: #f8d7da;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+}
+</style>
+
+<script>
+function copyToClipboard() {
+    const url = document.getElementById('mcp-url').textContent;
+    navigator.clipboard.writeText(url).then(function() {
+        alert('URL copied to clipboard!');
+    }, function(err) {
+        console.error('Could not copy text: ', err);
+    });
+}
+</script>
+{% endblock %}

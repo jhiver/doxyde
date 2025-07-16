@@ -3,7 +3,6 @@ members = [
     "doxyde-core",
     "doxyde-db",
     "doxyde-web",
-    "doxyde-mcp",
     "doxyde-cli",
     "doxyde-tagger",
 ]

@@ -1,10 +1,10 @@
 use crate::services::McpService;
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
 
-#[derive(Debug, Serialize, Deserialize)]
+// Define JSON-RPC types
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "jsonrpc")]
 pub enum JsonRpcMessage {
     #[serde(rename = "2.0")]
@@ -16,7 +16,7 @@ pub enum JsonRpcMessage {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(untagged)]
 pub enum JsonRpcResponse {
     Success {
@@ -31,7 +31,7 @@ pub enum JsonRpcResponse {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct ErrorData {
     pub code: i32,
     pub message: String,
@@ -50,370 +50,692 @@ impl SimpleMcpServer {
     }
 
     pub async fn handle_request(&self, request: Value) -> Result<Value> {
-        // Parse the request
-        let method = request.get("method").and_then(|v| v.as_str()).unwrap_or("");
-        let id = request.get("id").cloned().unwrap_or(json!(null));
-        let params = request.get("params").cloned();
+        tracing::debug!("SimpleMcpServer handling request: {}", serde_json::to_string_pretty(&request).unwrap_or_default());
+        
+        let method = extract_method(&request);
+        let id = extract_id(&request);
+        let params = extract_params(&request);
+        
+        tracing::debug!("Extracted method: {}, id: {:?}, params: {:?}", method, id, params);
 
-        let response = match method {
-            "initialize" => {
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "result": {
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {
-                            "tools": {},
-                        },
-                        "serverInfo": {
-                            "name": "doxyde-mcp",
-                            "version": env!("CARGO_PKG_VERSION"),
-                        }
-                    }
-                })
+        match method {
+            "initialize" => self.handle_initialize(id),
+            "tools/list" => self.handle_tools_list(id),
+            "tools/call" => self.handle_tools_call(id, params).await,
+            "notifications/initialized" => self.handle_notification_initialized(),
+            _ => Ok(create_error_response(id, -32601, "Method not found")),
+        }
+    }
+
+    fn handle_initialize(&self, id: Value) -> Result<Value> {
+        Ok(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {
+                    "tools": {},
+                },
+                "serverInfo": {
+                    "name": "doxyde-mcp",
+                    "version": env!("CARGO_PKG_VERSION"),
+                }
             }
-            "tools/list" => {
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "result": {
-                        "tools": [
-                            // Demo tools
-                            {
-                                "name": "flip_coin",
-                                "description": "Flip a coin one or more times",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "times": {
-                                            "type": "integer",
-                                            "description": "Number of times to flip the coin (default: 1, max: 10)",
-                                            "minimum": 1,
-                                            "maximum": 10,
-                                            "default": 1
-                                        }
-                                    }
-                                }
-                            },
-                            {
-                                "name": "get_current_time",
-                                "description": "Get the current time in UTC or a specified timezone",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "timezone": {
-                                            "type": "string",
-                                            "description": "Timezone (e.g., 'America/New_York', 'Europe/London'). Defaults to UTC.",
-                                            "examples": ["UTC", "America/New_York", "Europe/London", "Asia/Tokyo"]
-                                        }
-                                    }
-                                }
-                            },
-                            // Phase 1: Read-only operations
-                            {
-                                "name": "list_pages",
-                                "description": "Get all pages in the site with hierarchy",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {}
-                                }
-                            },
-                            {
-                                "name": "get_page",
-                                "description": "Get full page details by ID",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "page_id": {
-                                            "type": "integer",
-                                            "description": "The page ID"
-                                        }
-                                    },
-                                    "required": ["page_id"]
-                                }
-                            },
-                            {
-                                "name": "get_page_by_path",
-                                "description": "Find page by URL path (e.g., '/about/team')",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "path": {
-                                            "type": "string",
-                                            "description": "The URL path to search for"
-                                        }
-                                    },
-                                    "required": ["path"]
-                                }
-                            },
-                            {
-                                "name": "get_published_content",
-                                "description": "Get published content of a page",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "page_id": {
-                                            "type": "integer",
-                                            "description": "The page ID"
-                                        }
-                                    },
-                                    "required": ["page_id"]
-                                }
-                            },
-                            {
-                                "name": "get_draft_content",
-                                "description": "Get draft content of a page (if exists)",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "page_id": {
-                                            "type": "integer",
-                                            "description": "The page ID"
-                                        }
-                                    },
-                                    "required": ["page_id"]
-                                }
-                            },
-                            {
-                                "name": "search_pages",
-                                "description": "Search pages by title or content",
-                                "inputSchema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "query": {
-                                            "type": "string",
-                                            "description": "Search query"
-                                        }
-                                    },
-                                    "required": ["query"]
-                                }
-                            }
-                        ]
-                    }
-                })
+        }))
+    }
+
+    fn handle_tools_list(&self, id: Value) -> Result<Value> {
+        Ok(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "tools": self.get_tool_definitions()
             }
-            "tools/call" => {
-                let tool_name = params
-                    .as_ref()
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                    .unwrap_or("");
+        }))
+    }
 
-                let args = params
-                    .as_ref()
-                    .and_then(|p| p.get("arguments"))
-                    .cloned()
-                    .unwrap_or(json!({}));
-
-                let content = self.call_tool(tool_name, args).await?;
-
-                json!({
+    async fn handle_tools_call(&self, id: Value, params: Option<Value>) -> Result<Value> {
+        tracing::debug!("handle_tools_call called with id: {:?}, params: {:?}", id, params);
+        
+        let tool_name = match extract_tool_name(&params) {
+            Ok(name) => {
+                tracing::debug!("Extracted tool name: {}", name);
+                name
+            },
+            Err(e) => {
+                tracing::error!("Failed to extract tool name: {}", e);
+                return Ok(create_error_response(id, -32602, &e.to_string()));
+            }
+        };
+        
+        let arguments = match extract_tool_arguments(&params) {
+            Ok(args) => {
+                tracing::debug!("Extracted arguments: {}", serde_json::to_string_pretty(&args).unwrap_or_default());
+                args
+            },
+            Err(e) => {
+                tracing::error!("Failed to extract arguments: {}", e);
+                return Ok(create_error_response(id, -32602, &e.to_string()));
+            }
+        };
+        
+        tracing::debug!("Calling tool '{}' with arguments", tool_name);
+        
+        match self.call_tool(tool_name, arguments).await {
+            Ok(content) => {
+                tracing::debug!("Tool call successful");
+                Ok(json!({
                     "jsonrpc": "2.0",
                     "id": id,
                     "result": {
                         "content": content
                     }
-                })
+                }))
+            },
+            Err(e) => {
+                tracing::error!("Tool call failed: {}", e);
+                Ok(create_error_response(id, -32603, &e.to_string()))
             }
-            "notifications/initialized" => {
-                // Client notification - no response needed but we'll acknowledge it
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "result": {}
-                })
-            }
-            _ => {
-                json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "error": {
-                        "code": -32601,
-                        "message": format!("Method not found: {}", method)
-                    }
-                })
-            }
-        };
+        }
+    }
 
-        Ok(response)
+    fn handle_notification_initialized(&self) -> Result<Value> {
+        // Client notification - no response needed
+        Ok(json!({}))
+    }
+
+    fn get_tool_definitions(&self) -> Vec<Value> {
+        vec![
+            self.create_flip_coin_tool(),
+            self.create_get_current_time_tool(),
+            self.create_list_pages_tool(),
+            self.create_get_page_tool(),
+            self.create_get_page_by_path_tool(),
+            self.create_get_published_content_tool(),
+            self.create_get_draft_content_tool(),
+            self.create_search_pages_tool(),
+            self.create_create_page_tool(),
+        ]
     }
 
     async fn call_tool(&self, name: &str, arguments: Value) -> Result<Vec<Value>> {
         match name {
-            "flip_coin" => {
-                let times = arguments
-                    .get("times")
-                    .and_then(|t| t.as_u64())
-                    .unwrap_or(1)
-                    .min(10)
-                    .max(1) as usize;
+            "flip_coin" => self.handle_flip_coin(arguments),
+            "get_current_time" => self.handle_get_current_time(arguments),
+            "list_pages" => self.handle_list_pages().await,
+            "get_page" => self.handle_get_page(arguments).await,
+            "get_page_by_path" => self.handle_get_page_by_path(arguments).await,
+            "get_published_content" => self.handle_get_published_content(arguments).await,
+            "get_draft_content" => self.handle_get_draft_content(arguments).await,
+            "search_pages" => self.handle_search_pages(arguments).await,
+            "create_page" => self.handle_create_page(arguments).await,
+            _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
+        }
+    }
 
-                let mut results = Vec::new();
-                for i in 1..=times {
-                    let result = if rand::random::<bool>() {
-                        "Heads"
-                    } else {
-                        "Tails"
-                    };
-                    results.push(format!("Flip {}: {}", i, result));
-                }
-
-                Ok(vec![json!({
-                    "type": "text",
-                    "text": results.join("\n")
-                })])
-            }
-            "get_current_time" => {
-                let now = chrono::Utc::now();
-
-                let formatted =
-                    if let Some(tz_str) = arguments.get("timezone").and_then(|t| t.as_str()) {
-                        // Try to parse timezone
-                        match tz_str.parse::<chrono_tz::Tz>() {
-                            Ok(tz) => {
-                                let local_time = now.with_timezone(&tz);
-                                format!(
-                                    "Current time in {}: {}",
-                                    tz_str,
-                                    local_time.format("%Y-%m-%d %H:%M:%S %Z")
-                                )
-                            }
-                            Err(_) => {
-                                format!(
-                                    "Invalid timezone '{}'. Using UTC: {}",
-                                    tz_str,
-                                    now.format("%Y-%m-%d %H:%M:%S UTC")
-                                )
-                            }
-                        }
-                    } else {
-                        format!("Current time (UTC): {}", now.format("%Y-%m-%d %H:%M:%S"))
-                    };
-
-                Ok(vec![json!({
-                    "type": "text",
-                    "text": formatted
-                })])
-            }
-            // Phase 1: Read-only operations
-            "list_pages" => {
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.list_pages().await {
-                    Ok(pages) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&pages)?
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error listing pages: {}", e)
-                    })]),
+    // Tool definition methods
+    fn create_flip_coin_tool(&self) -> Value {
+        json!({
+            "name": "flip_coin",
+            "description": "Flip a coin one or more times",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "times": {
+                        "type": "integer",
+                        "description": "Number of times to flip (default: 1, max: 10)",
+                        "minimum": 1,
+                        "maximum": 10,
+                        "default": 1
+                    }
                 }
             }
-            "get_page" => {
-                let page_id = arguments
-                    .get("page_id")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| anyhow::anyhow!("page_id is required"))?;
+        })
+    }
 
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.get_page(page_id).await {
-                    Ok(page) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&page)?
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error getting page: {}", e)
-                    })]),
+    fn create_get_current_time_tool(&self) -> Value {
+        json!({
+            "name": "get_current_time",
+            "description": "Get the current time in UTC or a specified timezone",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": "Timezone (e.g., 'America/New_York', 'Europe/London')",
+                        "examples": ["UTC", "America/New_York", "Europe/London", "Asia/Tokyo"]
+                    }
                 }
             }
-            "get_page_by_path" => {
-                let path = arguments
-                    .get("path")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("path is required"))?;
+        })
+    }
 
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.get_page_by_path(path).await {
-                    Ok(page) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&page)?
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error finding page: {}", e)
-                    })]),
-                }
+    fn create_list_pages_tool(&self) -> Value {
+        json!({
+            "name": "list_pages",
+            "description": "Get all pages in the site with hierarchy",
+            "inputSchema": {
+                "type": "object",
+                "properties": {}
             }
-            "get_published_content" => {
-                let page_id = arguments
-                    .get("page_id")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| anyhow::anyhow!("page_id is required"))?;
+        })
+    }
 
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.get_published_content(page_id).await {
-                    Ok(components) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&components)?
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error getting published content: {}", e)
-                    })]),
-                }
+    fn create_get_page_tool(&self) -> Value {
+        json!({
+            "name": "get_page",
+            "description": "Get full page details by ID",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "The page ID"
+                    }
+                },
+                "required": ["page_id"]
             }
-            "get_draft_content" => {
-                let page_id = arguments
-                    .get("page_id")
-                    .and_then(|v| v.as_i64())
-                    .ok_or_else(|| anyhow::anyhow!("page_id is required"))?;
+        })
+    }
 
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.get_draft_content(page_id).await {
-                    Ok(Some(components)) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&components)?
-                    })]),
-                    Ok(None) => Ok(vec![json!({
-                        "type": "text",
-                        "text": "No draft version exists for this page"
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error getting draft content: {}", e)
-                    })]),
-                }
+    fn create_get_page_by_path_tool(&self) -> Value {
+        json!({
+            "name": "get_page_by_path",
+            "description": "Find page by URL path (e.g., '/about/team')",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "The URL path to search for"
+                    }
+                },
+                "required": ["path"]
             }
-            "search_pages" => {
-                let query = arguments
-                    .get("query")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| anyhow::anyhow!("query is required"))?;
+        })
+    }
 
-                let service = McpService::new(self.pool.clone(), self.site_id);
-                match service.search_pages(query).await {
-                    Ok(results) => Ok(vec![json!({
-                        "type": "text",
-                        "text": serde_json::to_string_pretty(&results)?
-                    })]),
-                    Err(e) => Ok(vec![json!({
-                        "type": "text",
-                        "text": format!("Error searching pages: {}", e)
-                    })]),
-                }
+    fn create_get_published_content_tool(&self) -> Value {
+        json!({
+            "name": "get_published_content",
+            "description": "Get published content of a page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "The page ID"
+                    }
+                },
+                "required": ["page_id"]
             }
-            _ => Ok(vec![json!({
+        })
+    }
+
+    fn create_get_draft_content_tool(&self) -> Value {
+        json!({
+            "name": "get_draft_content",
+            "description": "Get draft content of a page (if exists)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "The page ID"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
+    fn create_search_pages_tool(&self) -> Value {
+        json!({
+            "name": "search_pages",
+            "description": "Search pages by title or content",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    }
+                },
+                "required": ["query"]
+            }
+        })
+    }
+
+    fn create_create_page_tool(&self) -> Value {
+        json!({
+            "name": "create_page",
+            "description": "Create a new page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "parent_page_id": {
+                        "type": ["integer", "null"],
+                        "description": "ID of the parent page (required - root pages cannot be created)"
+                    },
+                    "slug": {
+                        "type": "string",
+                        "description": "URL-friendly page identifier (letters, numbers, hyphens only)"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Page title"
+                    },
+                    "template": {
+                        "type": ["string", "null"],
+                        "description": "Page template (default, full_width, landing, blog)"
+                    }
+                },
+                "required": ["slug", "title"]
+            }
+        })
+    }
+
+    // Tool handler methods
+    fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
+        let times = extract_flip_times(&arguments);
+        let results = flip_coins(times);
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": format_flip_results(&results)
+        })])
+    }
+
+    fn handle_get_current_time(&self, arguments: Value) -> Result<Vec<Value>> {
+        let timezone = extract_timezone(&arguments);
+        let time = get_time_in_timezone(&timezone)?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": time
+        })])
+    }
+
+    async fn handle_list_pages(&self) -> Result<Vec<Value>> {
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let pages = service.list_pages().await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&pages)?
+        })])
+    }
+
+    async fn handle_get_page(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let page = service.get_page(page_id).await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&page)?
+        })])
+    }
+
+    async fn handle_get_page_by_path(&self, arguments: Value) -> Result<Vec<Value>> {
+        let path = extract_path(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let page = service.get_page_by_path(&path).await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&page)?
+        })])
+    }
+
+    async fn handle_get_published_content(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let content = service.get_published_content(page_id).await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&content)?
+        })])
+    }
+
+    async fn handle_get_draft_content(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        
+        match service.get_draft_content(page_id).await? {
+            Some(content) => Ok(vec![json!({
                 "type": "text",
-                "text": format!("Unknown tool: {}", name)
+                "text": serde_json::to_string_pretty(&content)?
+            })]),
+            None => Ok(vec![json!({
+                "type": "text",
+                "text": "No draft version exists for this page"
             })]),
         }
     }
+
+    async fn handle_search_pages(&self, arguments: Value) -> Result<Vec<Value>> {
+        let query = extract_query(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let results = service.search_pages(&query).await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&results)?
+        })])
+    }
+
+    async fn handle_create_page(&self, arguments: Value) -> Result<Vec<Value>> {
+        let params = extract_create_page_params(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        
+        let page_info = service.create_page(
+            params.parent_page_id,
+            params.slug,
+            params.title,
+            params.template
+        ).await?;
+        
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&page_info)?
+        })])
+    }
+}
+
+// Helper functions
+fn extract_method(request: &Value) -> &str {
+    request.get("method").and_then(|v| v.as_str()).unwrap_or("")
+}
+
+fn extract_id(request: &Value) -> Value {
+    request.get("id").cloned().unwrap_or(json!(null))
+}
+
+fn extract_params(request: &Value) -> Option<Value> {
+    request.get("params").cloned()
+}
+
+fn extract_tool_name(params: &Option<Value>) -> Result<&str> {
+    params
+        .as_ref()
+        .and_then(|p| p.get("name"))
+        .and_then(|n| n.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Tool name is required"))
+}
+
+fn extract_tool_arguments(params: &Option<Value>) -> Result<Value> {
+    Ok(params
+        .as_ref()
+        .and_then(|p| p.get("arguments"))
+        .cloned()
+        .unwrap_or(json!({})))
+}
+
+fn extract_flip_times(arguments: &Value) -> usize {
+    arguments
+        .get("times")
+        .and_then(|t| t.as_u64())
+        .unwrap_or(1)
+        .clamp(1, 10) as usize
+}
+
+fn flip_coins(times: usize) -> Vec<&'static str> {
+    (0..times)
+        .map(|_| if rand::random::<bool>() { "heads" } else { "tails" })
+        .collect()
+}
+
+fn format_flip_results(results: &[&str]) -> String {
+    if results.len() == 1 {
+        format!("The coin landed on: {}", results[0])
+    } else {
+        let mut output = format!("Flipped {} times:\n", results.len());
+        for (i, result) in results.iter().enumerate() {
+            output.push_str(&format!("Flip {}: {}\n", i + 1, result));
+        }
+        output
+    }
+}
+
+fn extract_timezone(arguments: &Value) -> Option<String> {
+    arguments
+        .get("timezone")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+}
+
+fn get_time_in_timezone(timezone: &Option<String>) -> Result<String> {
+    use chrono::Utc;
+    
+    match timezone {
+        None => Ok(format!("Current UTC time: {}", Utc::now().format("%Y-%m-%d %H:%M:%S UTC"))),
+        Some(tz_str) => {
+            use chrono_tz::Tz;
+            use std::str::FromStr;
+            
+            let tz = Tz::from_str(tz_str)
+                .map_err(|_| anyhow::anyhow!("Invalid timezone: {}", tz_str))?;
+            let now = Utc::now().with_timezone(&tz);
+            Ok(format!("Current time in {}: {}", tz_str, now.format("%Y-%m-%d %H:%M:%S %Z")))
+        }
+    }
+}
+
+fn extract_page_id(arguments: &Value) -> Result<i64> {
+    arguments
+        .get("page_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("page_id is required"))
+}
+
+fn extract_path(arguments: &Value) -> Result<String> {
+    arguments
+        .get("path")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .ok_or_else(|| anyhow::anyhow!("path is required"))
+}
+
+fn extract_query(arguments: &Value) -> Result<String> {
+    arguments
+        .get("query")
+        .and_then(|v| v.as_str())
+        .map(String::from)
+        .ok_or_else(|| anyhow::anyhow!("query is required"))
+}
+
+struct CreatePageParams {
+    parent_page_id: Option<i64>,
+    slug: String,
+    title: String,
+    template: Option<String>,
+}
+
+fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
+    let parent_page_id = arguments
+        .get("parent_page_id")
+        .and_then(|v| v.as_i64());
+    
+    let slug = arguments
+        .get("slug")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("slug is required"))?
+        .to_string();
+    
+    let title = arguments
+        .get("title")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("title is required"))?
+        .to_string();
+    
+    let template = arguments
+        .get("template")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    
+    Ok(CreatePageParams {
+        parent_page_id,
+        slug,
+        title,
+        template,
+    })
+}
+
+fn create_error_response(id: Value, code: i32, message: &str) -> Value {
+    json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "error": {
+            "code": code,
+            "message": message
+        }
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_extract_method() {
+        let request = json!({"method": "test_method"});
+        assert_eq!(extract_method(&request), "test_method");
+        
+        let request = json!({});
+        assert_eq!(extract_method(&request), "");
+        
+        let request = json!({"method": 123});
+        assert_eq!(extract_method(&request), "");
+    }
+
+    #[test]
+    fn test_extract_id() {
+        let request = json!({"id": 123});
+        assert_eq!(extract_id(&request), json!(123));
+        
+        let request = json!({"id": "test"});
+        assert_eq!(extract_id(&request), json!("test"));
+        
+        let request = json!({});
+        assert_eq!(extract_id(&request), json!(null));
+    }
+
+    #[test]
+    fn test_extract_params() {
+        let request = json!({"params": {"key": "value"}});
+        assert_eq!(extract_params(&request), Some(json!({"key": "value"})));
+        
+        let request = json!({});
+        assert_eq!(extract_params(&request), None);
+    }
+
+    #[test]
+    fn test_extract_tool_name() {
+        let params = Some(json!({"name": "test_tool"}));
+        assert_eq!(extract_tool_name(&params).unwrap(), "test_tool");
+        
+        let params = Some(json!({}));
+        assert!(extract_tool_name(&params).is_err());
+        
+        let params = None;
+        assert!(extract_tool_name(&params).is_err());
+    }
+
+    #[test]
+    fn test_extract_flip_times() {
+        let args = json!({"times": 5});
+        assert_eq!(extract_flip_times(&args), 5);
+        
+        let args = json!({"times": 0});
+        assert_eq!(extract_flip_times(&args), 1);
+        
+        let args = json!({"times": 20});
+        assert_eq!(extract_flip_times(&args), 10);
+        
+        let args = json!({});
+        assert_eq!(extract_flip_times(&args), 1);
+    }
+
+    #[test]
+    fn test_format_flip_results() {
+        let results = vec!["heads"];
+        assert_eq!(format_flip_results(&results), "The coin landed on: heads");
+        
+        let results = vec!["heads", "tails"];
+        let formatted = format_flip_results(&results);
+        assert!(formatted.contains("Flipped 2 times:"));
+        assert!(formatted.contains("Flip 1: heads"));
+        assert!(formatted.contains("Flip 2: tails"));
+    }
+
+    #[test]
+    fn test_extract_page_id() {
+        let args = json!({"page_id": 123});
+        assert_eq!(extract_page_id(&args).unwrap(), 123);
+        
+        let args = json!({});
+        assert!(extract_page_id(&args).is_err());
+        
+        let args = json!({"page_id": "not_a_number"});
+        assert!(extract_page_id(&args).is_err());
+    }
+
+    #[test]
+    fn test_extract_path() {
+        let args = json!({"path": "/about"});
+        assert_eq!(extract_path(&args).unwrap(), "/about");
+        
+        let args = json!({});
+        assert!(extract_path(&args).is_err());
+    }
+
+    #[test]
+    fn test_extract_query() {
+        let args = json!({"query": "search term"});
+        assert_eq!(extract_query(&args).unwrap(), "search term");
+        
+        let args = json!({});
+        assert!(extract_query(&args).is_err());
+    }
+
+    #[test]
+    fn test_extract_create_page_params() {
+        let args = json!({
+            "parent_page_id": 1,
+            "slug": "test-page",
+            "title": "Test Page",
+            "template": "default"
+        });
+        let params = extract_create_page_params(&args).unwrap();
+        assert_eq!(params.parent_page_id, Some(1));
+        assert_eq!(params.slug, "test-page");
+        assert_eq!(params.title, "Test Page");
+        assert_eq!(params.template, Some("default".to_string()));
+        
+        let args = json!({
+            "slug": "test-page",
+            "title": "Test Page"
+        });
+        let params = extract_create_page_params(&args).unwrap();
+        assert_eq!(params.parent_page_id, None);
+        assert_eq!(params.template, None);
+        
+        let args = json!({"title": "Test Page"});
+        assert!(extract_create_page_params(&args).is_err());
+    }
+
+    #[test]
+    fn test_create_error_response() {
+        let response = create_error_response(json!(123), -32601, "Method not found");
+        assert_eq!(response["jsonrpc"], "2.0");
+        assert_eq!(response["id"], 123);
+        assert_eq!(response["error"]["code"], -32601);
+        assert_eq!(response["error"]["message"], "Method not found");
+    }
+
+    // Integration tests
     use crate::test_helpers::{create_test_app_state, create_test_site};
 
     async fn create_test_server() -> Result<SimpleMcpServer> {
@@ -452,7 +774,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 8); // 2 demo + 6 Phase 1 tools
+        assert_eq!(tools.len(), 9); // 2 demo + 6 Phase 1 tools + 1 create_page
 
         Ok(())
     }
@@ -475,6 +797,60 @@ mod tests {
         assert_eq!(content["type"], "text");
         assert!(content["text"].as_str().unwrap().contains("Flip 1:"));
         assert!(content["text"].as_str().unwrap().contains("Flip 2:"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First, get the root page ID
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Now create a new page
+        let request = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-page",
+                    "title": "Test Page",
+                    "template": "default"
+                }
+            }
+        });
+
+        let response = server.handle_request(request).await?;
+        let content = &response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+
+        let page_info_text = content["text"].as_str().unwrap();
+        let page_info: serde_json::Value = serde_json::from_str(page_info_text)?;
+
+        assert_eq!(page_info["slug"], "test-page");
+        assert_eq!(page_info["title"], "Test Page");
+        assert_eq!(page_info["path"], "/test-page");
+        assert_eq!(page_info["parent_id"], root_page_id);
+        assert_eq!(page_info["template"], "default");
 
         Ok(())
     }

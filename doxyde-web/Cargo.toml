@@ -12,7 +12,6 @@ path = "src/main.rs"
 [dependencies]
 doxyde-core = { path = "../doxyde-core" }
 doxyde-db = { path = "../doxyde-db" }
-doxyde-mcp = { path = "../doxyde-mcp" }
 anyhow.workspace = true
 rand = "0.8"
 chrono-tz = "0.9"

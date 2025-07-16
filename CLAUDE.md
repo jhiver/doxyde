@@ -45,6 +45,14 @@ Doxyde is a modern, AI-native content management system built with Rust. It's de
 - **Usage Tracking**: Last usage time is tracked for each token
 - **Simple Integration**: Users just copy the generated URL into Claude Code as a custom connector
 
+**MCP Error Handling (Important):**
+- **Always return JSON-RPC format**: MCP endpoints must ALWAYS return JSON-RPC responses, even for errors
+- **Never throw HTTP errors**: Don't use `AppError` or return HTTP status codes for MCP endpoints
+- **Proper error structure**: Errors must have `jsonrpc`, `id`, and `error` fields with `code` and `message`
+- **Tool errors propagate**: Tool handlers should propagate errors (use `?`) instead of catching them
+- **Error codes**: Use `-32602` for invalid params, `-32603` for internal/execution errors
+- **Example**: When a tool fails, return `{"jsonrpc": "2.0", "id": 1, "error": {"code": -32603, "message": "Error details"}}`
+
 ### Previous Updates (July 13, 2025)
 
 **Image Upload System:**
@@ -201,12 +209,20 @@ Since Rust is hard, you MUST follow this EXACT development process:
 - ❌ Implementing a whole module at once
 - ❌ Using `unwrap()` or `expect()` anywhere in the code
 - ❌ Ignoring error handling
+- ❌ Writing functions longer than 30 lines
+- ❌ Nesting more than 3 levels deep
+- ❌ Having more than 4 parameters per function
 
 ### ✅ REQUIRED PRACTICES
 - ✅ One function → its tests → verify → next function
 - ✅ Stop and think deeply when tests fail
 - ✅ Understand root causes, not symptoms
 - ✅ Clean, thoughtful fixes over quick patches
+- ✅ Keep functions short and focused (max 30 lines)
+- ✅ Extract complex logic into helper functions
+- ✅ Write at least one test per function
+- ✅ Test edge cases and error conditions
+- ✅ Use descriptive function names that explain what they do
 
 ### Example Development Flow
 ```rust
@@ -232,6 +248,50 @@ mod tests {
 // $ cargo test
 // Only after all tests pass, move to next function
 ```
+
+### Code Readability Guidelines
+
+**Function Length**
+- Maximum 30 lines per function (excluding tests)
+- If a function is getting long, extract helper functions
+- Each function should do ONE thing well
+
+**Example of refactoring a long function:**
+```rust
+// ❌ BAD: Too long and does too many things
+pub fn process_request(request: Request) -> Result<Response> {
+    // 50+ lines of validation, processing, formatting...
+}
+
+// ✅ GOOD: Split into focused functions
+pub fn process_request(request: Request) -> Result<Response> {
+    let validated = validate_request(&request)?;
+    let result = execute_operation(validated)?;
+    format_response(result)
+}
+
+fn validate_request(request: &Request) -> Result<ValidatedRequest> {
+    // 10-15 lines focused on validation
+}
+
+fn execute_operation(request: ValidatedRequest) -> Result<OperationResult> {
+    // 10-15 lines focused on business logic
+}
+
+fn format_response(result: OperationResult) -> Result<Response> {
+    // 10-15 lines focused on formatting
+}
+```
+
+**Nesting Depth**
+- Maximum 3 levels of nesting
+- Use early returns to reduce nesting
+- Extract complex conditions into well-named functions
+
+**Testing Requirements**
+- Every public function must have tests
+- Test the happy path, edge cases, and error cases
+- Use descriptive test names that explain what is being tested
 
 ## Development Workflow
 

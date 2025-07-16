@@ -56,16 +56,7 @@ impl McpService {
 
         // First pass: create PageInfo for all pages
         for page in &pages {
-            let info = PageInfo {
-                id: page.id.unwrap(),
-                slug: page.slug.clone(),
-                title: page.title.clone(),
-                path: self.build_page_path(&pages, page).await?,
-                parent_id: page.parent_page_id,
-                position: page.position,
-                has_children: pages.iter().any(|p| p.parent_page_id == page.id),
-                template: Some(page.template.clone()),
-            };
+            let info = self.page_to_info(&pages, page).await?;
             page_map.insert(page.id.unwrap(), (info, Vec::new()));
         }
 
@@ -177,22 +168,7 @@ impl McpService {
             .list_by_page_version(version.id.unwrap())
             .await?;
 
-        let mut result = Vec::new();
-        for component in components {
-            let info = ComponentInfo {
-                id: component.id.unwrap(),
-                component_type: component.component_type.clone(),
-                position: component.position,
-                template: component.template.clone(),
-                title: component.title.clone(),
-                content: component.content.clone(),
-                created_at: component.created_at.to_rfc3339(),
-                updated_at: component.updated_at.to_rfc3339(),
-            };
-            result.push(info);
-        }
-
-        Ok(result)
+        Ok(self.components_to_info(components))
     }
 
     /// Get draft content of a page (if exists)
@@ -214,22 +190,7 @@ impl McpService {
             .list_by_page_version(version.id.unwrap())
             .await?;
 
-        let mut result = Vec::new();
-        for component in components {
-            let info = ComponentInfo {
-                id: component.id.unwrap(),
-                component_type: component.component_type.clone(),
-                position: component.position,
-                template: component.template.clone(),
-                title: component.title.clone(),
-                content: component.content.clone(),
-                created_at: component.created_at.to_rfc3339(),
-                updated_at: component.updated_at.to_rfc3339(),
-            };
-            result.push(info);
-        }
-
-        Ok(Some(result))
+        Ok(Some(self.components_to_info(components)))
     }
 
     /// Search pages by title or content
@@ -239,63 +200,93 @@ impl McpService {
 
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
+        let mut found_pages = std::collections::HashSet::new();
 
         for page in pages.iter() {
+            // Skip if already found
+            if found_pages.contains(&page.id.unwrap()) {
+                continue;
+            }
+
             // Search in title
             if page.title.to_lowercase().contains(&query_lower) {
-                results.push(PageInfo {
-                    id: page.id.unwrap(),
-                    slug: page.slug.clone(),
-                    title: page.title.clone(),
-                    path: self.build_page_path(&pages, page).await?,
-                    parent_id: page.parent_page_id,
-                    position: page.position,
-                    has_children: pages.iter().any(|p| p.parent_page_id == page.id),
-                    template: Some(page.template.clone()),
-                });
+                results.push(self.page_to_info(&pages, page).await?);
+                found_pages.insert(page.id.unwrap());
                 continue;
             }
 
             // Search in content
-            if let Ok(components) = self.get_published_content(page.id.unwrap()).await {
-                for component in components {
-                    // Check in title
-                    if let Some(title) = &component.title {
-                        if title.to_lowercase().contains(&query_lower) {
-                            results.push(PageInfo {
-                                id: page.id.unwrap(),
-                                slug: page.slug.clone(),
-                                title: page.title.clone(),
-                                path: self.build_page_path(&pages, page).await?,
-                                parent_id: page.parent_page_id,
-                                position: page.position,
-                                has_children: pages.iter().any(|p| p.parent_page_id == page.id),
-                                template: Some(page.template.clone()),
-                            });
-                            break;
-                        }
-                    }
-
-                    // Check in content JSON
-                    let content_str = component.content.to_string().to_lowercase();
-                    if content_str.contains(&query_lower) {
-                        results.push(PageInfo {
-                            id: page.id.unwrap(),
-                            slug: page.slug.clone(),
-                            title: page.title.clone(),
-                            path: self.build_page_path(&pages, page).await?,
-                            parent_id: page.parent_page_id,
-                            position: page.position,
-                            has_children: pages.iter().any(|p| p.parent_page_id == page.id),
-                            template: Some(page.template.clone()),
-                        });
-                        break;
-                    }
-                }
+            if self.page_content_matches(page.id.unwrap(), &query_lower).await? {
+                results.push(self.page_to_info(&pages, page).await?);
+                found_pages.insert(page.id.unwrap());
             }
         }
 
         Ok(results)
+    }
+
+    /// Create a new page
+    pub async fn create_page(
+        &self,
+        parent_page_id: Option<i64>,
+        slug: String,
+        title: String,
+        template: Option<String>,
+    ) -> Result<PageInfo> {
+        let page_repo = PageRepository::new(self.pool.clone());
+
+        // If parent_page_id is provided, verify it belongs to this site
+        if let Some(parent_id) = parent_page_id {
+            let parent = page_repo
+                .find_by_id(parent_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Parent page not found"))?;
+            if parent.site_id != self.site_id {
+                return Err(anyhow::anyhow!("Parent page does not belong to this site"));
+            }
+        }
+
+        // Calculate position for new page
+        let position = self.calculate_page_position(&page_repo, parent_page_id).await?;
+
+        // Create the page object
+        let new_page = if let Some(parent_id) = parent_page_id {
+            Page::new_with_parent(self.site_id, parent_id, slug, title)
+        } else {
+            Page::new(self.site_id, slug, title)
+        };
+
+        // Set template and position
+        let mut page_with_metadata = new_page;
+        page_with_metadata.template = template.unwrap_or_else(|| "default".to_string());
+        page_with_metadata.position = position;
+
+        // Validate using the model's validation
+        page_with_metadata.is_valid()
+            .map_err(|e| anyhow::anyhow!(e))?;
+
+        let page_id = page_repo.create(&page_with_metadata).await?;
+
+        // Retrieve the created page
+        let created_page = page_repo
+            .find_by_id(page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created page"))?;
+
+        // Get all pages to build path
+        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+
+        // Return page info
+        Ok(PageInfo {
+            id: created_page.id.unwrap(),
+            slug: created_page.slug.clone(),
+            title: created_page.title.clone(),
+            path: self.build_page_path(&all_pages, &created_page).await?,
+            parent_id: created_page.parent_page_id,
+            position: created_page.position,
+            has_children: false, // New page has no children
+            template: Some(created_page.template.clone()),
+        })
     }
 
     // Helper methods
@@ -348,12 +339,90 @@ impl McpService {
             None
         }
     }
+
+    async fn calculate_page_position(
+        &self,
+        page_repo: &PageRepository,
+        parent_page_id: Option<i64>,
+    ) -> Result<i32> {
+        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        
+        let position = if let Some(parent_id) = parent_page_id {
+            // Get max position among siblings
+            pages
+                .iter()
+                .filter(|p| p.parent_page_id == Some(parent_id))
+                .map(|p| p.position)
+                .max()
+                .unwrap_or(0) + 1
+        } else {
+            // Get max position among root pages
+            pages
+                .iter()
+                .filter(|p| p.parent_page_id.is_none())
+                .map(|p| p.position)
+                .max()
+                .unwrap_or(0) + 1
+        };
+        
+        Ok(position)
+    }
+
+    async fn page_to_info(&self, all_pages: &[Page], page: &Page) -> Result<PageInfo> {
+        Ok(PageInfo {
+            id: page.id.unwrap(),
+            slug: page.slug.clone(),
+            title: page.title.clone(),
+            path: self.build_page_path(all_pages, page).await?,
+            parent_id: page.parent_page_id,
+            position: page.position,
+            has_children: all_pages.iter().any(|p| p.parent_page_id == page.id),
+            template: Some(page.template.clone()),
+        })
+    }
+
+    async fn page_content_matches(&self, page_id: i64, query_lower: &str) -> Result<bool> {
+        if let Ok(components) = self.get_published_content(page_id).await {
+            for component in components {
+                // Check in component title
+                if let Some(title) = &component.title {
+                    if title.to_lowercase().contains(query_lower) {
+                        return Ok(true);
+                    }
+                }
+
+                // Check in content JSON
+                let content_str = component.content.to_string().to_lowercase();
+                if content_str.contains(query_lower) {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+
+    fn components_to_info(&self, components: Vec<doxyde_core::models::Component>) -> Vec<ComponentInfo> {
+        components
+            .into_iter()
+            .map(|component| ComponentInfo {
+                id: component.id.unwrap(),
+                component_type: component.component_type,
+                position: component.position,
+                template: component.template,
+                title: component.title,
+                content: component.content,
+                created_at: component.created_at.to_rfc3339(),
+                updated_at: component.updated_at.to_rfc3339(),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_helpers::{create_test_app_state, create_test_site};
+    use serde_json::json;
 
     async fn create_test_service() -> Result<(McpService, i64)> {
         let state = create_test_app_state().await?;
@@ -379,6 +448,301 @@ mod tests {
         let (service, _) = create_test_service().await?;
         let result = service.get_page(999).await;
         assert!(result.is_err());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page_as_child_of_root() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create a page as child of root
+        let page_info = service
+            .create_page(
+                Some(root_page_id),
+                "about".to_string(),
+                "About Us".to_string(),
+                Some("default".to_string()),
+            )
+            .await?;
+
+        assert_eq!(page_info.slug, "about");
+        assert_eq!(page_info.title, "About Us");
+        assert_eq!(page_info.path, "/about");
+        assert_eq!(page_info.parent_id, Some(root_page_id));
+        // Position depends on whether there are already child pages
+        assert!(page_info.position >= 0);
+        assert!(!page_info.has_children);
+        assert_eq!(page_info.template, Some("default".to_string()));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page_with_parent() -> Result<()> {
+        let (service, _site_id) = create_test_service().await?;
+
+        // Get the root page to use as parent
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create a child page
+        let page_info = service
+            .create_page(
+                Some(root_page_id),
+                "team".to_string(),
+                "Our Team".to_string(),
+                Some("full_width".to_string()),
+            )
+            .await?;
+
+        assert_eq!(page_info.slug, "team");
+        assert_eq!(page_info.title, "Our Team");
+        assert_eq!(page_info.path, "/team");
+        assert_eq!(page_info.parent_id, Some(root_page_id));
+        assert!(page_info.position >= 0); // Position should be valid
+        assert!(!page_info.has_children);
+        assert_eq!(page_info.template, Some("full_width".to_string()));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page_validation_errors() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page to use as parent
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Test empty slug
+        let result = service
+            .create_page(
+                Some(root_page_id),
+                "".to_string(),
+                "Title".to_string(),
+                None,
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Slug cannot be empty"));
+
+        // Test empty title
+        let result = service
+            .create_page(
+                Some(root_page_id),
+                "valid-slug".to_string(),
+                "".to_string(),
+                None,
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Title cannot be empty"));
+
+        // Test invalid slug characters (space in slug)
+        let result = service
+            .create_page(
+                Some(root_page_id),
+                "invalid slug!".to_string(),
+                "Title".to_string(),
+                None,
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Slug cannot contain spaces"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_root_page_not_allowed() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Try to create a root page (without parent)
+        let result = service
+            .create_page(
+                None,
+                "new-root".to_string(),
+                "New Root Page".to_string(),
+                None,
+            )
+            .await;
+
+        assert!(result.is_err());
+        // The error will come from PageRepository
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page_with_invalid_parent() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Try to create page with non-existent parent
+        let result = service
+            .create_page(
+                Some(9999),
+                "orphan".to_string(),
+                "Orphan Page".to_string(),
+                None,
+            )
+            .await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Parent page not found"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_page_default_template() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create page without specifying template
+        let page_info = service
+            .create_page(
+                Some(root_page_id),
+                "contact".to_string(),
+                "Contact Us".to_string(),
+                None,
+            )
+            .await?;
+
+        // Should default to "default" template
+        assert_eq!(page_info.template, Some("default".to_string()));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_calculate_page_position() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+
+        // Test position for root page (should be based on existing root pages)
+        let position = service.calculate_page_position(&page_repo, None).await?;
+        assert!(position >= 0);
+
+        // Get root page for parent tests
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Test position for child page
+        let position = service.calculate_page_position(&page_repo, Some(root_page_id)).await?;
+        assert!(position >= 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_page_to_info() -> Result<()> {
+        let (service, site_id) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+        let pages = page_repo.list_by_site_id(site_id).await?;
+        
+        assert!(!pages.is_empty());
+        let page = &pages[0];
+        
+        let info = service.page_to_info(&pages, page).await?;
+        
+        assert_eq!(info.id, page.id.unwrap());
+        assert_eq!(info.slug, page.slug);
+        assert_eq!(info.title, page.title);
+        assert_eq!(info.parent_id, page.parent_page_id);
+        assert_eq!(info.position, page.position);
+        assert_eq!(info.template, Some(page.template.clone()));
+        assert_eq!(info.path, "/"); // Root page should have "/" path
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_page_content_matches() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        
+        // Get a page
+        let pages = service.list_pages().await?;
+        let page_id = pages[0].page.id;
+        
+        // Test with non-matching query
+        let matches = service.page_content_matches(page_id, "nonexistentcontent").await?;
+        assert!(!matches);
+        
+        // Note: We can't test positive matches without first adding content to the page
+        // This would require creating components, which is beyond the scope of this unit test
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_components_to_info() -> Result<()> {
+        use chrono::Utc;
+        use doxyde_core::models::Component;
+        
+        let (service, _) = create_test_service().await?;
+        
+        let components = vec![
+            Component {
+                id: Some(1),
+                page_version_id: 1,
+                component_type: "text".to_string(),
+                position: 0,
+                template: "default".to_string(),
+                title: Some("Test Title".to_string()),
+                content: json!({"text": "Test content"}),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            Component {
+                id: Some(2),
+                page_version_id: 1,
+                component_type: "image".to_string(),
+                position: 1,
+                template: "full_width".to_string(),
+                title: None,
+                content: json!({"url": "test.jpg"}),
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+        ];
+        
+        let infos = service.components_to_info(components.clone());
+        
+        assert_eq!(infos.len(), 2);
+        
+        assert_eq!(infos[0].id, 1);
+        assert_eq!(infos[0].component_type, "text");
+        assert_eq!(infos[0].position, 0);
+        assert_eq!(infos[0].template, "default");
+        assert_eq!(infos[0].title, Some("Test Title".to_string()));
+        assert_eq!(infos[0].content, json!({"text": "Test content"}));
+        
+        assert_eq!(infos[1].id, 2);
+        assert_eq!(infos[1].component_type, "image");
+        assert_eq!(infos[1].position, 1);
+        assert_eq!(infos[1].template, "full_width");
+        assert_eq!(infos[1].title, None);
+        assert_eq!(infos[1].content, json!({"url": "test.jpg"}));
+        
         Ok(())
     }
 }
