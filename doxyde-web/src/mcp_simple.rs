@@ -1311,7 +1311,6 @@ mod tests {
     async fn create_test_server() -> Result<SimpleMcpServer> {
         let state = create_test_app_state().await?;
         let site = create_test_site(&state.db, "test.com", "Test Site").await?;
-
         Ok(SimpleMcpServer::new(state.db, site.id.unwrap()))
     }
 
@@ -2081,4 +2080,398 @@ mod tests {
 
         Ok(())
     }
+
+    #[tokio::test]
+    async fn test_publish_draft() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First get the root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+        
+        // Create a test page
+        let create_page_req = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-publish",
+                    "title": "Test Publish Page"
+                }
+            }
+        });
+        
+        let create_resp = server.handle_request(create_page_req).await?;
+        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_info: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page_info["id"].as_i64().unwrap();
+
+        // Create a component to generate a draft
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_component_markdown",
+                "arguments": {
+                    "page_id": page_id,
+                    "text": "# Draft Content\n\nThis is draft content to be published.",
+                    "title": "Draft Test"
+                }
+            }
+        });
+
+        let create_response = server.handle_request(create_request).await?;
+        // Response contains the component info, not a success message
+        let component_text = create_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let _component_info: serde_json::Value = serde_json::from_str(component_text)?;
+
+        // Publish the draft
+        let publish_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "publish_draft",
+                "arguments": {
+                    "page_id": page_id
+                }
+            }
+        });
+
+        let publish_response = server.handle_request(publish_request).await?;
+        let publish_text = publish_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        assert!(publish_text.contains("Successfully published draft"));
+        assert!(publish_text.contains("is now live"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_discard_draft() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First get the root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+        
+        // Create a test page
+        let create_page_req = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-discard",
+                    "title": "Test Discard Page"
+                }
+            }
+        });
+        
+        let create_resp = server.handle_request(create_page_req).await?;
+        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_info: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page_info["id"].as_i64().unwrap();
+
+        // Create a component to generate a draft
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_component_markdown",
+                "arguments": {
+                    "page_id": page_id,
+                    "text": "This content should be discarded",
+                    "title": "To Be Discarded"
+                }
+            }
+        });
+
+        server.handle_request(create_request).await?;
+
+        // Discard the draft
+        let discard_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "discard_draft",
+                "arguments": {
+                    "page_id": page_id
+                }
+            }
+        });
+
+        let discard_response = server.handle_request(discard_request).await?;
+        let discard_text = discard_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        assert!(discard_text.contains("Successfully discarded draft"));
+
+        // Try to discard again - should fail
+        let discard_again = server.handle_request(json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "discard_draft",
+                "arguments": {
+                    "page_id": page_id
+                }
+            }
+        })).await?;
+
+        assert!(discard_again.get("error").is_some());
+        let error_msg = discard_again["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("No draft version found"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_component_markdown() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First get the root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+        
+        // Create a test page
+        let create_page_req = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-update",
+                    "title": "Test Update Page"
+                }
+            }
+        });
+        
+        let create_resp = server.handle_request(create_page_req).await?;
+        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_info: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page_info["id"].as_i64().unwrap();
+
+        // Create a component first
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_component_markdown",
+                "arguments": {
+                    "page_id": page_id,
+                    "text": "Original content",
+                    "title": "Original Title"
+                }
+            }
+        });
+
+        let create_response = server.handle_request(create_request).await?;
+        let create_text = create_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let component_info: serde_json::Value = serde_json::from_str(create_text)?;
+        let component_id = component_info["id"].as_i64().unwrap();
+
+        // Update the component
+        let update_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "update_component_markdown",
+                "arguments": {
+                    "component_id": component_id,
+                    "text": "Updated content with **bold** text",
+                    "title": "Updated Title",
+                    "template": "card"
+                }
+            }
+        });
+
+        let update_response = server.handle_request(update_request).await?;
+        assert!(update_response["result"]["content"][0]["text"].is_string());
+
+        // Get the component to verify update
+        let get_request = json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "get_component",
+                "arguments": {
+                    "component_id": component_id
+                }
+            }
+        });
+
+        let get_response = server.handle_request(get_request).await?;
+        let component_text = get_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let updated_component: serde_json::Value = serde_json::from_str(component_text)?;
+        
+        assert_eq!(updated_component["title"], "Updated Title");
+        assert_eq!(updated_component["template"], "card");
+        assert_eq!(updated_component["content"]["text"], "Updated content with **bold** text");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_component() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First get the root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+        
+        // Create a test page
+        let create_page_req = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-delete",
+                    "title": "Test Delete Page"
+                }
+            }
+        });
+        
+        let create_resp = server.handle_request(create_page_req).await?;
+        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_info: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page_info["id"].as_i64().unwrap();
+
+        // Create a component
+        let create_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_component_markdown",
+                "arguments": {
+                    "page_id": page_id,
+                    "text": "Component to be deleted"
+                }
+            }
+        });
+
+        let create_response = server.handle_request(create_request).await?;
+        let create_text = create_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let component_info: serde_json::Value = serde_json::from_str(create_text)?;
+        let component_id = component_info["id"].as_i64().unwrap();
+
+        // Delete the component
+        let delete_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "delete_component",
+                "arguments": {
+                    "component_id": component_id
+                }
+            }
+        });
+
+        let delete_response = server.handle_request(delete_request).await?;
+        let delete_text = delete_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        assert!(delete_text.contains(&format!("Successfully deleted component with ID {}", component_id)));
+
+        // Try to get the deleted component - should fail
+        let get_request = json!({
+            "jsonrpc": "2.0",
+            "id": 5,
+            "method": "tools/call",
+            "params": {
+                "name": "get_component",
+                "arguments": {
+                    "component_id": component_id
+                }
+            }
+        });
+
+        let get_response = server.handle_request(get_request).await?;
+        assert!(get_response.get("error").is_some());
+        let error_msg = get_response["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("Component not found"));
+
+        Ok(())
+    }
+
 }
