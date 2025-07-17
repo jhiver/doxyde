@@ -660,18 +660,32 @@ Visit http://localhost:3000 and login at http://localhost:3000/.login
 11. **Image Management**: Upload and serve images with automatic metadata extraction
 12. **Modern UI**: Professional design with Inter font and dark header/footer theme
 
-### 🔧 Current MCP Development Tasks
+### 🔧 MCP Development Status
 
-**Completed:**
-- **delete_page MCP tool**: Page deletion with comprehensive safety checks ✅
-- **move_page MCP tool**: Page hierarchy management with circular reference prevention ✅
-- **Component management**: Markdown-specific tools (create, update, delete, list, get) ✅
-- **Draft/publish tools**: publish_draft and discard_draft for managing page versions ✅
+**✅ Completed MCP Tools (Phase 1 Complete!):**
+1. **Page Management:**
+   - `delete_page`: Safe page deletion with children/root checks
+   - `move_page`: Page hierarchy management with circular reference prevention
+   - `create_page`, `update_page`: Already existed
 
-**Pending:**
-- Comprehensive tests for all new MCP tools
+2. **Component Management (Markdown):**
+   - `create_component_markdown`: Create markdown components with content
+   - `update_component_markdown`: Edit existing markdown components
+   - `delete_component`: Remove any component
+   - `list_components`: List all components for a page
+   - `get_component`: Get specific component details
+
+3. **Draft/Publish Workflow:**
+   - `publish_draft`: Make draft version live
+   - `discard_draft`: Cancel draft changes
+
+**📋 Current Todo:**
+- Add comprehensive tests for all new MCP tools (HIGH PRIORITY)
+
+**🔮 Future Enhancements:**
 - Support for other component types (image, code, html, etc.)
 - Component reordering functionality
+- Bulk operations support
 
 ## Next Implementation Tasks
 
