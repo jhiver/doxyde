@@ -1,7 +1,8 @@
 use anyhow::Result;
-use doxyde_core::models::Page;
+use doxyde_core::models::{Page, Component};
 use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sqlx::SqlitePool;
 
 #[derive(Clone)]
@@ -390,6 +391,205 @@ impl McpService {
 
         // Return updated page info
         self.page_to_info(&all_pages, &moved_page).await
+    }
+
+    /// Create a markdown component on a page
+    pub async fn create_component_markdown(
+        &self,
+        page_id: i64,
+        content_text: String,
+        title: Option<String>,
+        template: Option<String>,
+    ) -> Result<ComponentInfo> {
+        // Verify page exists and belongs to this site
+        let _page = self.get_page(page_id).await?;
+
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get or create draft version
+        let draft = crate::draft::get_or_create_draft(&self.pool, page_id, None).await?;
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
+
+        // Get current components to determine position
+        let existing_components = component_repo.list_by_page_version(draft_id).await?;
+        let next_position = existing_components.len() as i32;
+
+        // Create the markdown component
+        let content = json!({
+            "text": content_text
+        });
+
+        let mut component = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            next_position,
+            content,
+        );
+        
+        component.title = title;
+        component.template = template.unwrap_or_else(|| "default".to_string());
+
+        // Validate the component
+        component.is_valid().map_err(|e| anyhow::anyhow!(e))?;
+
+        // Create the component
+        let component_id = component_repo.create(&component).await?;
+
+        // Return component info
+        Ok(ComponentInfo {
+            id: component_id,
+            component_type: component.component_type,
+            position: component.position,
+            template: component.template,
+            title: component.title,
+            content: component.content,
+            created_at: component.created_at.to_rfc3339(),
+            updated_at: component.updated_at.to_rfc3339(),
+        })
+    }
+
+    /// Update a markdown component
+    pub async fn update_component_markdown(
+        &self,
+        component_id: i64,
+        content_text: String,
+        title: Option<String>,
+        template: Option<String>,
+    ) -> Result<ComponentInfo> {
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the existing component
+        let mut component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify it's a markdown component
+        if component.component_type != "markdown" {
+            return Err(anyhow::anyhow!("Component is not a markdown component"));
+        }
+
+        // Verify the component belongs to a page in this site
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        let _page = self.get_page(version.page_id).await?;
+
+        // Update the component
+        component.content = json!({
+            "text": content_text
+        });
+        
+        if let Some(new_title) = title {
+            component.title = Some(new_title);
+        }
+        
+        if let Some(new_template) = template {
+            component.template = new_template;
+        }
+
+        component.updated_at = chrono::Utc::now();
+
+        // Validate and update
+        component.is_valid().map_err(|e| anyhow::anyhow!(e))?;
+        component_repo.update(&component).await?;
+
+        // Return updated component info
+        Ok(ComponentInfo {
+            id: component_id,
+            component_type: component.component_type,
+            position: component.position,
+            template: component.template,
+            title: component.title,
+            content: component.content,
+            created_at: component.created_at.to_rfc3339(),
+            updated_at: component.updated_at.to_rfc3339(),
+        })
+    }
+
+    /// Delete a component
+    pub async fn delete_component(&self, component_id: i64) -> Result<()> {
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component to verify it exists and get its page version
+        let component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify the component belongs to a page in this site
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        let _page = self.get_page(version.page_id).await?;
+
+        // Delete the component
+        component_repo.delete(component_id).await?;
+
+        Ok(())
+    }
+
+    /// List all components for a page
+    pub async fn list_components(&self, page_id: i64) -> Result<Vec<ComponentInfo>> {
+        // Verify page exists and belongs to this site
+        let _page = self.get_page(page_id).await?;
+
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the draft version if it exists, otherwise get published
+        let version = if let Some(draft) = version_repo.get_draft(page_id).await? {
+            draft
+        } else if let Some(published) = version_repo.get_published(page_id).await? {
+            published
+        } else {
+            return Ok(vec![]); // No versions exist
+        };
+
+        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version ID not found"))?;
+
+        // Get components
+        let components = component_repo.list_by_page_version(version_id).await?;
+
+        Ok(self.components_to_info(components))
+    }
+
+    /// Get a specific component
+    pub async fn get_component(&self, component_id: i64) -> Result<ComponentInfo> {
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component
+        let component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify the component belongs to a page in this site
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        let _page = self.get_page(version.page_id).await?;
+
+        // Return component info
+        Ok(ComponentInfo {
+            id: component_id,
+            component_type: component.component_type,
+            position: component.position,
+            template: component.template,
+            title: component.title,
+            content: component.content,
+            created_at: component.created_at.to_rfc3339(),
+            updated_at: component.updated_at.to_rfc3339(),
+        })
     }
 
     // Helper methods

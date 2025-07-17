@@ -173,6 +173,11 @@ impl SimpleMcpServer {
             self.create_update_page_tool(),
             self.create_delete_page_tool(),
             self.create_move_page_tool(),
+            self.create_component_markdown_tool(),
+            self.create_update_component_markdown_tool(),
+            self.create_delete_component_tool(),
+            self.create_list_components_tool(),
+            self.create_get_component_tool(),
         ]
     }
 
@@ -190,6 +195,11 @@ impl SimpleMcpServer {
             "update_page" => self.handle_update_page(arguments).await,
             "delete_page" => self.handle_delete_page(arguments).await,
             "move_page" => self.handle_move_page(arguments).await,
+            "create_component_markdown" => self.handle_create_component_markdown(arguments).await,
+            "update_component_markdown" => self.handle_update_component_markdown(arguments).await,
+            "delete_component" => self.handle_delete_component(arguments).await,
+            "list_components" => self.handle_list_components(arguments).await,
+            "get_component" => self.handle_get_component(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
         }
     }
@@ -427,6 +437,115 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_component_markdown_tool(&self) -> Value {
+        json!({
+            "name": "create_component_markdown",
+            "description": "Create a markdown component on a page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page to add the component to"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Markdown content text"
+                    },
+                    "title": {
+                        "type": ["string", "null"],
+                        "description": "Optional title for the component"
+                    },
+                    "template": {
+                        "type": ["string", "null"],
+                        "description": "Display template (default, with_title, card, highlight, quote, hidden, hero)"
+                    }
+                },
+                "required": ["page_id", "text"]
+            }
+        })
+    }
+
+    fn create_update_component_markdown_tool(&self) -> Value {
+        json!({
+            "name": "update_component_markdown",
+            "description": "Update a markdown component",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "component_id": {
+                        "type": "integer",
+                        "description": "ID of the component to update"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "New markdown content text"
+                    },
+                    "title": {
+                        "type": ["string", "null"],
+                        "description": "Optional new title for the component"
+                    },
+                    "template": {
+                        "type": ["string", "null"],
+                        "description": "New display template (default, with_title, card, highlight, quote, hidden, hero)"
+                    }
+                },
+                "required": ["component_id", "text"]
+            }
+        })
+    }
+
+    fn create_delete_component_tool(&self) -> Value {
+        json!({
+            "name": "delete_component",
+            "description": "Delete a component from a page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "component_id": {
+                        "type": "integer",
+                        "description": "ID of the component to delete"
+                    }
+                },
+                "required": ["component_id"]
+            }
+        })
+    }
+
+    fn create_list_components_tool(&self) -> Value {
+        json!({
+            "name": "list_components",
+            "description": "List all components for a page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page to list components for"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
+    fn create_get_component_tool(&self) -> Value {
+        json!({
+            "name": "get_component",
+            "description": "Get details of a specific component",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "component_id": {
+                        "type": "integer",
+                        "description": "ID of the component to retrieve"
+                    }
+                },
+                "required": ["component_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
         let times = extract_flip_times(&arguments);
@@ -581,6 +700,70 @@ impl SimpleMcpServer {
             "text": serde_json::to_string_pretty(&page_info)?
         })])
     }
+
+    async fn handle_create_component_markdown(&self, arguments: Value) -> Result<Vec<Value>> {
+        let params = extract_create_component_markdown_params(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let component_info = service
+            .create_component_markdown(params.page_id, params.text, params.title, params.template)
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&component_info)?
+        })])
+    }
+
+    async fn handle_update_component_markdown(&self, arguments: Value) -> Result<Vec<Value>> {
+        let params = extract_update_component_markdown_params(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let component_info = service
+            .update_component_markdown(params.component_id, params.text, params.title, params.template)
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&component_info)?
+        })])
+    }
+
+    async fn handle_delete_component(&self, arguments: Value) -> Result<Vec<Value>> {
+        let component_id = extract_component_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        service.delete_component(component_id).await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": format!("Successfully deleted component with ID {}", component_id)
+        })])
+    }
+
+    async fn handle_list_components(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let components = service.list_components(page_id).await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&components)?
+        })])
+    }
+
+    async fn handle_get_component(&self, arguments: Value) -> Result<Vec<Value>> {
+        let component_id = extract_component_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let component_info = service.get_component(component_id).await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&component_info)?
+        })])
+    }
 }
 
 // Helper functions
@@ -718,6 +901,20 @@ struct MovePageParams {
     position: Option<i32>,
 }
 
+struct CreateComponentMarkdownParams {
+    page_id: i64,
+    text: String,
+    title: Option<String>,
+    template: Option<String>,
+}
+
+struct UpdateComponentMarkdownParams {
+    component_id: i64,
+    text: String,
+    title: Option<String>,
+    template: Option<String>,
+}
+
 fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
     let parent_page_id = arguments.get("parent_page_id").and_then(|v| v.as_i64());
 
@@ -797,6 +994,73 @@ fn extract_move_page_params(arguments: &Value) -> Result<MovePageParams> {
         page_id,
         new_parent_id,
         position,
+    })
+}
+
+fn extract_component_id(arguments: &Value) -> Result<i64> {
+    arguments
+        .get("component_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("component_id is required"))
+}
+
+fn extract_create_component_markdown_params(arguments: &Value) -> Result<CreateComponentMarkdownParams> {
+    let page_id = arguments
+        .get("page_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("page_id is required"))?;
+
+    let text = arguments
+        .get("text")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("text is required"))?
+        .to_string();
+
+    let title = arguments
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let template = arguments
+        .get("template")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Ok(CreateComponentMarkdownParams {
+        page_id,
+        text,
+        title,
+        template,
+    })
+}
+
+fn extract_update_component_markdown_params(arguments: &Value) -> Result<UpdateComponentMarkdownParams> {
+    let component_id = arguments
+        .get("component_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("component_id is required"))?;
+
+    let text = arguments
+        .get("text")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("text is required"))?
+        .to_string();
+
+    let title = arguments
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let template = arguments
+        .get("template")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    Ok(UpdateComponentMarkdownParams {
+        component_id,
+        text,
+        title,
+        template,
     })
 }
 
@@ -1018,7 +1282,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 12); // 2 demo + 6 Phase 1 tools + 4 write tools
+        assert_eq!(tools.len(), 17); // 2 demo + 6 Phase 1 tools + 4 write tools + 5 component tools
 
         Ok(())
     }
@@ -1631,6 +1895,127 @@ mod tests {
         assert!(move_response.get("error").is_some());
         let error_msg = move_response["error"]["message"].as_str().unwrap();
         assert!(error_msg.contains("Cannot move page to one of its descendants"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_create_component_markdown() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page to create a test page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create a page to add components to
+        let create_page = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "test-page",
+                    "title": "Test Page"
+                }
+            }
+        });
+
+        let page_response = server.handle_request(create_page).await?;
+        let page_text = page_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let page: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page["id"].as_i64().unwrap();
+
+        // Create a markdown component
+        let create_component = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_component_markdown",
+                "arguments": {
+                    "page_id": page_id,
+                    "text": "# Hello World\n\nThis is a **markdown** component.",
+                    "title": "Welcome Section",
+                    "template": "hero"
+                }
+            }
+        });
+
+        let component_response = server.handle_request(create_component).await?;
+        let content = &component_response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+
+        let component_text = content["text"].as_str().unwrap();
+        let component: serde_json::Value = serde_json::from_str(component_text)?;
+
+        assert_eq!(component["component_type"], "markdown");
+        assert_eq!(component["title"], "Welcome Section");
+        assert_eq!(component["template"], "hero");
+        assert_eq!(component["content"]["text"], "# Hello World\n\nThis is a **markdown** component.");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_list_components() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // List components for root page (should be empty initially)
+        let list_components = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "list_components",
+                "arguments": {
+                    "page_id": root_page_id
+                }
+            }
+        });
+
+        let components_response = server.handle_request(list_components).await?;
+        let content = &components_response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+
+        let components_text = content["text"].as_str().unwrap();
+        let components: Vec<serde_json::Value> = serde_json::from_str(components_text)?;
+        assert_eq!(components.len(), 0); // No components initially
 
         Ok(())
     }
