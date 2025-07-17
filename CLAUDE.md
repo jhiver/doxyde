@@ -662,17 +662,16 @@ Visit http://localhost:3000 and login at http://localhost:3000/.login
 
 ### 🔧 Current MCP Development Tasks
 
-**In Progress:**
-- **delete_page MCP tool**: Implement page deletion functionality with safety checks
-  - Prevent deletion of root pages
-  - Prevent deletion of pages with children
-  - Cascade delete all components and versions
-  - Return proper JSON-RPC errors for all failure cases
+**Completed:**
+- **delete_page MCP tool**: Page deletion with comprehensive safety checks ✅
+- **move_page MCP tool**: Page hierarchy management with circular reference prevention ✅
+- **Component management**: Markdown-specific tools (create, update, delete, list, get) ✅
+- **Draft/publish tools**: publish_draft and discard_draft for managing page versions ✅
 
-**Pending MCP Tools:**
-- Component management (create, update, delete, reorder)
-- Page hierarchy management (move/reorder)
-- Draft/publish workflow tools
+**Pending:**
+- Comprehensive tests for all new MCP tools
+- Support for other component types (image, code, html, etc.)
+- Component reordering functionality
 
 ## Next Implementation Tasks
 

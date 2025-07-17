@@ -178,6 +178,8 @@ impl SimpleMcpServer {
             self.create_delete_component_tool(),
             self.create_list_components_tool(),
             self.create_get_component_tool(),
+            self.create_publish_draft_tool(),
+            self.create_discard_draft_tool(),
         ]
     }
 
@@ -200,6 +202,8 @@ impl SimpleMcpServer {
             "delete_component" => self.handle_delete_component(arguments).await,
             "list_components" => self.handle_list_components(arguments).await,
             "get_component" => self.handle_get_component(arguments).await,
+            "publish_draft" => self.handle_publish_draft(arguments).await,
+            "discard_draft" => self.handle_discard_draft(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
         }
     }
@@ -546,6 +550,40 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_publish_draft_tool(&self) -> Value {
+        json!({
+            "name": "publish_draft",
+            "description": "Publish the draft version of a page, making it the live version",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page whose draft to publish"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
+    fn create_discard_draft_tool(&self) -> Value {
+        json!({
+            "name": "discard_draft",
+            "description": "Discard the draft version of a page, reverting to the published version",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page whose draft to discard"
+                    }
+                },
+                "required": ["page_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
         let times = extract_flip_times(&arguments);
@@ -762,6 +800,30 @@ impl SimpleMcpServer {
         Ok(vec![json!({
             "type": "text",
             "text": serde_json::to_string_pretty(&component_info)?
+        })])
+    }
+
+    async fn handle_publish_draft(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        let draft_info = service.publish_draft(page_id).await?;
+        Ok(vec![json!({
+            "type": "text",
+            "text": format!(
+                "Successfully published draft for page {}. Version {} is now live.",
+                draft_info.page_id,
+                draft_info.version_number
+            )
+        })])
+    }
+
+    async fn handle_discard_draft(&self, arguments: Value) -> Result<Vec<Value>> {
+        let page_id = extract_page_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+        service.discard_draft(page_id).await?;
+        Ok(vec![json!({
+            "type": "text",
+            "text": format!("Successfully discarded draft for page {}", page_id)
         })])
     }
 }
@@ -1282,7 +1344,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 17); // 2 demo + 6 Phase 1 tools + 4 write tools + 5 component tools
+        assert_eq!(tools.len(), 19); // 2 demo + 6 Phase 1 tools + 4 write tools + 5 component tools + 2 draft tools
 
         Ok(())
     }

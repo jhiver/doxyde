@@ -41,6 +41,16 @@ pub struct ComponentInfo {
     pub updated_at: String,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DraftInfo {
+    pub page_id: i64,
+    pub version_id: i64,
+    pub version_number: i32,
+    pub created_by: Option<String>,
+    pub is_published: bool,
+    pub component_count: i32,
+}
+
 impl McpService {
     pub fn new(pool: SqlitePool, site_id: i64) -> Self {
         Self { pool, site_id }
@@ -590,6 +600,57 @@ impl McpService {
             created_at: component.created_at.to_rfc3339(),
             updated_at: component.updated_at.to_rfc3339(),
         })
+    }
+
+    /// Publish the draft version of a page
+    pub async fn publish_draft(&self, page_id: i64) -> Result<DraftInfo> {
+        // Verify page exists and belongs to this site
+        let _page = self.get_page(page_id).await?;
+        
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        
+        // Get the draft
+        let draft = version_repo
+            .get_draft(page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No draft version found for this page"))?;
+        
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
+        
+        // Publish it
+        crate::draft::publish_draft(&self.pool, page_id).await?;
+        
+        // Get component count for info
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let components = component_repo.list_by_page_version(draft_id).await?;
+        
+        Ok(DraftInfo {
+            page_id,
+            version_id: draft_id,
+            version_number: draft.version_number,
+            created_by: draft.created_by,
+            is_published: true,
+            component_count: components.len() as i32,
+        })
+    }
+    
+    /// Discard the draft version of a page
+    pub async fn discard_draft(&self, page_id: i64) -> Result<()> {
+        // Verify page exists and belongs to this site
+        let _page = self.get_page(page_id).await?;
+        
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        
+        // Check if there's a draft
+        let draft = version_repo.get_draft(page_id).await?;
+        if draft.is_none() {
+            return Err(anyhow::anyhow!("No draft version found for this page"));
+        }
+        
+        // Delete it
+        crate::draft::delete_draft_if_exists(&self.pool, page_id).await?;
+        
+        Ok(())
     }
 
     // Helper methods
