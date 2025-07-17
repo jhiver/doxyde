@@ -172,6 +172,7 @@ impl SimpleMcpServer {
             self.create_create_page_tool(),
             self.create_update_page_tool(),
             self.create_delete_page_tool(),
+            self.create_move_page_tool(),
         ]
     }
 
@@ -188,6 +189,7 @@ impl SimpleMcpServer {
             "create_page" => self.handle_create_page(arguments).await,
             "update_page" => self.handle_update_page(arguments).await,
             "delete_page" => self.handle_delete_page(arguments).await,
+            "move_page" => self.handle_move_page(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
         }
     }
@@ -400,6 +402,31 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_move_page_tool(&self) -> Value {
+        json!({
+            "name": "move_page",
+            "description": "Move a page to a new parent (cannot move root pages or create circular references)",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "page_id": {
+                        "type": "integer",
+                        "description": "ID of the page to move"
+                    },
+                    "new_parent_id": {
+                        "type": "integer",
+                        "description": "ID of the new parent page"
+                    },
+                    "position": {
+                        "type": ["integer", "null"],
+                        "description": "Optional position within siblings (0-based)"
+                    }
+                },
+                "required": ["page_id", "new_parent_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     fn handle_flip_coin(&self, arguments: Value) -> Result<Vec<Value>> {
         let times = extract_flip_times(&arguments);
@@ -540,6 +567,20 @@ impl SimpleMcpServer {
             "text": format!("Successfully deleted page with ID {}", page_id)
         })])
     }
+
+    async fn handle_move_page(&self, arguments: Value) -> Result<Vec<Value>> {
+        let params = extract_move_page_params(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let page_info = service
+            .move_page(params.page_id, params.new_parent_id, params.position)
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&page_info)?
+        })])
+    }
 }
 
 // Helper functions
@@ -671,6 +712,12 @@ struct UpdatePageParams {
     template: Option<String>,
 }
 
+struct MovePageParams {
+    page_id: i64,
+    new_parent_id: i64,
+    position: Option<i32>,
+}
+
 fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
     let parent_page_id = arguments.get("parent_page_id").and_then(|v| v.as_i64());
 
@@ -727,6 +774,29 @@ fn extract_update_page_params(arguments: &Value) -> Result<UpdatePageParams> {
         title,
         slug,
         template,
+    })
+}
+
+fn extract_move_page_params(arguments: &Value) -> Result<MovePageParams> {
+    let page_id = arguments
+        .get("page_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("page_id is required"))?;
+
+    let new_parent_id = arguments
+        .get("new_parent_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("new_parent_id is required"))?;
+
+    let position = arguments
+        .get("position")
+        .and_then(|v| v.as_i64())
+        .map(|p| p as i32);
+
+    Ok(MovePageParams {
+        page_id,
+        new_parent_id,
+        position,
     })
 }
 
@@ -948,7 +1018,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 11); // 2 demo + 6 Phase 1 tools + 3 write tools
+        assert_eq!(tools.len(), 12); // 2 demo + 6 Phase 1 tools + 4 write tools
 
         Ok(())
     }
@@ -1314,6 +1384,253 @@ mod tests {
         assert!(delete_response.get("error").is_some());
         let error_msg = delete_response["error"]["message"].as_str().unwrap();
         assert!(error_msg.contains("Cannot delete root page"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page to create test pages
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create two pages
+        let create_page1 = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "page1",
+                    "title": "Page 1"
+                }
+            }
+        });
+
+        let page1_response = server.handle_request(create_page1).await?;
+        let page1_text = page1_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let page1: serde_json::Value = serde_json::from_str(page1_text)?;
+        let page1_id = page1["id"].as_i64().unwrap();
+
+        let create_page2 = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "page2",
+                    "title": "Page 2"
+                }
+            }
+        });
+
+        let page2_response = server.handle_request(create_page2).await?;
+        let page2_text = page2_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let page2: serde_json::Value = serde_json::from_str(page2_text)?;
+        let page2_id = page2["id"].as_i64().unwrap();
+
+        // Move page1 under page2
+        let move_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "move_page",
+                "arguments": {
+                    "page_id": page1_id,
+                    "new_parent_id": page2_id
+                }
+            }
+        });
+
+        let move_response = server.handle_request(move_request).await?;
+        let content = &move_response["result"]["content"][0];
+        assert_eq!(content["type"], "text");
+
+        let moved_page_text = content["text"].as_str().unwrap();
+        let moved_page: serde_json::Value = serde_json::from_str(moved_page_text)?;
+
+        assert_eq!(moved_page["id"], page1_id);
+        assert_eq!(moved_page["parent_id"], page2_id);
+        assert_eq!(moved_page["path"], "/page2/page1");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page_root_fails() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create a page to serve as potential parent
+        let create_page = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "page1",
+                    "title": "Page 1"
+                }
+            }
+        });
+
+        let page_response = server.handle_request(create_page).await?;
+        let page_text = page_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let page: serde_json::Value = serde_json::from_str(page_text)?;
+        let page_id = page["id"].as_i64().unwrap();
+
+        // Try to move root page - should fail
+        let move_request = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "move_page",
+                "arguments": {
+                    "page_id": root_page_id,
+                    "new_parent_id": page_id
+                }
+            }
+        });
+
+        let move_response = server.handle_request(move_request).await?;
+        assert!(move_response.get("error").is_some());
+        let error_msg = move_response["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("Cannot move root page"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page_circular_reference_fails() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create parent page
+        let create_parent = json!({
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": root_page_id,
+                    "slug": "parent",
+                    "title": "Parent"
+                }
+            }
+        });
+
+        let parent_response = server.handle_request(create_parent).await?;
+        let parent_text = parent_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let parent: serde_json::Value = serde_json::from_str(parent_text)?;
+        let parent_id = parent["id"].as_i64().unwrap();
+
+        // Create child page
+        let create_child = json!({
+            "jsonrpc": "2.0",
+            "id": 3,
+            "method": "tools/call",
+            "params": {
+                "name": "create_page",
+                "arguments": {
+                    "parent_page_id": parent_id,
+                    "slug": "child",
+                    "title": "Child"
+                }
+            }
+        });
+
+        let child_response = server.handle_request(create_child).await?;
+        let child_text = child_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let child: serde_json::Value = serde_json::from_str(child_text)?;
+        let child_id = child["id"].as_i64().unwrap();
+
+        // Try to move parent under child - should fail
+        let move_request = json!({
+            "jsonrpc": "2.0",
+            "id": 4,
+            "method": "tools/call",
+            "params": {
+                "name": "move_page",
+                "arguments": {
+                    "page_id": parent_id,
+                    "new_parent_id": child_id
+                }
+            }
+        });
+
+        let move_response = server.handle_request(move_request).await?;
+        assert!(move_response.get("error").is_some());
+        let error_msg = move_response["error"]["message"].as_str().unwrap();
+        assert!(error_msg.contains("Cannot move page to one of its descendants"));
 
         Ok(())
     }

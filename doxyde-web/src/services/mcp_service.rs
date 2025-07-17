@@ -358,6 +358,40 @@ impl McpService {
         Ok(())
     }
 
+    /// Move a page to a new parent or reorder within siblings
+    pub async fn move_page(&self, page_id: i64, new_parent_id: i64, position: Option<i32>) -> Result<PageInfo> {
+        let page_repo = PageRepository::new(self.pool.clone());
+
+        // Verify both pages exist and belong to this site
+        let _page = self.get_page(page_id).await?;
+        let _new_parent = self.get_page(new_parent_id).await?;
+
+        // Use the repository's move_page method which handles all safety checks
+        page_repo.move_page(page_id, new_parent_id).await?;
+
+        // If position is specified, update it
+        if let Some(new_position) = position {
+            // Update position within the new parent
+            let mut updated_page = page_repo
+                .find_by_id(page_id)
+                .await?
+                .ok_or_else(|| anyhow::anyhow!("Page not found after move"))?;
+            
+            updated_page.position = new_position;
+            page_repo.update(&updated_page).await?;
+        }
+
+        // Get all pages to build info
+        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let moved_page = page_repo
+            .find_by_id(page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found after move"))?;
+
+        // Return updated page info
+        self.page_to_info(&all_pages, &moved_page).await
+    }
+
     // Helper methods
 
     async fn build_page_path(&self, all_pages: &[Page], page: &Page) -> Result<String> {
@@ -894,6 +928,148 @@ mod tests {
         // Try to delete a non-existent page
         let result = service.delete_page(9999).await;
         assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page_success() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create two pages under root
+        let page1_info = service
+            .create_page(
+                Some(root_page_id),
+                "page1".to_string(),
+                "Page 1".to_string(),
+                None,
+            )
+            .await?;
+
+        let page2_info = service
+            .create_page(
+                Some(root_page_id),
+                "page2".to_string(),
+                "Page 2".to_string(),
+                None,
+            )
+            .await?;
+
+        // Move page1 under page2
+        let moved_page = service.move_page(page1_info.id, page2_info.id, None).await?;
+
+        assert_eq!(moved_page.id, page1_info.id);
+        assert_eq!(moved_page.parent_id, Some(page2_info.id));
+        assert_eq!(moved_page.path, "/page2/page1");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page_with_position() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+
+        // Get the root page
+        let pages = service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        // Create parent page
+        let parent_info = service
+            .create_page(
+                Some(root_page_id),
+                "parent".to_string(),
+                "Parent".to_string(),
+                None,
+            )
+            .await?;
+
+        // Create three child pages
+        let _child1_info = service
+            .create_page(
+                Some(parent_info.id),
+                "child1".to_string(),
+                "Child 1".to_string(),
+                None,
+            )
+            .await?;
+
+        let _child2_info = service
+            .create_page(
+                Some(parent_info.id),
+                "child2".to_string(),
+                "Child 2".to_string(),
+                None,
+            )
+            .await?;
+
+        let _child3_info = service
+            .create_page(
+                Some(parent_info.id),
+                "child3".to_string(),
+                "Child 3".to_string(),
+                None,
+            )
+            .await?;
+
+        // Create another page under root
+        let other_page_info = service
+            .create_page(
+                Some(root_page_id),
+                "other".to_string(),
+                "Other".to_string(),
+                None,
+            )
+            .await?;
+
+        // Move other page to parent with position 1 (between child1 and child2)
+        let moved_page = service
+            .move_page(other_page_info.id, parent_info.id, Some(1))
+            .await?;
+
+        assert_eq!(moved_page.id, other_page_info.id);
+        assert_eq!(moved_page.parent_id, Some(parent_info.id));
+        assert_eq!(moved_page.position, 1);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_page_wrong_site() -> Result<()> {
+        let state = create_test_app_state().await?;
+        let site1 = create_test_site(&state.db, "site1.com", "Site 1").await?;
+        let site2 = create_test_site(&state.db, "site2.com", "Site 2").await?;
+        
+        let service1 = McpService::new(state.db.clone(), site1.id.unwrap());
+        let service2 = McpService::new(state.db.clone(), site2.id.unwrap());
+
+        // Get root pages
+        let pages1 = service1.list_pages().await?;
+        let root1_id = pages1[0].page.id;
+
+        let pages2 = service2.list_pages().await?;
+        let root2_id = pages2[0].page.id;
+
+        // Create page in site1
+        let page_info = service1
+            .create_page(
+                Some(root1_id),
+                "test-page".to_string(),
+                "Test Page".to_string(),
+                None,
+            )
+            .await?;
+
+        // Try to move page from site1 to site2 - should fail
+        let result = service1.move_page(page_info.id, root2_id, None).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not belong to this site"));
 
         Ok(())
     }
