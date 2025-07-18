@@ -32,13 +32,22 @@ impl McpProxyServer {
 
             tracing::debug!("Received: {}", line);
 
+            // Parse the request to check if it's a notification
+            let request_json: Value = serde_json::from_str(&line).context("Invalid JSON")?;
+            let is_notification = request_json.get("id").is_none();
+
             // Forward the JSON-RPC request to the HTTP endpoint
             let response = self.forward_request(&line).await?;
 
-            // Write response to stdout
-            println!("{}", response);
-            io::stdout().flush().context("Failed to flush stdout")?;
-            tracing::debug!("Sent: {}", response);
+            // Only send response if it's not a notification
+            if !is_notification {
+                // Write response to stdout
+                println!("{}", response);
+                io::stdout().flush().context("Failed to flush stdout")?;
+                tracing::debug!("Sent: {}", response);
+            } else {
+                tracing::debug!("Notification processed, no response sent");
+            }
         }
 
         Ok(())

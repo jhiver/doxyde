@@ -1,7 +1,9 @@
 use crate::services::McpService;
+use crate::services::mcp_service::PageInfo;
 use anyhow::Result;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
+use doxyde_core::models::Page;
 
 // Define JSON-RPC types
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -70,6 +72,8 @@ impl SimpleMcpServer {
             "initialize" => self.handle_initialize(id),
             "tools/list" => self.handle_tools_list(id),
             "tools/call" => self.handle_tools_call(id, params).await,
+            "resources/list" => self.handle_resources_list(id).await,
+            "prompts/list" => self.handle_prompts_list(id),
             "notifications/initialized" => self.handle_notification_initialized(),
             _ => Ok(create_error_response(id, -32601, "Method not found")),
         }
@@ -83,6 +87,12 @@ impl SimpleMcpServer {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {
                     "tools": {},
+                    "resources": {
+                        "list": true
+                    },
+                    "prompts": {
+                        "list": true
+                    }
                 },
                 "serverInfo": {
                     "name": "doxyde-mcp",
@@ -157,6 +167,53 @@ impl SimpleMcpServer {
     fn handle_notification_initialized(&self) -> Result<Value> {
         // Client notification - no response needed
         Ok(json!({}))
+    }
+
+    async fn handle_resources_list(&self, id: Value) -> Result<Value> {
+        // Get pages in breadth-first order with 100 page limit
+        let pages = self.get_pages_breadth_first(100).await?;
+        
+        // Convert pages to MCP resources
+        let resources: Vec<Value> = pages.into_iter().map(|page| {
+            let page_type = if page.parent_id.is_none() {
+                "Homepage"
+            } else {
+                "Page"
+            };
+            
+            let description = format!(
+                "{} • Template: {} • Path: {}",
+                page_type,
+                page.template.as_deref().unwrap_or("default"),
+                page.path
+            );
+            
+            json!({
+                "uri": format!("page://{}", page.id),
+                "name": page.title,
+                "description": description,
+                "mimeType": "text/html"
+            })
+        }).collect();
+        
+        Ok(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "resources": resources
+            }
+        }))
+    }
+
+    fn handle_prompts_list(&self, id: Value) -> Result<Value> {
+        // Return empty prompts list for now
+        Ok(json!({
+            "jsonrpc": "2.0",
+            "id": id,
+            "result": {
+                "prompts": []
+            }
+        }))
     }
 
     fn get_tool_definitions(&self) -> Vec<Value> {
@@ -825,6 +882,94 @@ impl SimpleMcpServer {
             "type": "text",
             "text": format!("Successfully discarded draft for page {}", page_id)
         })])
+    }
+
+    // Helper method to get pages in breadth-first order with limit
+    async fn get_pages_breadth_first(&self, limit: usize) -> Result<Vec<PageInfo>> {
+        use doxyde_db::repositories::PageRepository;
+        use std::collections::VecDeque;
+        
+        let page_repo = PageRepository::new(self.pool.clone());
+        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        
+        // Create a map of page_id to children
+        let mut children_map: std::collections::HashMap<Option<i64>, Vec<&Page>> = std::collections::HashMap::new();
+        
+        for page in &all_pages {
+            children_map.entry(page.parent_page_id).or_insert_with(Vec::new).push(page);
+        }
+        
+        // Sort children by position
+        for children in children_map.values_mut() {
+            children.sort_by_key(|p| p.position);
+        }
+        
+        // Breadth-first traversal
+        let mut result = Vec::new();
+        let mut queue = VecDeque::new();
+        
+        // Start with root pages (parent_page_id = None)
+        if let Some(roots) = children_map.get(&None) {
+            for root in roots {
+                queue.push_back(root);
+            }
+        }
+        
+        // Process queue in breadth-first order
+        while let Some(page) = queue.pop_front() {
+            if result.len() >= limit {
+                break;
+            }
+            
+            // Convert to PageInfo
+            let page_info = PageInfo {
+                id: page.id.unwrap(),
+                slug: page.slug.clone(),
+                title: page.title.clone(),
+                path: self.build_page_path(&all_pages, page).await?,
+                parent_id: page.parent_page_id,
+                position: page.position,
+                has_children: children_map.contains_key(&page.id),
+                template: Some(page.template.clone()),
+            };
+            
+            result.push(page_info);
+            
+            // Add children to queue
+            if let Some(children) = children_map.get(&page.id) {
+                for child in children {
+                    queue.push_back(child);
+                }
+            }
+        }
+        
+        Ok(result)
+    }
+    
+    // Helper to build page path
+    async fn build_page_path(&self, all_pages: &[Page], page: &Page) -> Result<String> {
+        // Special case for root page
+        if page.parent_page_id.is_none() {
+            return Ok("/".to_string());
+        }
+        
+        let mut path_parts = vec![page.slug.clone()];
+        let mut current_parent = page.parent_page_id;
+        
+        while let Some(parent_id) = current_parent {
+            if let Some(parent) = all_pages.iter().find(|p| p.id == Some(parent_id)) {
+                // Don't include root page slug in path
+                if parent.parent_page_id.is_some() {
+                    path_parts.push(parent.slug.clone());
+                }
+                current_parent = parent.parent_page_id;
+            } else {
+                break;
+            }
+        }
+        
+        path_parts.reverse();
+        Ok(format!("/{}", path_parts.join("/")))
     }
 }
 
@@ -2471,6 +2616,174 @@ mod tests {
         let error_msg = get_response["error"]["message"].as_str().unwrap();
         assert!(error_msg.contains("Component not found"));
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_resources_list() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // First create some pages to have resources
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create a few test pages
+        for i in 1..=3 {
+            let create_request = json!({
+                "jsonrpc": "2.0",
+                "id": i + 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "create_page",
+                    "arguments": {
+                        "parent_page_id": root_page_id,
+                        "slug": format!("page-{}", i),
+                        "title": format!("Page {}", i),
+                        "template": "default"
+                    }
+                }
+            });
+            server.handle_request(create_request).await?;
+        }
+
+        // Now test resources/list
+        let resources_request = json!({
+            "jsonrpc": "2.0",
+            "id": 10,
+            "method": "resources/list"
+        });
+
+        let resources_response = server.handle_request(resources_request).await?;
+        assert_eq!(resources_response["jsonrpc"], "2.0");
+        assert_eq!(resources_response["id"], 10);
+        
+        let resources = resources_response["result"]["resources"].as_array().unwrap();
+        assert!(resources.len() >= 4); // At least root + 3 created pages
+        
+        // Check first resource (should be root page)
+        let root_resource = &resources[0];
+        assert!(root_resource["uri"].as_str().unwrap().starts_with("page://"));
+        assert!(root_resource["description"].as_str().unwrap().contains("Homepage"));
+        assert_eq!(root_resource["mimeType"], "text/html");
+        
+        // Check that pages are in breadth-first order
+        // Root should come first, then its children
+        assert!(resources[0]["description"].as_str().unwrap().contains("Path: /"));
+        assert!(resources[1]["description"].as_str().unwrap().contains("Path: /page-"));
+        
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_resources_list_limit() -> Result<()> {
+        let server = create_test_server().await?;
+
+        // Get root page
+        let list_request = json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "list_pages",
+                "arguments": {}
+            }
+        });
+
+        let list_response = server.handle_request(list_request).await?;
+        let pages_text = list_response["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
+        let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
+        let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
+
+        // Create many pages to test the 100 page limit
+        // Create 10 parent pages
+        let mut parent_ids = vec![];
+        for i in 1..=10 {
+            let create_request = json!({
+                "jsonrpc": "2.0",
+                "id": i + 1,
+                "method": "tools/call",
+                "params": {
+                    "name": "create_page",
+                    "arguments": {
+                        "parent_page_id": root_page_id,
+                        "slug": format!("parent-{}", i),
+                        "title": format!("Parent {}", i),
+                        "template": "default"
+                    }
+                }
+            });
+            let response = server.handle_request(create_request).await?;
+            let page_text = response["result"]["content"][0]["text"].as_str().unwrap();
+            let page: serde_json::Value = serde_json::from_str(page_text)?;
+            parent_ids.push(page["id"].as_i64().unwrap());
+        }
+
+        // For each parent, create 10 children (total 100 children + 10 parents + 1 root = 111 pages)
+        for (p_idx, parent_id) in parent_ids.iter().enumerate() {
+            for i in 1..=10 {
+                let create_request = json!({
+                    "jsonrpc": "2.0",
+                    "id": 100 + p_idx * 10 + i,
+                    "method": "tools/call",
+                    "params": {
+                        "name": "create_page",
+                        "arguments": {
+                            "parent_page_id": parent_id,
+                            "slug": format!("child-{}-{}", p_idx + 1, i),
+                            "title": format!("Child {} of Parent {}", i, p_idx + 1),
+                            "template": "default"
+                        }
+                    }
+                });
+                server.handle_request(create_request).await?;
+            }
+        }
+
+        // Test resources/list
+        let resources_request = json!({
+            "jsonrpc": "2.0",
+            "id": 200,
+            "method": "resources/list"
+        });
+
+        let resources_response = server.handle_request(resources_request).await?;
+        let resources = resources_response["result"]["resources"].as_array().unwrap();
+        
+        // Should be limited to 100 pages
+        assert_eq!(resources.len(), 100);
+        
+        // Verify breadth-first order:
+        // 1. Root page should be first
+        assert!(resources[0]["description"].as_str().unwrap().contains("Homepage"));
+        
+        // 2. All parent pages should come before any child pages
+        let mut found_child = false;
+        for (i, resource) in resources.iter().enumerate() {
+            let desc = resource["description"].as_str().unwrap();
+            if desc.contains("/child-") {
+                found_child = true;
+            }
+            if found_child && desc.contains("/parent-") && !desc.contains("/child-") {
+                panic!("Found parent page at index {} after child pages", i);
+            }
+        }
+        
         Ok(())
     }
 
