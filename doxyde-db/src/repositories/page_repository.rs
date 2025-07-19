@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::{Context, Result};
-use doxyde_core::Page;
+use doxyde_core::{Page, utils::slug::generate_slug_from_title};
 use sqlx::SqlitePool;
 
 pub struct PageRepository {
@@ -920,6 +920,58 @@ impl PageRepository {
         .context("Failed to check for child pages")?;
 
         Ok(row.count > 0)
+    }
+
+    /// Generate a unique slug for a page under the given parent
+    pub async fn generate_unique_slug(
+        &self,
+        site_id: i64,
+        parent_page_id: Option<i64>,
+        base_slug: &str,
+    ) -> Result<String> {
+        let mut slug = base_slug.to_string();
+        let mut suffix = 1;
+
+        loop {
+            // Check if this slug already exists under the same parent
+            let exists = sqlx::query!(
+                r#"
+                SELECT COUNT(*) as "count: i64" 
+                FROM pages 
+                WHERE site_id = ? AND parent_page_id IS ? AND slug = ?
+                "#,
+                site_id,
+                parent_page_id,
+                slug
+            )
+            .fetch_one(&self.pool)
+            .await
+            .context("Failed to check slug existence")?;
+
+            if exists.count == 0 {
+                return Ok(slug);
+            }
+
+            // Generate new slug with suffix
+            suffix += 1;
+            slug = format!("{}-{}", base_slug, suffix);
+        }
+    }
+
+    /// Create a page with auto-generated slug if needed
+    pub async fn create_with_auto_slug(&self, page: &mut Page) -> Result<i64> {
+        // If slug is empty, generate from title
+        if page.slug.is_empty() {
+            page.slug = generate_slug_from_title(&page.title);
+        }
+
+        // Ensure slug is unique
+        page.slug = self
+            .generate_unique_slug(page.site_id, page.parent_page_id, &page.slug)
+            .await?;
+
+        // Create the page with the unique slug
+        self.create(page).await
     }
 }
 
@@ -4689,6 +4741,122 @@ mod tests {
         assert!(page_repo.find_by_id(page_id).await?.is_none());
         assert!(version_repo.find_by_id(version_id).await?.is_none());
         assert!(component_repo.find_by_id(component_id).await?.is_none());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_generate_unique_slug() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        let site_id = setup_test_db(&pool).await?;
+        let root_id = get_root_page_id(&pool, site_id).await?;
+
+        let repo = PageRepository::new(pool.clone());
+
+        // First slug should remain unchanged
+        let slug1 = repo
+            .generate_unique_slug(site_id, Some(root_id), "about-us")
+            .await?;
+        assert_eq!(slug1, "about-us");
+
+        // Create a page with that slug
+        let page1 = Page::new_with_parent(site_id, root_id, slug1, "About Us".to_string());
+        repo.create(&page1).await?;
+
+        // Next slug with same base should get suffix
+        let slug2 = repo
+            .generate_unique_slug(site_id, Some(root_id), "about-us")
+            .await?;
+        assert_eq!(slug2, "about-us-2");
+
+        // Create another page
+        let page2 = Page::new_with_parent(site_id, root_id, slug2, "About Us 2".to_string());
+        repo.create(&page2).await?;
+
+        // Third slug should get suffix 3
+        let slug3 = repo
+            .generate_unique_slug(site_id, Some(root_id), "about-us")
+            .await?;
+        assert_eq!(slug3, "about-us-3");
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_create_with_auto_slug() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        let site_id = setup_test_db(&pool).await?;
+        let root_id = get_root_page_id(&pool, site_id).await?;
+
+        let repo = PageRepository::new(pool.clone());
+
+        // Create page with explicit slug
+        let mut page1 = Page::new_with_parent(
+            site_id,
+            root_id,
+            "custom-slug".to_string(),
+            "My Page".to_string(),
+        );
+        let id1 = repo.create_with_auto_slug(&mut page1).await?;
+        assert_eq!(page1.slug, "custom-slug");
+
+        // Create page with empty slug - should auto-generate
+        let mut page2 = Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+        let id2 = repo.create_with_auto_slug(&mut page2).await?;
+        assert_eq!(page2.slug, "my-page");
+
+        // Create another page with same title - should get suffix
+        let mut page3 = Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+        let id3 = repo.create_with_auto_slug(&mut page3).await?;
+        assert_eq!(page3.slug, "my-page-2");
+
+        // Verify all pages were created
+        assert!(repo.find_by_id(id1).await?.is_some());
+        assert!(repo.find_by_id(id2).await?.is_some());
+        assert!(repo.find_by_id(id3).await?.is_some());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_generate_unique_slug_different_parents() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        let site_id = setup_test_db(&pool).await?;
+        let root_id = get_root_page_id(&pool, site_id).await?;
+
+        let repo = PageRepository::new(pool.clone());
+
+        // Create two parent pages
+        let parent1 = Page::new_with_parent(
+            site_id,
+            root_id,
+            "parent1".to_string(),
+            "Parent 1".to_string(),
+        );
+        let parent1_id = repo.create(&parent1).await?;
+
+        let parent2 = Page::new_with_parent(
+            site_id,
+            root_id,
+            "parent2".to_string(),
+            "Parent 2".to_string(),
+        );
+        let parent2_id = repo.create(&parent2).await?;
+
+        // Same slug should be allowed under different parents
+        let slug1 = repo
+            .generate_unique_slug(site_id, Some(parent1_id), "about")
+            .await?;
+        assert_eq!(slug1, "about");
+
+        let page1 = Page::new_with_parent(site_id, parent1_id, slug1, "About".to_string());
+        repo.create(&page1).await?;
+
+        // Same slug under different parent should also work
+        let slug2 = repo
+            .generate_unique_slug(site_id, Some(parent2_id), "about")
+            .await?;
+        assert_eq!(slug2, "about");
 
         Ok(())
     }

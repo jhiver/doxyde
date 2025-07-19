@@ -410,8 +410,8 @@ impl SimpleMcpServer {
                         "description": "ID of the parent page (required - root pages cannot be created)"
                     },
                     "slug": {
-                        "type": "string",
-                        "description": "URL-friendly page identifier (letters, numbers, hyphens only)"
+                        "type": ["string", "null"],
+                        "description": "Optional URL-friendly page identifier. If not provided, will be auto-generated from title"
                     },
                     "title": {
                         "type": "string",
@@ -422,7 +422,7 @@ impl SimpleMcpServer {
                         "description": "Page template (default, full_width, landing, blog)"
                     }
                 },
-                "required": ["slug", "title"]
+                "required": ["title"]
             }
         })
     }
@@ -1090,7 +1090,7 @@ fn extract_query(arguments: &Value) -> Result<String> {
 
 struct CreatePageParams {
     parent_page_id: Option<i64>,
-    slug: String,
+    slug: Option<String>,
     title: String,
     template: Option<String>,
 }
@@ -1128,8 +1128,7 @@ fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
     let slug = arguments
         .get("slug")
         .and_then(|v| v.as_str())
-        .ok_or_else(|| anyhow::anyhow!("slug is required"))?
-        .to_string();
+        .map(String::from);
 
     let title = arguments
         .get("title")
@@ -1398,7 +1397,7 @@ mod tests {
         });
         let params = extract_create_page_params(&args).unwrap();
         assert_eq!(params.parent_page_id, Some(1));
-        assert_eq!(params.slug, "test-page");
+        assert_eq!(params.slug, Some("test-page".to_string()));
         assert_eq!(params.title, "Test Page");
         assert_eq!(params.template, Some("default".to_string()));
 
@@ -1410,7 +1409,14 @@ mod tests {
         assert_eq!(params.parent_page_id, None);
         assert_eq!(params.template, None);
 
+        // Test without slug - should work now
         let args = json!({"title": "Test Page"});
+        let params = extract_create_page_params(&args).unwrap();
+        assert_eq!(params.slug, None);
+        assert_eq!(params.title, "Test Page");
+
+        // Test missing title - should fail
+        let args = json!({"slug": "test"});
         assert!(extract_create_page_params(&args).is_err());
     }
 

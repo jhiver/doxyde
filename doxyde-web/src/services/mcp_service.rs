@@ -243,7 +243,7 @@ impl McpService {
     pub async fn create_page(
         &self,
         parent_page_id: Option<i64>,
-        slug: String,
+        slug: Option<String>,
         title: String,
         template: Option<String>,
     ) -> Result<PageInfo> {
@@ -266,23 +266,19 @@ impl McpService {
             .await?;
 
         // Create the page object
-        let new_page = if let Some(parent_id) = parent_page_id {
-            Page::new_with_parent(self.site_id, parent_id, slug, title)
-        } else {
-            Page::new(self.site_id, slug, title)
+        let mut new_page = match (parent_page_id, slug) {
+            (Some(parent_id), Some(slug)) => Page::new_with_parent(self.site_id, parent_id, slug, title),
+            (Some(parent_id), None) => Page::new_with_parent_and_title(self.site_id, parent_id, title),
+            (None, Some(slug)) => Page::new(self.site_id, slug, title),
+            (None, None) => Page::new_with_title(self.site_id, title),
         };
 
         // Set template and position
-        let mut page_with_metadata = new_page;
-        page_with_metadata.template = template.unwrap_or_else(|| "default".to_string());
-        page_with_metadata.position = position;
+        new_page.template = template.unwrap_or_else(|| "default".to_string());
+        new_page.position = position;
 
-        // Validate using the model's validation
-        page_with_metadata
-            .is_valid()
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        let page_id = page_repo.create(&page_with_metadata).await?;
+        // Create the page with auto-generated unique slug if needed
+        let page_id = page_repo.create_with_auto_slug(&mut new_page).await?;
 
         // Retrieve the created page
         let created_page = page_repo

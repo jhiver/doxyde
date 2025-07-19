@@ -16,6 +16,7 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use crate::utils::slug::generate_slug_from_title;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Page {
@@ -77,6 +78,18 @@ impl Page {
             created_at: now,
             updated_at: now,
         }
+    }
+
+    /// Create a new page with auto-generated slug from title
+    pub fn new_with_title(site_id: i64, title: String) -> Self {
+        let slug = generate_slug_from_title(&title);
+        Self::new(site_id, slug, title)
+    }
+
+    /// Create a new child page with auto-generated slug from title
+    pub fn new_with_parent_and_title(site_id: i64, parent_page_id: i64, title: String) -> Self {
+        let slug = generate_slug_from_title(&title);
+        Self::new_with_parent(site_id, parent_page_id, slug, title)
     }
 
     pub fn validate_slug(&self) -> Result<(), String> {
@@ -763,5 +776,62 @@ mod tests {
         page.structured_data_type = "Article".to_string();
 
         assert!(page.is_valid().is_ok());
+    }
+
+    #[test]
+    fn test_new_with_title_generates_slug() {
+        let test_cases = vec![
+            ("About Us", "about-us"),
+            ("Hello World", "hello-world"),
+            ("Contact Page", "contact-page"),
+            ("2024 Year in Review", "2024-year-in-review"),
+            ("What's New?", "what-s-new"),
+            ("Price: $99.99", "price-99-99"),
+        ];
+
+        for (title, expected_slug) in test_cases {
+            let page = Page::new_with_title(1, title.to_string());
+            assert_eq!(page.slug, expected_slug);
+            assert_eq!(page.title, title);
+            assert_eq!(page.site_id, 1);
+            assert_eq!(page.parent_page_id, None);
+        }
+    }
+
+    #[test]
+    fn test_new_with_parent_and_title_generates_slug() {
+        let test_cases = vec![
+            ("Sub Page", "sub-page"),
+            ("Child Page", "child-page"),
+            ("Nested Content", "nested-content"),
+        ];
+
+        for (title, expected_slug) in test_cases {
+            let page = Page::new_with_parent_and_title(1, 10, title.to_string());
+            assert_eq!(page.slug, expected_slug);
+            assert_eq!(page.title, title);
+            assert_eq!(page.site_id, 1);
+            assert_eq!(page.parent_page_id, Some(10));
+        }
+    }
+
+    #[test]
+    fn test_new_with_title_handles_edge_cases() {
+        // Empty title should generate "untitled" slug
+        let page = Page::new_with_title(1, "".to_string());
+        assert_eq!(page.slug, "untitled");
+        assert_eq!(page.title, "");
+
+        // Only special characters should generate "untitled" slug
+        let page = Page::new_with_title(1, "!!!".to_string());
+        assert_eq!(page.slug, "untitled");
+        assert_eq!(page.title, "!!!");
+
+        // Very long title should be truncated
+        let long_title = "This is a very long title that exceeds one hundred characters and should be truncated to ensure reasonable URL length for better usability and SEO";
+        let page = Page::new_with_title(1, long_title.to_string());
+        assert!(page.slug.len() <= 100);
+        assert!(!page.slug.ends_with('-'));
+        assert_eq!(page.title, long_title);
     }
 }

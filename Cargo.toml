@@ -60,3 +60,4 @@ image = "0.25"
 # Async utilities
 futures = "0.3"
 url = "2.5"
+once_cell = "1.19"

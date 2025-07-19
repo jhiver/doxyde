@@ -85,12 +85,13 @@
         </div>
         
         <div class="form-group">
-            <label for="slug">URL Slug</label>
-            <input type="text" id="slug" name="slug" required 
-                   pattern="[a-z0-9-]+" 
+            <label for="slug">URL Slug (Optional)</label>
+            <input type="text" id="slug" name="slug" 
+                   pattern="[a-z0-9-]*" 
                    placeholder="e.g., about-us, contact, products">
             <div class="help-text">
                 URL-friendly name (lowercase letters, numbers, and hyphens only).
+                Leave empty to auto-generate from title.
                 The page will be accessible at: {{ current_path }}/<span id="slug-preview">slug</span>
             </div>
         </div>
@@ -103,24 +104,41 @@
 </div>
 
 <script>
-// Live slug preview
-document.getElementById('slug').addEventListener('input', function(e) {
-    const preview = document.getElementById('slug-preview');
-    preview.textContent = e.target.value || 'slug';
-});
+// Generate slug from title
+function generateSlugFromTitle(title) {
+    return title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
 
-// Auto-generate slug from title
-document.getElementById('title').addEventListener('blur', function(e) {
+// Update slug preview
+function updateSlugPreview() {
     const slugInput = document.getElementById('slug');
-    if (!slugInput.value && e.target.value) {
-        // Convert title to slug
-        const slug = e.target.value
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, '');
-        slugInput.value = slug;
-        document.getElementById('slug-preview').textContent = slug;
+    const titleInput = document.getElementById('title');
+    const preview = document.getElementById('slug-preview');
+    
+    if (slugInput.value) {
+        preview.textContent = slugInput.value;
+    } else if (titleInput.value) {
+        preview.textContent = generateSlugFromTitle(titleInput.value) || 'slug';
+    } else {
+        preview.textContent = 'slug';
+    }
+}
+
+// Live slug preview
+document.getElementById('slug').addEventListener('input', updateSlugPreview);
+
+// Update preview when title changes
+document.getElementById('title').addEventListener('input', function(e) {
+    const slugInput = document.getElementById('slug');
+    if (!slugInput.value) {
+        updateSlugPreview();
     }
 });
+
+// On page load, update preview
+updateSlugPreview();
 </script>
 {% endblock %}

@@ -38,6 +38,7 @@ pub struct AddComponentForm {
 #[derive(Debug, Deserialize)]
 pub struct NewPageForm {
     pub title: String,
+    #[serde(default)]
     pub slug: String,
 }
 
@@ -462,42 +463,40 @@ pub async fn create_page_handler(
     }
 
     // Create the new page
-    let new_page = Page::new_with_parent(
-        site.id.unwrap(),
-        parent_page.id.unwrap(),
-        form.slug.clone(),
-        form.title.clone(),
-    );
+    let mut new_page = if form.slug.is_empty() {
+        Page::new_with_parent_and_title(
+            site.id.unwrap(),
+            parent_page.id.unwrap(),
+            form.title.clone(),
+        )
+    } else {
+        Page::new_with_parent(
+            site.id.unwrap(),
+            parent_page.id.unwrap(),
+            form.slug.clone(),
+            form.title.clone(),
+        )
+    };
 
-    // Validate the page
-    if let Err(_e) = new_page.is_valid() {
+    // Validate the page (except slug which will be auto-generated if needed)
+    if new_page.validate_title().is_err() {
         return Err(StatusCode::BAD_REQUEST);
     }
 
     let page_repo = PageRepository::new(state.db.clone());
 
-    // Check if slug already exists under this parent
-    let children = page_repo
-        .list_children(parent_page.id.unwrap())
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    if children.iter().any(|child| child.slug == form.slug) {
-        return Err(StatusCode::CONFLICT); // Slug already exists
-    }
-
-    // Create the page
+    // Create the page with auto-generated unique slug if needed
     let _new_page_id = page_repo
-        .create(&new_page)
+        .create_with_auto_slug(&mut new_page)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Build the path to the new page
     let parent_path = build_page_path(&state, &parent_page).await?;
     let new_page_path = if parent_path == "/" {
-        format!("/{}", form.slug)
+        format!("/{}", new_page.slug)
     } else {
-        format!("{}/{}", parent_path, form.slug)
+        format!("{}/{}", parent_path, new_page.slug)
     };
 
     // Redirect to the new page
