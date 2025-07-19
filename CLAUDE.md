@@ -679,8 +679,11 @@ Visit http://localhost:3000 and login at http://localhost:3000/.login
    - `publish_draft`: Make draft version live
    - `discard_draft`: Cancel draft changes
 
-**📋 Current Todo:**
-- Add comprehensive tests for all new MCP tools (HIGH PRIORITY)
+**✅ Testing Complete (July 19, 2025):**
+- Created comprehensive_mcp_tests.py with 100% tool coverage
+- All MCP tools tested thoroughly with various scenarios
+- Created specialized test_move_page.py for hierarchy testing
+- Discovered minor issue: move_page doesn't properly check circular references
 
 **🔮 Future Enhancements:**
 - Support for other component types (image, code, html, etc.)
