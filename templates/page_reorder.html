@@ -1,0 +1,295 @@
+{% extends "base.html" %}
+
+{% block title %}Reorder Children - {{ page.title }} - {{ super() }}{% endblock %}
+
+{% block sidebar %}
+    <div class="sidebar-card">
+        <div class="sidebar-card-header">
+            <h3>Reorder Child Pages</h3>
+        </div>
+        <div class="sidebar-card-body">
+            <p>Choose how child pages are sorted.</p>
+            <p>In manual mode, drag and drop to reorder pages.</p>
+        </div>
+    </div>
+{% endblock %}
+
+{% block content %}
+<article>
+    <h1>Reorder Child Pages: {{ page.title }}</h1>
+    
+    {% if children|length == 0 %}
+        <p>This page has no child pages to reorder.</p>
+        <div class="form-actions">
+            <a href="{{ page.slug }}/" class="btn btn-secondary">Back to Page</a>
+        </div>
+    {% else %}
+    
+    <form id="reorder-form" method="post">
+        <div class="sort-mode-selector">
+            <label for="sort_mode">Sort Mode:</label>
+            <select name="sort_mode" id="sort_mode" onchange="updateSortMode()">
+                <option value="created_at_asc" {% if sort_mode == "created_at_asc" %}selected{% endif %}>
+                    Creation Date (Oldest First)
+                </option>
+                <option value="created_at_desc" {% if sort_mode == "created_at_desc" %}selected{% endif %}>
+                    Creation Date (Newest First)
+                </option>
+                <option value="title_asc" {% if sort_mode == "title_asc" %}selected{% endif %}>
+                    Title (A to Z)
+                </option>
+                <option value="title_desc" {% if sort_mode == "title_desc" %}selected{% endif %}>
+                    Title (Z to A)
+                </option>
+                <option value="manual" {% if sort_mode == "manual" %}selected{% endif %}>
+                    Manual Order
+                </option>
+            </select>
+        </div>
+
+        <div id="manual-order-section" style="{% if sort_mode != 'manual' %}display: none;{% endif %}">
+            <h3>Drag to Reorder:</h3>
+            <ul id="sortable-list" class="sortable-list">
+                {% for child in children %}
+                <li class="sortable-item" data-id="{{ child.id }}">
+                    <div class="drag-handle">≡</div>
+                    <div class="page-info">
+                        <strong>{{ child.title }}</strong>
+                        <span class="page-meta">Created: {{ child.created_at }}</span>
+                    </div>
+                    <input type="hidden" name="position_{{ child.id }}" value="{{ loop.index0 }}" />
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        <div id="preview-order-section" style="{% if sort_mode == 'manual' %}display: none;{% endif %}">
+            <h3>Preview Order:</h3>
+            <ul class="preview-list">
+                {% for child in children %}
+                <li class="preview-item">
+                    <strong>{{ child.title }}</strong>
+                    <span class="page-meta">Created: {{ child.created_at }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save Changes</button>
+            <a href="{{ page.slug }}/" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+    
+    {% endif %}
+</article>
+
+<style>
+.sort-mode-selector {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.sort-mode-selector label {
+    font-weight: bold;
+    margin-right: 10px;
+}
+
+.sort-mode-selector select {
+    padding: 8px 12px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.sortable-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+.sortable-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    margin-bottom: 10px;
+    background: white;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    cursor: move;
+    transition: all 0.2s;
+}
+
+.sortable-item:hover {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.sortable-item.dragging {
+    opacity: 0.5;
+}
+
+.drag-handle {
+    font-size: 20px;
+    color: #6c757d;
+    margin-right: 15px;
+    cursor: grab;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.page-info {
+    flex: 1;
+}
+
+.page-meta {
+    display: block;
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.preview-list {
+    list-style: none;
+    padding: 0;
+    margin: 20px 0;
+}
+
+.preview-item {
+    padding: 15px;
+    margin-bottom: 10px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+}
+
+.form-actions {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #dee2e6;
+}
+</style>
+
+<script>
+function updateSortMode() {
+    const sortMode = document.getElementById('sort_mode').value;
+    const manualSection = document.getElementById('manual-order-section');
+    const previewSection = document.getElementById('preview-order-section');
+    
+    if (sortMode === 'manual') {
+        manualSection.style.display = 'block';
+        previewSection.style.display = 'none';
+        initializeDragAndDrop();
+    } else {
+        manualSection.style.display = 'none';
+        previewSection.style.display = 'block';
+        updatePreviewOrder(sortMode);
+    }
+}
+
+function initializeDragAndDrop() {
+    const sortableList = document.getElementById('sortable-list');
+    if (!sortableList) return;
+    
+    let draggedItem = null;
+    
+    sortableList.querySelectorAll('.sortable-item').forEach(item => {
+        item.draggable = true;
+        
+        item.addEventListener('dragstart', function(e) {
+            draggedItem = this;
+            this.classList.add('dragging');
+        });
+        
+        item.addEventListener('dragend', function(e) {
+            this.classList.remove('dragging');
+        });
+        
+        item.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(sortableList, e.clientY);
+            if (afterElement == null) {
+                sortableList.appendChild(draggedItem);
+            } else {
+                sortableList.insertBefore(draggedItem, afterElement);
+            }
+            updatePositions();
+        });
+    });
+}
+
+function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.sortable-item:not(.dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect();
+        const offset = y - box.top - box.height / 2;
+        
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child };
+        } else {
+            return closest;
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function updatePositions() {
+    const items = document.querySelectorAll('.sortable-item');
+    items.forEach((item, index) => {
+        const input = item.querySelector('input[type="hidden"]');
+        if (input) {
+            input.value = index;
+        }
+    });
+}
+
+function updatePreviewOrder(sortMode) {
+    const previewList = document.querySelector('.preview-list');
+    if (!previewList) return;
+    
+    const items = Array.from(previewList.querySelectorAll('.preview-item'));
+    const childData = {{ children | json_encode | safe }};
+    
+    // Sort the child data based on the selected mode
+    let sortedData = [...childData];
+    switch(sortMode) {
+        case 'created_at_asc':
+            sortedData.sort((a, b) => a.created_at.localeCompare(b.created_at));
+            break;
+        case 'created_at_desc':
+            sortedData.sort((a, b) => b.created_at.localeCompare(a.created_at));
+            break;
+        case 'title_asc':
+            sortedData.sort((a, b) => a.title.localeCompare(b.title));
+            break;
+        case 'title_desc':
+            sortedData.sort((a, b) => b.title.localeCompare(a.title));
+            break;
+    }
+    
+    // Clear and rebuild the preview list
+    previewList.innerHTML = '';
+    sortedData.forEach(child => {
+        const li = document.createElement('li');
+        li.className = 'preview-item';
+        li.innerHTML = `
+            <strong>${child.title}</strong>
+            <span class="page-meta">Created: ${child.created_at}</span>
+        `;
+        previewList.appendChild(li);
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const sortMode = document.getElementById('sort_mode').value;
+    if (sortMode === 'manual') {
+        initializeDragAndDrop();
+    }
+});
+</script>
+{% endblock %}

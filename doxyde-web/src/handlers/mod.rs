@@ -25,6 +25,7 @@ pub mod mcp_tokens;
 pub mod move_page;
 pub mod pages;
 pub mod properties;
+pub mod reorder;
 pub mod sites;
 
 pub use action::handle_action;
@@ -45,3 +46,4 @@ pub use mcp_tokens::{
 };
 pub use move_page::{do_move_page_handler, move_page_handler};
 pub use properties::{page_properties_handler, update_page_properties_handler};
+pub use reorder::{reorder_page_handler, update_page_order_handler};

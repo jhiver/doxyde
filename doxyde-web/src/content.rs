@@ -379,6 +379,33 @@ pub async fn content_handler(
                 Ok(axum::response::Redirect::to("/.login").into_response())
             }
         }
+        Some(".reorder") => {
+            // Reorder children handler - requires authentication
+            if let OptionalUser(Some(current_user)) = user {
+                match crate::handlers::reorder_page_handler(State(state.clone().into()), site, page, current_user).await {
+                    Ok(response) => Ok(response),
+                    Err(status) => {
+                        tracing::error!(
+                            status = ?status,
+                            "Failed to render reorder page form"
+                        );
+                        match status {
+                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                                "You don't have permission to reorder pages",
+                            )),
+                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
+                            StatusCode::INTERNAL_SERVER_ERROR => Err(
+                                AppError::internal_server_error("Failed to render reorder page form"),
+                            ),
+                            _ => Err(AppError::new(status, "An error occurred")),
+                        }
+                    }
+                }
+            } else {
+                // Redirect to login
+                Ok(axum::response::Redirect::to("/.login").into_response())
+            }
+        }
         Some(".upload-image") => {
             // Image upload handler - requires authentication
             if let OptionalUser(Some(_current_user)) = user {

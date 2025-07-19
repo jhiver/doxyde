@@ -125,32 +125,16 @@ async fn main() -> Result<()> {
 async fn init_database(database_url: &str) -> Result<()> {
     println!("Initializing database at: {}", database_url);
 
-    // Create the database file if it's SQLite
-    if database_url.starts_with("sqlite:") {
-        let path = database_url.trim_start_matches("sqlite:");
-        if let Some(parent) = std::path::Path::new(path).parent() {
-            std::fs::create_dir_all(parent).context("Failed to create database directory")?;
-        }
-    }
-
-    let pool = SqlitePool::connect(database_url)
-        .await
-        .context("Failed to connect to database")?;
-
-    // Run migrations
-    sqlx::migrate!("../migrations")
-        .run(&pool)
-        .await
-        .context("Failed to run migrations")?;
+    // Use the shared init_database function from doxyde-db
+    let _pool = doxyde_db::init_database(database_url).await?;
 
     println!("Database initialized successfully!");
     Ok(())
 }
 
 async fn connect_database(database_url: &str) -> Result<SqlitePool> {
-    SqlitePool::connect(database_url)
-        .await
-        .context("Failed to connect to database")
+    // Use the shared init_database which also ensures migrations are run
+    doxyde_db::init_database(database_url).await
 }
 
 async fn handle_site_command(command: SiteCommands, pool: SqlitePool) -> Result<()> {

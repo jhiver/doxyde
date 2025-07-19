@@ -33,6 +33,16 @@
             <a href="./.new">Create New</a>
         {% endif %}
         
+        {% if has_children is defined and has_children %}
+            <span class="separator">|</span>
+            
+            {% if current_action == ".reorder" %}
+                <strong>Reorder</strong>
+            {% else %}
+                <a href="./.reorder">Reorder</a>
+            {% endif %}
+        {% endif %}
+        
         {% if is_movable is defined and is_movable %}
             <span class="separator">|</span>
             

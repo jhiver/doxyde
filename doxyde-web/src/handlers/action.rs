@@ -18,12 +18,12 @@ use anyhow::Result;
 use axum::{
     extract::{Host, State},
     http::{StatusCode, Uri},
-    response::Response,
+    response::{IntoResponse, Response},
 };
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 
 use crate::{
-    auth::CurrentUser,
+    auth::{CurrentUser},
     content::ContentPath,
     handlers::{
         delete_page::DeletePageForm,
@@ -337,6 +337,49 @@ pub async fn handle_action(
                 axum::extract::Form(delete_form),
             )
             .await
+        }
+        Some(".reorder") => {
+            // Parse form data for reorder
+            let form_data: Vec<(String, String)> =
+                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+
+            // Extract sort mode
+            let sort_mode = form_data
+                .iter()
+                .find(|(k, _)| k == "sort_mode")
+                .map(|(_, v)| v.clone())
+                .unwrap_or_else(|| "created_at_asc".to_string());
+
+            // Extract positions if in manual mode
+            let mut positions = Vec::new();
+            if sort_mode == "manual" {
+                for (key, value) in &form_data {
+                    if let Some(page_id_str) = key.strip_prefix("position_") {
+                        if let (Ok(page_id), Ok(position)) = (page_id_str.parse::<i64>(), value.parse::<i32>()) {
+                            positions.push((page_id, position));
+                        }
+                    }
+                }
+            }
+
+            crate::handlers::update_page_order_handler(
+                State(state.clone().into()),
+                site,
+                page.clone(),
+                user,
+                sort_mode,
+                if positions.is_empty() { None } else { Some(positions) },
+            )
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+            // Redirect back to the page
+            let redirect_path = if content_path.path == "/" {
+                "/".to_string()
+            } else {
+                format!("{}/", content_path.path)
+            };
+            Ok(axum::response::Redirect::to(&redirect_path).into_response())
         }
         _ => Err(StatusCode::NOT_FOUND),
     }

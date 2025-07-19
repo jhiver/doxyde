@@ -485,6 +485,15 @@ pub async fn create_page_handler(
 
     let page_repo = PageRepository::new(state.db.clone());
 
+    // Calculate the position for the new page
+    let siblings = page_repo
+        .list_children(parent_page.id.unwrap())
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    
+    // Set position to be after all existing siblings
+    new_page.position = siblings.len() as i32;
+
     // Create the page with auto-generated unique slug if needed
     let _new_page_id = page_repo
         .create_with_auto_slug(&mut new_page)

@@ -65,9 +65,9 @@ pub async fn show_page_handler(
         Vec::new()
     };
 
-    // Get child pages
+    // Get child pages using sorted method
     let children = page_repo
-        .list_children(page.id.unwrap())
+        .list_children_sorted(page.id.unwrap())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -110,7 +110,7 @@ pub async fn show_page_handler(
     for (i, nav_page) in breadcrumb.iter().enumerate().rev() {
         // Get children of this page
         let page_children = page_repo
-            .list_children(nav_page.id.unwrap())
+            .list_children_sorted(nav_page.id.unwrap())
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -164,7 +164,7 @@ pub async fn show_page_handler(
 
     // Keep children data for backward compatibility
     let children_data: Vec<serde_json::Value> = children
-        .into_iter()
+        .iter()
         .map(|child| {
             let child_url = if current_path == "/" {
                 format!("/{}", child.slug)
@@ -191,6 +191,7 @@ pub async fn show_page_handler(
     context.insert("navigation_levels", &navigation_levels);
     context.insert("children", &children_data); // Keep for backward compatibility
     context.insert("current_path", &current_path);
+    context.insert("has_children", &!children.is_empty());
 
     // Add user info and check edit permissions if logged in
     let mut can_edit = false;

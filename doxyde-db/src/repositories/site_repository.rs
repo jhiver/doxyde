@@ -53,7 +53,7 @@ impl SiteRepository {
         let site_id = site_result.last_insert_rowid();
 
         // Create the root page for this site
-        let root_page = Page::new(site_id, "home".to_string(), "Home".to_string());
+        let root_page = Page::new(site_id, "".to_string(), "Home".to_string());
 
         sqlx::query(
             r#"
@@ -327,7 +327,7 @@ mod tests {
                 .await?;
 
         assert_eq!(root_page.0, None); // parent_page_id should be NULL
-        assert_eq!(root_page.1, "home");
+        assert_eq!(root_page.1, "");
         assert_eq!(root_page.2, "Home");
 
         Ok(())

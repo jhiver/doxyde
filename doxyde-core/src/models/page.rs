@@ -33,6 +33,7 @@ pub struct Page {
     pub og_image_url: Option<String>,
     pub structured_data_type: String,
     pub position: i32,
+    pub sort_mode: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -54,6 +55,7 @@ impl Page {
             og_image_url: None,
             structured_data_type: "WebPage".to_string(),
             position: 0,
+            sort_mode: "created_at_asc".to_string(),
             created_at: now,
             updated_at: now,
         }
@@ -75,6 +77,7 @@ impl Page {
             og_image_url: None,
             structured_data_type: "WebPage".to_string(),
             position: 0,
+            sort_mode: "created_at_asc".to_string(),
             created_at: now,
             updated_at: now,
         }
@@ -93,8 +96,13 @@ impl Page {
     }
 
     pub fn validate_slug(&self) -> Result<(), String> {
+        // Empty slug is allowed only for root pages (pages with no parent)
         if self.slug.is_empty() {
-            return Err("Slug cannot be empty".to_string());
+            if self.parent_page_id.is_some() {
+                return Err("Slug cannot be empty for non-root pages".to_string());
+            }
+            // Empty slug is valid for root pages
+            return Ok(());
         }
 
         if self.slug.len() > 255 {
@@ -244,6 +252,25 @@ impl Page {
         Ok(())
     }
 
+    pub fn validate_sort_mode(&self) -> Result<(), String> {
+        const VALID_MODES: &[&str] = &[
+            "created_at_asc",
+            "created_at_desc",
+            "title_asc",
+            "title_desc",
+            "manual",
+        ];
+
+        if !VALID_MODES.contains(&self.sort_mode.as_str()) {
+            return Err(format!(
+                "Invalid sort mode '{}'. Valid modes are: {}",
+                self.sort_mode,
+                VALID_MODES.join(", ")
+            ));
+        }
+        Ok(())
+    }
+
     pub fn is_valid(&self) -> Result<(), String> {
         self.validate_slug()?;
         self.validate_title()?;
@@ -254,6 +281,7 @@ impl Page {
         self.validate_canonical_url()?;
         self.validate_og_image_url()?;
         self.validate_structured_data_type()?;
+        self.validate_sort_mode()?;
         Ok(())
     }
 }
@@ -287,6 +315,7 @@ mod tests {
         assert_eq!(page.canonical_url, None);
         assert_eq!(page.og_image_url, None);
         assert_eq!(page.structured_data_type, "WebPage");
+        assert_eq!(page.sort_mode, "created_at_asc");
 
         // Check timestamps are set correctly
         assert!(page.created_at >= before_creation);
@@ -393,10 +422,16 @@ mod tests {
 
     #[test]
     fn test_validate_slug_empty() {
-        let page = Page::new(1, String::new(), "Test".to_string());
-        let result = page.validate_slug();
+        // Empty slug is valid for root pages (no parent)
+        let root_page = Page::new(1, String::new(), "Test".to_string());
+        let result = root_page.validate_slug();
+        assert!(result.is_ok());
+        
+        // Empty slug is invalid for child pages
+        let child_page = Page::new_with_parent(1, 10, String::new(), "Test".to_string());
+        let result = child_page.validate_slug();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Slug cannot be empty");
+        assert_eq!(result.unwrap_err(), "Slug cannot be empty for non-root pages");
     }
 
     #[test]
@@ -557,11 +592,17 @@ mod tests {
 
     #[test]
     fn test_is_valid_with_both_invalid() {
+        // Root page with empty slug is valid if title is provided
+        let root_page = Page::new(1, "".to_string(), "Valid Title".to_string());
+        let result = root_page.is_valid();
+        assert!(result.is_ok());
+        
+        // Root page with empty slug and empty title should fail on title validation
         let page = Page::new(1, "".to_string(), "".to_string());
         let result = page.is_valid();
         assert!(result.is_err());
-        // Should fail on slug validation first
-        assert_eq!(result.unwrap_err(), "Slug cannot be empty");
+        // Should fail on title validation since empty slug is valid for root pages
+        assert_eq!(result.unwrap_err(), "Title cannot be empty");
     }
 
     #[test]
@@ -762,6 +803,40 @@ mod tests {
         assert_eq!(page.canonical_url, None);
         assert_eq!(page.og_image_url, None);
         assert_eq!(page.structured_data_type, "WebPage");
+        assert_eq!(page.sort_mode, "created_at_asc");
+    }
+
+    #[test]
+    fn test_validate_sort_mode_valid() {
+        let test_cases = vec![
+            "created_at_asc",
+            "created_at_desc",
+            "title_asc",
+            "title_desc",
+            "manual",
+        ];
+
+        for mode in test_cases {
+            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            page.sort_mode = mode.to_string();
+            assert!(
+                page.validate_sort_mode().is_ok(),
+                "Sort mode '{}' should be valid",
+                mode
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_sort_mode_invalid() {
+        let test_cases = vec!["invalid", "created_asc", "manual_sort", ""];
+
+        for mode in test_cases {
+            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            page.sort_mode = mode.to_string();
+            let result = page.validate_sort_mode();
+            assert!(result.is_err(), "Sort mode '{}' should be invalid", mode);
+        }
     }
 
     #[test]

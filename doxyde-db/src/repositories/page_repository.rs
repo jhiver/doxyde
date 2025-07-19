@@ -37,8 +37,8 @@ impl PageRepository {
 
         let result = sqlx::query(
             r#"
-            INSERT INTO pages (site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO pages (site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
         .bind(page.site_id)
@@ -53,6 +53,7 @@ impl PageRepository {
         .bind(&page.og_image_url)
         .bind(&page.structured_data_type)
         .bind(page.position)
+        .bind(&page.sort_mode)
         .bind(page.created_at)
         .bind(page.updated_at)
         .execute(&self.pool)
@@ -64,9 +65,9 @@ impl PageRepository {
 
     pub async fn find_by_id(&self, id: i64) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE id = ?
             "#,
@@ -91,6 +92,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at_str,
                 updated_at_str,
             )) => {
@@ -129,6 +131,7 @@ impl PageRepository {
                     og_image_url,
                     structured_data_type,
                     position,
+                    sort_mode,
                     created_at,
                     updated_at,
                 }))
@@ -139,9 +142,9 @@ impl PageRepository {
 
     pub async fn find_by_slug_and_site_id(&self, slug: &str, site_id: i64) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE slug = ? AND site_id = ?
             "#,
@@ -167,6 +170,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at_str,
                 updated_at_str,
             )) => {
@@ -205,6 +209,7 @@ impl PageRepository {
                     og_image_url,
                     structured_data_type,
                     position,
+                    sort_mode,
                     created_at,
                     updated_at,
                 }))
@@ -215,9 +220,9 @@ impl PageRepository {
 
     pub async fn list_by_site_id(&self, site_id: i64) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE site_id = ?
             ORDER BY parent_page_id, position, slug
@@ -243,6 +248,7 @@ impl PageRepository {
             og_image_url,
             structured_data_type,
             position,
+            sort_mode,
             created_at_str,
             updated_at_str,
         ) in results
@@ -282,6 +288,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at,
                 updated_at,
             });
@@ -296,7 +303,7 @@ impl PageRepository {
         let rows_affected = sqlx::query(
             r#"
             UPDATE pages
-            SET site_id = ?, parent_page_id = ?, slug = ?, title = ?, description = ?, keywords = ?, template = ?, meta_robots = ?, canonical_url = ?, og_image_url = ?, structured_data_type = ?, position = ?, updated_at = ?
+            SET site_id = ?, parent_page_id = ?, slug = ?, title = ?, description = ?, keywords = ?, template = ?, meta_robots = ?, canonical_url = ?, og_image_url = ?, structured_data_type = ?, position = ?, sort_mode = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
@@ -312,6 +319,7 @@ impl PageRepository {
         .bind(&page.og_image_url)
         .bind(&page.structured_data_type)
         .bind(page.position)
+        .bind(&page.sort_mode)
         .bind(page.updated_at)
         .bind(id)
         .execute(&self.pool)
@@ -387,11 +395,110 @@ impl PageRepository {
         Ok(())
     }
 
+    /// List children pages sorted according to the parent's sort_mode
+    pub async fn list_children_sorted(&self, parent_page_id: i64) -> Result<Vec<Page>> {
+        // First get the parent page to check its sort_mode
+        let parent = self
+            .find_by_id(parent_page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Parent page not found"))?;
+
+        // Build the ORDER BY clause based on sort_mode
+        let order_by = match parent.sort_mode.as_str() {
+            "created_at_asc" => "created_at ASC",
+            "created_at_desc" => "created_at DESC",
+            "title_asc" => "title ASC",
+            "title_desc" => "title DESC",
+            "manual" => "position ASC, slug ASC",
+            _ => "position ASC, slug ASC", // fallback to manual sorting
+        };
+
+        let query = format!(
+            r#"
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            FROM pages
+            WHERE parent_page_id = ?
+            ORDER BY {}
+            "#,
+            order_by
+        );
+
+        let results =
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(&query)
+            .bind(parent_page_id)
+            .fetch_all(&self.pool)
+            .await
+            .context("Failed to list children pages")?;
+
+        let mut pages = Vec::new();
+        for (
+            id,
+            site_id,
+            parent_page_id,
+            slug,
+            title,
+            description,
+            keywords,
+            template,
+            meta_robots,
+            canonical_url,
+            og_image_url,
+            structured_data_type,
+            position,
+            sort_mode,
+            created_at_str,
+            updated_at_str,
+        ) in results
+        {
+            // SQLite stores datetime as "YYYY-MM-DD HH:MM:SS" or ISO8601
+            let created_at = if created_at_str.contains('T') {
+                chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                    .context("Failed to parse created_at as RFC3339")?
+                    .with_timezone(&chrono::Utc)
+            } else {
+                chrono::NaiveDateTime::parse_from_str(&created_at_str, "%Y-%m-%d %H:%M:%S")
+                    .context("Failed to parse created_at as SQLite format")?
+                    .and_utc()
+            };
+
+            let updated_at = if updated_at_str.contains('T') {
+                chrono::DateTime::parse_from_rfc3339(&updated_at_str)
+                    .context("Failed to parse updated_at as RFC3339")?
+                    .with_timezone(&chrono::Utc)
+            } else {
+                chrono::NaiveDateTime::parse_from_str(&updated_at_str, "%Y-%m-%d %H:%M:%S")
+                    .context("Failed to parse updated_at as SQLite format")?
+                    .and_utc()
+            };
+
+            pages.push(Page {
+                id: Some(id),
+                site_id,
+                parent_page_id,
+                slug,
+                title,
+                description,
+                keywords,
+                template,
+                meta_robots,
+                canonical_url,
+                og_image_url,
+                structured_data_type,
+                position,
+                sort_mode,
+                created_at,
+                updated_at,
+            });
+        }
+
+        Ok(pages)
+    }
+
     pub async fn list_children(&self, parent_page_id: i64) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE parent_page_id = ?
             ORDER BY position, slug
@@ -417,6 +524,7 @@ impl PageRepository {
             og_image_url,
             structured_data_type,
             position,
+            sort_mode,
             created_at_str,
             updated_at_str,
         ) in results
@@ -456,6 +564,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at,
                 updated_at,
             });
@@ -467,9 +576,9 @@ impl PageRepository {
     /// List all root-level pages for a site (pages with no parent)
     pub async fn list_root_pages(&self, site_id: i64) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE site_id = ? AND parent_page_id IS NULL
             ORDER BY position, slug
@@ -495,6 +604,7 @@ impl PageRepository {
             og_image_url,
             structured_data_type,
             position,
+            sort_mode,
             created_at_str,
             updated_at_str,
         ) in results
@@ -534,6 +644,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at,
                 updated_at,
             });
@@ -697,6 +808,29 @@ impl PageRepository {
         Ok(())
     }
 
+    /// Update positions for a batch of pages (used for manual reordering)
+    pub async fn update_positions(&self, positions: &[(i64, i32)]) -> Result<()> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        for (page_id, position) in positions {
+            sqlx::query!(
+                r#"UPDATE pages SET position = ? WHERE id = ?"#,
+                position,
+                page_id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to update page position")?;
+        }
+
+        tx.commit().await.context("Failed to commit transaction")?;
+        Ok(())
+    }
+
     pub async fn move_page(&self, page_id: i64, new_parent_id: i64) -> Result<()> {
         // Get the page to be moved
         let page = self
@@ -797,9 +931,9 @@ impl PageRepository {
 
     pub async fn get_root_page(&self, site_id: i64) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String)>(
+            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, created_at, updated_at
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE site_id = ? AND parent_page_id IS NULL
             "#,
@@ -824,6 +958,7 @@ impl PageRepository {
                 og_image_url,
                 structured_data_type,
                 position,
+                sort_mode,
                 created_at_str,
                 updated_at_str,
             )) => {
@@ -862,6 +997,7 @@ impl PageRepository {
                     og_image_url,
                     structured_data_type,
                     position,
+                    sort_mode,
                     created_at,
                     updated_at,
                 }))
@@ -1043,6 +1179,7 @@ mod tests {
                 og_image_url TEXT,
                 structured_data_type TEXT NOT NULL DEFAULT 'WebPage',
                 position INTEGER NOT NULL DEFAULT 0,
+                sort_mode TEXT NOT NULL DEFAULT 'created_at_asc',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
@@ -1778,9 +1915,12 @@ mod tests {
 
         let repo = PageRepository::new(pool);
 
-        // Try to find with empty slug
+        // Empty slug should find the root page
         let found = repo.find_by_slug_and_site_id("", site_id).await?;
-        assert!(found.is_none());
+        assert!(found.is_some());
+        let page = found.unwrap();
+        assert_eq!(page.slug, "");
+        assert!(page.parent_page_id.is_none()); // It's the root page
 
         Ok(())
     }
@@ -1873,8 +2013,8 @@ mod tests {
 
         // Verify they are ordered by slug (including root)
         assert_eq!(pages.len(), 5);
-        // Root page slug is "home"
-        assert_eq!(pages[0].slug, "home"); // root page
+        // Root page slug is empty string
+        assert_eq!(pages[0].slug, ""); // root page
         assert_eq!(pages[1].slug, "about");
         assert_eq!(pages[2].slug, "blog");
         assert_eq!(pages[3].slug, "contact");
@@ -2005,7 +2145,7 @@ mod tests {
 
         assert_eq!(pages.len(), 6); // 1 root + 5 child pages
                                     // Verify ordering
-        assert_eq!(pages[0].slug, "home"); // root page
+        assert_eq!(pages[0].slug, ""); // root page
         assert_eq!(pages[1].slug, "123numbers");
         assert_eq!(pages[2].slug, "dir/nested");
         assert_eq!(pages[3].slug, "page.html");
@@ -2048,7 +2188,7 @@ mod tests {
         let pages = repo.list_by_site_id(site_id).await?;
 
         assert_eq!(pages.len(), 3); // 1 root + 2 remaining child pages
-        assert_eq!(pages[0].slug, "home"); // root page
+        assert_eq!(pages[0].slug, ""); // root page
         assert_eq!(pages[1].slug, "page1");
         assert_eq!(pages[2].slug, "page3");
 
@@ -2869,7 +3009,7 @@ mod tests {
         // Trail should contain only the page itself
         assert_eq!(trail.len(), 1);
         assert_eq!(trail[0].id, Some(root_id));
-        assert_eq!(trail[0].slug, "home"); // Root page has slug "home"
+        assert_eq!(trail[0].slug, ""); // Root page has empty slug
 
         Ok(())
     }
@@ -2899,7 +3039,7 @@ mod tests {
         // Trail should be [root, child]
         assert_eq!(trail.len(), 2);
         assert_eq!(trail[0].id, Some(root_id));
-        assert_eq!(trail[0].slug, "home"); // Root page has slug "home"
+        assert_eq!(trail[0].slug, ""); // Root page has empty slug
         assert_eq!(trail[1].id, Some(child_id));
         assert_eq!(trail[1].slug, "child");
 
@@ -2946,7 +3086,7 @@ mod tests {
 
         // Trail should be [root, products, electronics, phones]
         assert_eq!(trail.len(), 4);
-        assert_eq!(trail[0].slug, "home"); // Root page has slug "home"
+        assert_eq!(trail[0].slug, ""); // Root page has empty slug
         assert_eq!(trail[1].slug, "products");
         assert_eq!(trail[2].slug, "electronics");
         assert_eq!(trail[3].slug, "phones");
@@ -2994,7 +3134,7 @@ mod tests {
 
         // Trail should be [root, middle]
         assert_eq!(trail.len(), 2);
-        assert_eq!(trail[0].slug, "home"); // Root page has slug "home"
+        assert_eq!(trail[0].slug, ""); // Root page has empty slug
         assert_eq!(trail[1].slug, "middle");
 
         Ok(())
@@ -3034,14 +3174,14 @@ mod tests {
         // Get breadcrumb trail for child1
         let trail1 = repo.get_breadcrumb_trail(child1_id).await?;
         assert_eq!(trail1.len(), 3); // root -> parent -> child1
-        assert_eq!(trail1[0].slug, "home"); // root
+        assert_eq!(trail1[0].slug, ""); // root
         assert_eq!(trail1[1].slug, "parent");
         assert_eq!(trail1[2].slug, "child1");
 
         // Get breadcrumb trail for child2
         let trail2 = repo.get_breadcrumb_trail(child2_id).await?;
         assert_eq!(trail2.len(), 3); // root -> parent -> child2
-        assert_eq!(trail2[0].slug, "home"); // root
+        assert_eq!(trail2[0].slug, ""); // root
         assert_eq!(trail2[1].slug, "parent");
         assert_eq!(trail2[2].slug, "child2");
 
@@ -3244,7 +3384,7 @@ mod tests {
         assert!(found_root.is_some());
         let found_root = found_root.unwrap();
         assert!(found_root.id.is_some());
-        assert_eq!(found_root.slug, "home"); // Root page has slug "home"
+        assert_eq!(found_root.slug, ""); // Root page has empty slug
         assert!(found_root.parent_page_id.is_none());
 
         Ok(())
@@ -3261,7 +3401,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Try to create another root page - should fail due to our check
-        let root2 = Page::new(site_id, "home".to_string(), "Home Page 2".to_string());
+        let root2 = Page::new(site_id, "".to_string(), "Home Page 2".to_string());
         let result = repo.create(&root2).await;
         assert!(result.is_err());
         assert!(result
@@ -4857,6 +4997,84 @@ mod tests {
             .generate_unique_slug(site_id, Some(parent2_id), "about")
             .await?;
         assert_eq!(slug2, "about");
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_list_children_sorted() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        let site_id = setup_test_db(&pool).await?;
+        let root_id = get_root_page_id(&pool, site_id).await?;
+
+        let repo = PageRepository::new(pool.clone());
+
+        // Create parent page with manual sort mode
+        let mut parent = Page::new_with_parent(
+            site_id,
+            root_id,
+            "parent".to_string(),
+            "Parent Page".to_string(),
+        );
+        parent.sort_mode = "manual".to_string();
+        let parent_id = repo.create(&parent).await?;
+
+        // Create child pages with different positions and creation times
+        let mut child1 = Page::new_with_parent(
+            site_id,
+            parent_id,
+            "child1".to_string(),
+            "B Child".to_string(),
+        );
+        child1.position = 2;
+        child1.created_at = chrono::Utc::now() - chrono::Duration::days(2);
+        let id1 = repo.create(&child1).await?;
+
+        let mut child2 = Page::new_with_parent(
+            site_id,
+            parent_id,
+            "child2".to_string(),
+            "A Child".to_string(),
+        );
+        child2.position = 1;
+        child2.created_at = chrono::Utc::now() - chrono::Duration::days(1);
+        let id2 = repo.create(&child2).await?;
+
+        let mut child3 = Page::new_with_parent(
+            site_id,
+            parent_id,
+            "child3".to_string(),
+            "C Child".to_string(),
+        );
+        child3.position = 0;
+        child3.created_at = chrono::Utc::now();
+        let id3 = repo.create(&child3).await?;
+
+        // Test manual sorting (by position)
+        let children = repo.list_children_sorted(parent_id).await?;
+        assert_eq!(children.len(), 3);
+        assert_eq!(children[0].id, Some(id3)); // position 0
+        assert_eq!(children[1].id, Some(id2)); // position 1
+        assert_eq!(children[2].id, Some(id1)); // position 2
+
+        // Update parent to sort by created_at_asc
+        parent.id = Some(parent_id);
+        parent.sort_mode = "created_at_asc".to_string();
+        repo.update(&parent).await?;
+
+        let children = repo.list_children_sorted(parent_id).await?;
+        assert_eq!(children[0].id, Some(id1)); // oldest first
+        assert_eq!(children[1].id, Some(id2));
+        assert_eq!(children[2].id, Some(id3)); // newest last
+
+        // Update parent to sort by title_desc
+        parent.sort_mode = "title_desc".to_string();
+        repo.update(&parent).await?;
+
+        let children = repo.list_children_sorted(parent_id).await?;
+        assert_eq!(children[0].title, "C Child"); // C first
+        assert_eq!(children[1].title, "B Child");
+        assert_eq!(children[2].title, "A Child"); // A last
 
         Ok(())
     }
