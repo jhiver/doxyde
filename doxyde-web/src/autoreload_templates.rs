@@ -73,6 +73,9 @@ impl TemplateEngine {
         // Register round filter
         tera.register_filter("round", make_round_filter());
 
+        // Register json_encode filter
+        tera.register_filter("json_encode", make_json_encode_filter());
+
         // Register component rendering functions
         tera.register_function(
             "render_component",
@@ -227,5 +230,21 @@ impl Filter for RoundFilter {
         let rounded = (num * multiplier).round() / multiplier;
 
         Ok(to_value(rounded)?)
+    }
+}
+
+fn make_json_encode_filter() -> impl Filter {
+    JsonEncodeFilter
+}
+
+struct JsonEncodeFilter;
+
+impl Filter for JsonEncodeFilter {
+    fn filter(&self, value: &Value, _args: &HashMap<String, Value>) -> tera::Result<Value> {
+        // Serialize the value to JSON string
+        match serde_json::to_string(value) {
+            Ok(json_string) => Ok(Value::String(json_string)),
+            Err(e) => Err(tera::Error::msg(format!("Failed to encode JSON: {}", e))),
+        }
     }
 }

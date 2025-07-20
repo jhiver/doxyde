@@ -72,53 +72,67 @@ pub async fn show_page_handler(
             if let Ok(mut config) =
                 serde_json::from_value::<serde_json::Value>(component.content.clone())
             {
-                if let Some(parent_page_id) = config.get("parent_page_id").and_then(|v| v.as_i64())
-                {
-                    // Fetch child pages
-                    let child_pages = page_repo
-                        .list_children_sorted(parent_page_id)
+                // Get parent_page_id - could be null, number, or not present
+                let parent_page_id = config.get("parent_page_id").and_then(|v| v.as_i64());
+                
+                // Fetch pages based on parent_page_id
+                let child_pages = if let Some(parent_id) = parent_page_id {
+                    // Fetch children of specific parent
+                    page_repo
+                        .list_children_sorted(parent_id)
+                        .await
+                        .unwrap_or_default()
+                } else {
+                    // When parent_page_id is null or not present, fetch all pages from the site
+                    // TODO: This should ideally fetch all blog posts or pages marked as blog posts
+                    // For now, fetch all pages except the home page
+                    page_repo
+                        .list_by_site_id(site.id.unwrap())
+                        .await
+                        .unwrap_or_default()
+                        .into_iter()
+                        .filter(|p| p.slug != "home")
+                        .collect()
+                };
+
+                // Get item count
+                let item_count = config
+                    .get("item_count")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(5) as usize;
+
+                // Build page data with URLs
+                let mut pages_data = Vec::new();
+                for child in child_pages.iter().take(item_count) {
+                    // Build URL for child page
+                    let child_breadcrumb = page_repo
+                        .get_breadcrumb_trail(child.id.unwrap())
                         .await
                         .unwrap_or_default();
 
-                    // Get item count
-                    let item_count = config
-                        .get("item_count")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(5) as usize;
+                    let child_url = if child_breadcrumb.len() <= 1 {
+                        "/".to_string()
+                    } else {
+                        let path_parts: Vec<&str> = child_breadcrumb[1..]
+                            .iter()
+                            .map(|p| p.slug.as_str())
+                            .collect();
+                        format!("/{}", path_parts.join("/"))
+                    };
 
-                    // Build page data with URLs
-                    let mut pages_data = Vec::new();
-                    for child in child_pages.iter().take(item_count) {
-                        // Build URL for child page
-                        let child_breadcrumb = page_repo
-                            .get_breadcrumb_trail(child.id.unwrap())
-                            .await
-                            .unwrap_or_default();
-
-                        let child_url = if child_breadcrumb.len() <= 1 {
-                            "/".to_string()
-                        } else {
-                            let path_parts: Vec<&str> = child_breadcrumb[1..]
-                                .iter()
-                                .map(|p| p.slug.as_str())
-                                .collect();
-                            format!("/{}", path_parts.join("/"))
-                        };
-
-                        pages_data.push(serde_json::json!({
-                            "id": child.id,
-                            "title": child.title,
-                            "slug": child.slug,
-                            "description": child.description,
-                            "created_at": child.created_at.format("%B %d, %Y").to_string(),
-                            "url": child_url
-                        }));
-                    }
-
-                    // Inject pages data into component content
-                    config["pages"] = serde_json::json!(pages_data);
-                    component.content = config;
+                    pages_data.push(serde_json::json!({
+                        "id": child.id,
+                        "title": child.title,
+                        "slug": child.slug,
+                        "description": child.description,
+                        "created_at": child.created_at.format("%B %d, %Y").to_string(),
+                        "url": child_url
+                    }));
                 }
+
+                // Inject pages data into component content
+                config["pages"] = serde_json::json!(pages_data);
+                component.content = config;
             }
         }
     }
