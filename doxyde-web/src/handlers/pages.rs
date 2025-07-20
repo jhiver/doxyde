@@ -272,6 +272,7 @@ pub async fn show_page_handler(
         }
     }
     context.insert("can_edit", &can_edit);
+    context.insert("action", "view");
 
     // Check if page is movable (has valid move targets)
     let is_movable = if let Some(page_id) = page.id {
