@@ -177,7 +177,10 @@ impl Page {
     pub fn validate_keywords(&self) -> Result<(), String> {
         if let Some(ref keywords) = self.keywords {
             if keywords.len() > 255 {
-                return Err("Keywords cannot exceed 255 characters".to_string());
+                return Err(format!(
+                    "Keywords cannot exceed 255 characters (current: {} characters)",
+                    keywords.len()
+                ));
             }
         }
         Ok(())
@@ -723,7 +726,21 @@ mod tests {
 
         let result = page.validate_keywords();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Keywords cannot exceed 255 characters");
+        assert_eq!(result.unwrap_err(), "Keywords cannot exceed 255 characters (current: 256 characters)");
+    }
+
+    #[test]
+    fn test_validate_keywords_real_world_example() {
+        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        // This is the exact keywords string that caused the 400 error
+        page.keywords = Some("About Doxyde, Doxyde CMS, CMS in Rust, open source CMS, AI-native CMS, Jean-Michel Hiver, software origin story, Rust web development, Model Context Protocol, MCP integration, Cloud Code, LLM-generated code, AI and CMS, developer tools, clean architecture, CMS history, open source philosophy, AGPL CMS".to_string());
+
+        let result = page.validate_keywords();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Keywords cannot exceed 255 characters (current: 302 characters)");
+        
+        // Check the actual length
+        assert_eq!(page.keywords.as_ref().unwrap().len(), 302);
     }
 
     #[test]

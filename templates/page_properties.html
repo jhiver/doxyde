@@ -118,8 +118,9 @@
             
             <div class="form-group">
                 <label for="keywords">Keywords:</label>
-                <input type="text" id="keywords" name="keywords" value="{% if page.keywords %}{{ page.keywords }}{% endif %}" placeholder="comma, separated, keywords">
+                <input type="text" id="keywords" name="keywords" value="{% if page.keywords %}{{ page.keywords }}{% endif %}" placeholder="comma, separated, keywords" maxlength="255">
                 <div class="help-text">Comma-separated keywords for SEO (max 255 characters)</div>
+                <div class="help-text" id="keywords-counter" style="text-align: right; color: #666;"></div>
             </div>
             
             <div class="form-group">
@@ -206,4 +207,30 @@
         <p><strong>Last Updated:</strong> {{ page.updated_at }}</p>
     </div>
 </div>
+
+<script>
+// Character counter for keywords field
+document.addEventListener('DOMContentLoaded', function() {
+    const keywordsInput = document.getElementById('keywords');
+    const counter = document.getElementById('keywords-counter');
+    
+    function updateCounter() {
+        const length = keywordsInput.value.length;
+        const remaining = 255 - length;
+        
+        counter.textContent = `${length} / 255 characters`;
+        
+        if (remaining < 20) {
+            counter.style.color = remaining < 0 ? '#dc3545' : '#ff6b6b';
+        } else {
+            counter.style.color = '#666';
+        }
+    }
+    
+    if (keywordsInput && counter) {
+        updateCounter();
+        keywordsInput.addEventListener('input', updateCounter);
+    }
+});
+</script>
 {% endblock %}

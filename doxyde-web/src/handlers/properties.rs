@@ -183,8 +183,41 @@ pub async fn update_page_properties_handler(
     page.updated_at = chrono::Utc::now();
 
     // Validate the page
-    if let Err(_e) = page.is_valid() {
-        return Err(StatusCode::BAD_REQUEST);
+    if let Err(validation_error) = page.is_valid() {
+        tracing::error!("Page validation failed: {}", validation_error);
+        
+        // Create an error response with the validation details
+        let error_html = format!(
+            r#"<!DOCTYPE html>
+<html>
+<head>
+    <title>Validation Error</title>
+    <style>
+        body {{ font-family: Inter, sans-serif; margin: 40px; background: #f5f5f5; }}
+        .error-box {{ background: white; border-radius: 8px; padding: 30px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); max-width: 600px; margin: 0 auto; }}
+        h1 {{ color: #dc3545; margin-bottom: 20px; }}
+        p {{ color: #666; line-height: 1.6; }}
+        .error-detail {{ background: #f8f9fa; padding: 15px; border-radius: 4px; border-left: 4px solid #dc3545; margin: 20px 0; }}
+        .back-link {{ display: inline-block; margin-top: 20px; color: #007bff; text-decoration: none; }}
+        .back-link:hover {{ text-decoration: underline; }}
+    </style>
+</head>
+<body>
+    <div class="error-box">
+        <h1>Validation Error</h1>
+        <p>The form could not be saved due to a validation error:</p>
+        <div class="error-detail">
+            <strong>{}</strong>
+        </div>
+        <p>Please go back and correct the error before submitting again.</p>
+        <a href="javascript:history.back()" class="back-link">← Go Back</a>
+    </div>
+</body>
+</html>"#,
+            html_escape::encode_text(&validation_error)
+        );
+        
+        return Ok((StatusCode::BAD_REQUEST, Html(error_html)).into_response());
     }
 
     // Save to database
