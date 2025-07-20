@@ -27,7 +27,7 @@ use tera::Context;
 
 use crate::{
     auth::CurrentUser, component_registry::get_component_registry, draft::get_or_create_draft,
-    template_context::add_base_context, AppState,
+    handlers::shared::add_action_bar_context, template_context::add_base_context, AppState,
 };
 
 #[derive(Debug, Deserialize)]
@@ -200,40 +200,9 @@ pub async fn edit_page_content_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    context.insert("can_edit", &true);
-    context.insert("action", ".edit");
-
-    // Check if page is movable (has valid move targets)
-    let is_movable = if let Some(page_id) = page.id {
-        if page.parent_page_id.is_some() {
-            // Only non-root pages can be moved
-            match page_repo.get_valid_move_targets(page_id).await {
-                Ok(targets) => !targets.is_empty(),
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-    context.insert("is_movable", &is_movable);
-
-    // Check if page can be deleted (not root and has no children)
-    let can_delete = if let Some(page_id) = page.id {
-        if page.parent_page_id.is_some() {
-            // Only non-root pages can be deleted
-            match page_repo.has_children(page_id).await {
-                Ok(has_children) => !has_children,
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-    context.insert("can_delete", &can_delete);
+    
+    // Add all action bar context variables
+    add_action_bar_context(&mut context, &state, &page, &user, ".edit").await?;
 
     // Get all pages for blog summary parent page dropdown
     let all_pages = match page_repo.list_by_site_id(site.id.unwrap()).await {
@@ -473,8 +442,9 @@ pub async fn new_page_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    context.insert("can_edit", &true);
-    context.insert("action", ".new");
+    
+    // Add all action bar context variables
+    add_action_bar_context(&mut context, &state, &page, &user, ".new").await?;
 
     // Render the new page template
     let html = state

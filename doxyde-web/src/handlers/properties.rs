@@ -25,7 +25,7 @@ use doxyde_db::repositories::PageRepository;
 use serde::Deserialize;
 use tera::Context;
 
-use super::edit::can_edit_page;
+use super::{edit::can_edit_page, shared::add_action_bar_context};
 use crate::{
     auth::CurrentUser, template_context::add_base_context, template_utils::discover_page_templates,
     AppState,
@@ -98,40 +98,9 @@ pub async fn page_properties_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    context.insert("can_edit", &true);
-    context.insert("action", ".properties");
-
-    // Check if page is movable (has valid move targets)
-    let is_movable = if let Some(page_id) = page.id {
-        if page.parent_page_id.is_some() {
-            // Only non-root pages can be moved
-            match page_repo.get_valid_move_targets(page_id).await {
-                Ok(targets) => !targets.is_empty(),
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-    context.insert("is_movable", &is_movable);
-
-    // Check if page can be deleted (not root and has no children)
-    let can_delete = if let Some(page_id) = page.id {
-        if page.parent_page_id.is_some() {
-            // Only non-root pages can be deleted
-            match page_repo.has_children(page_id).await {
-                Ok(has_children) => !has_children,
-                Err(_) => false,
-            }
-        } else {
-            false
-        }
-    } else {
-        false
-    };
-    context.insert("can_delete", &can_delete);
+    
+    // Add all action bar context variables
+    add_action_bar_context(&mut context, &state, &page, &user, ".properties").await?;
 
     // Discover available templates dynamically
     let templates_path = std::path::Path::new(&state.config.templates_dir);

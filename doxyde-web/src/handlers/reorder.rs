@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use super::shared::add_action_bar_context;
 use crate::{auth::CurrentUser, error::AppError, template_context::add_base_context, AppState};
 use axum::{
     extract::State,
@@ -48,11 +49,8 @@ pub async fn reorder_page_handler(
     State(state): State<Arc<AppState>>,
     site: Site,
     page: Page,
-    _current_user: CurrentUser,
+    current_user: CurrentUser,
 ) -> Result<Response, StatusCode> {
-    // Simple permission check - user must be logged in
-    // In production, you might want to check site permissions here
-    let can_edit = true;
 
     // Get child pages using the sorted method
     let page_repo = PageRepository::new(state.db.clone());
@@ -75,16 +73,14 @@ pub async fn reorder_page_handler(
         })
         .collect();
 
-    let has_children = !children.is_empty();
-
     let context = ReorderContext {
         site: site.clone(),
         page: page.clone(),
         children: child_pages,
         sort_mode: page.sort_mode.clone(),
-        can_edit,
+        can_edit: true,
         action: ".reorder".to_string(),
-        has_children,
+        has_children: !children.is_empty(),
     };
 
     // Convert to Tera context
@@ -129,10 +125,11 @@ pub async fn reorder_page_handler(
     tera_context.insert("page", &context.page);
     tera_context.insert("children", &context.children);
     tera_context.insert("sort_mode", &context.sort_mode);
-    tera_context.insert("can_edit", &context.can_edit);
-    tera_context.insert("action", &context.action);
-    tera_context.insert("has_children", &context.has_children);
     tera_context.insert("current_path", &current_path);
+    tera_context.insert("user", &current_user.user);
+    
+    // Add all action bar context variables
+    add_action_bar_context(&mut tera_context, &state, &page, &current_user, ".reorder").await?;
 
     match state.templates.render("page_reorder.html", &tera_context) {
         Ok(html) => Ok(Html(html).into_response()),

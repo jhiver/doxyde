@@ -25,6 +25,7 @@ use doxyde_db::repositories::{PageRepository, SiteUserRepository};
 use serde::Deserialize;
 use tera::Context;
 
+use super::shared::add_action_bar_context;
 use crate::{auth::CurrentUser, template_context::add_base_context, AppState};
 
 #[derive(Debug, Deserialize)]
@@ -97,8 +98,9 @@ pub async fn delete_page_handler(
     context.insert("page", &page);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    context.insert("can_edit", &true);
-    context.insert("action", ".delete");
+    
+    // Add all action bar context variables
+    add_action_bar_context(&mut context, &state, &page, &user, ".delete").await?;
 
     let html = state
         .templates
