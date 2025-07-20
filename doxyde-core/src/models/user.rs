@@ -85,6 +85,11 @@ impl User {
     pub fn verify_password(&self, password: &str) -> Result<bool> {
         use argon2::password_hash::{PasswordHash, PasswordVerifier};
 
+        // Check if password is starred/disabled
+        if self.password_hash.contains('*') {
+            return Err(anyhow::anyhow!("Password disabled"));
+        }
+
         let parsed_hash = PasswordHash::new(&self.password_hash)
             .map_err(|e| anyhow::anyhow!("Invalid password hash format: {}", e))?;
 
@@ -305,6 +310,42 @@ mod tests {
 
         // Should return error for invalid hash format
         assert!(user.verify_password("password").is_err());
+    }
+
+    #[test]
+    fn test_verify_password_starred_hash() {
+        let mut user = User::new(
+            "test@example.com".to_string(),
+            "testuser".to_string(),
+            "password",
+        )
+        .unwrap();
+
+        // Star the password hash to disable it
+        user.password_hash = format!("*{}", user.password_hash);
+
+        // Should return error for starred password
+        let result = user.verify_password("password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Password disabled"));
+    }
+
+    #[test]
+    fn test_verify_password_hash_with_stars_in_middle() {
+        let mut user = User::new(
+            "test@example.com".to_string(),
+            "testuser".to_string(),
+            "password",
+        )
+        .unwrap();
+
+        // Put stars in the middle of the hash
+        user.password_hash = user.password_hash.replace("$", "*$");
+
+        // Should return error for starred password
+        let result = user.verify_password("password");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Password disabled"));
     }
 
     #[test]

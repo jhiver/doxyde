@@ -147,7 +147,24 @@ pub async fn login(
                 })?;
             return Ok((jar, Html(html)).into_response());
         }
-        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+        Err(e) => {
+            // Check if it's a disabled password
+            if e.to_string().contains("Password disabled") {
+                let context =
+                    create_login_context(&state, &host, Some("Account is disabled")).await;
+                let html = state
+                    .templates
+                    .render("login.html", &context)
+                    .map_err(|e| {
+                        tracing::error!("Failed to render login.html: {:?}", e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+                return Ok((jar, Html(html)).into_response());
+            }
+            // Other errors (invalid hash format, etc.) are server errors
+            tracing::error!("Password verification error: {:?}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Create session
@@ -472,6 +489,64 @@ mod tests {
         assert!(response.is_ok());
 
         // Verify no session was created for inactive user
+        let session_repo = SessionRepository::new(pool);
+        let sessions = session_repo.find_by_user_id(user_id).await?;
+        assert_eq!(sessions.len(), 0);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_login_starred_password() -> Result<()> {
+        let pool = create_test_db().await?;
+        let templates = init_templates("templates", false)?;
+        let config = crate::config::Config {
+            database_url: "sqlite::memory:".to_string(),
+            host: "localhost".to_string(),
+            port: 3000,
+            templates_dir: "templates".to_string(),
+            session_secret: "test-secret".to_string(),
+            development_mode: false,
+            uploads_dir: "/tmp/test-uploads".to_string(),
+            max_upload_size: 1048576,
+        };
+        let state = AppState::new(pool.clone(), templates, config);
+
+        // Create user with starred password
+        let user_repo = UserRepository::new(pool.clone());
+        let user = User::new(
+            "test@example.com".to_string(),
+            "testuser".to_string(),
+            "password123",
+        )?;
+        let user_id = user_repo.create(&user).await?;
+        
+        // Star the password in the database
+        let starred_hash = format!("*{}", user.password_hash);
+        sqlx::query!(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            starred_hash,
+            user_id
+        )
+        .execute(&pool)
+        .await?;
+
+        let form = LoginForm {
+            username: "testuser".to_string(),
+            password: "password123".to_string(),
+        };
+
+        let jar = CookieJar::new();
+        let response = login(
+            Host("localhost:3000".to_string()),
+            State(state),
+            jar,
+            Form(form),
+        )
+        .await;
+        assert!(response.is_ok());
+
+        // Verify no session was created
         let session_repo = SessionRepository::new(pool);
         let sessions = session_repo.find_by_user_id(user_id).await?;
         assert_eq!(sessions.len(), 0);
