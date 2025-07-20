@@ -24,7 +24,14 @@
 
 <style>
 .blog-summary.list {
-    margin: 2rem 0;
+    margin: var(--space-xl) 0;
+}
+
+.summary-title {
+    margin-bottom: var(--space-lg);
+    color: var(--gray-900);
+    font-size: 1.75rem;
+    font-weight: 600;
 }
 
 .summary-list {
@@ -34,8 +41,17 @@
 }
 
 .summary-item {
-    padding: 1.5rem 0;
-    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-lg) 0;
+    border-bottom: 1px solid var(--gray-200);
+    transition: background-color 0.2s ease;
+}
+
+.summary-item:hover {
+    background-color: var(--gray-50);
+    margin-left: calc(-1 * var(--space-md));
+    margin-right: calc(-1 * var(--space-md));
+    padding-left: var(--space-md);
+    padding-right: var(--space-md);
 }
 
 .summary-item:first-child {
@@ -48,27 +64,29 @@
 }
 
 .summary-item-title {
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 var(--space-sm) 0;
     font-size: 1.25rem;
+    font-weight: 600;
 }
 
 .summary-item-title a {
-    color: var(--color-heading);
+    color: var(--gray-900);
     text-decoration: none;
+    transition: color 0.2s ease;
 }
 
 .summary-item-title a:hover {
-    color: var(--color-primary);
+    color: var(--primary-color);
 }
 
 .summary-item-description {
-    color: var(--color-text-secondary);
+    color: var(--gray-600);
     line-height: 1.6;
-    margin: 0.5rem 0;
+    margin: var(--space-sm) 0;
 }
 
 .summary-item-date {
     font-size: 0.875rem;
-    color: var(--color-text-muted);
+    color: var(--gray-500);
 }
 </style>
