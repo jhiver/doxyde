@@ -20,7 +20,10 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use doxyde_core::models::{page::Page, site::Site};
+use doxyde_core::{
+    models::{page::Page, site::Site},
+    utils::slug::generate_slug_from_title,
+};
 use doxyde_db::repositories::PageRepository;
 use serde::Deserialize;
 use tera::Context;
@@ -34,6 +37,7 @@ use crate::{
 #[derive(Debug, Deserialize)]
 pub struct PagePropertiesForm {
     pub title: String,
+    pub slug: Option<String>,
     pub description: Option<String>,
     pub keywords: Option<String>,
     pub template: String,
@@ -153,6 +157,20 @@ pub async fn update_page_properties_handler(
 
     // Update page properties
     page.title = form.title;
+    
+    // Handle slug change (only for non-root pages)
+    if page.parent_page_id.is_some() {
+        if let Some(new_slug) = form.slug.filter(|s| !s.is_empty()) {
+            // Only update if slug is different
+            if new_slug != page.slug {
+                page.slug = new_slug;
+            }
+        } else {
+            // Auto-generate slug from title if empty
+            page.slug = generate_slug_from_title(&page.title);
+        }
+    }
+    
     page.description = form.description.filter(|s| !s.is_empty());
     page.keywords = form.keywords.filter(|s| !s.is_empty());
     page.template = form.template;
@@ -170,16 +188,17 @@ pub async fn update_page_properties_handler(
     }
 
     // Save to database
-    let page_repo = PageRepository::new(state.db);
+    let page_repo = PageRepository::new(state.db.clone());
     page_repo
         .update(&page)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Build redirect path
+    // Build redirect path using the updated page
     let redirect_path = if page.parent_page_id.is_none() {
         "/".to_string()
     } else {
+        // Get the updated breadcrumb trail (which includes the new slug)
         let breadcrumb = page_repo
             .get_breadcrumb_trail(page.id.unwrap())
             .await

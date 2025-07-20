@@ -96,6 +96,21 @@
             </div>
             
             <div class="form-group">
+                <label for="slug">URL Slug:</label>
+                <input type="text" id="slug" name="slug" value="{{ page.slug }}" 
+                       pattern="[a-z0-9-]+" 
+                       {% if not page.parent_page_id %}disabled{% endif %}>
+                <div class="help-text">
+                    URL-friendly name (lowercase letters, numbers, and hyphens only).
+                    {% if not page.parent_page_id %}
+                        Root pages cannot have their slug changed.
+                    {% else %}
+                        Leave empty to auto-generate from title.
+                    {% endif %}
+                </div>
+            </div>
+            
+            <div class="form-group">
                 <label for="description">Description:</label>
                 <textarea id="description" name="description" placeholder="Brief description of the page content">{% if page.description %}{{ page.description }}{% endif %}</textarea>
                 <div class="help-text">Used for SEO and may appear in search results (max 500 characters)</div>

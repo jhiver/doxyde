@@ -41,6 +41,28 @@ pub struct NewPageForm {
     pub title: String,
     #[serde(default)]
     pub slug: String,
+    pub description: Option<String>,
+    pub keywords: Option<String>,
+    #[serde(default = "default_template")]
+    pub template: String,
+    #[serde(default = "default_meta_robots")]
+    pub meta_robots: String,
+    pub canonical_url: Option<String>,
+    pub og_image_url: Option<String>,
+    #[serde(default = "default_structured_data_type")]
+    pub structured_data_type: String,
+}
+
+fn default_template() -> String {
+    "default".to_string()
+}
+
+fn default_meta_robots() -> String {
+    "index,follow".to_string()
+}
+
+fn default_structured_data_type() -> String {
+    "WebPage".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -483,6 +505,15 @@ pub async fn create_page_handler(
             form.title.clone(),
         )
     };
+
+    // Set all the additional properties from the form
+    new_page.description = form.description.filter(|s| !s.is_empty());
+    new_page.keywords = form.keywords.filter(|s| !s.is_empty());
+    new_page.template = form.template;
+    new_page.meta_robots = form.meta_robots;
+    new_page.canonical_url = form.canonical_url.filter(|s| !s.is_empty());
+    new_page.og_image_url = form.og_image_url.filter(|s| !s.is_empty());
+    new_page.structured_data_type = form.structured_data_type;
 
     // Validate the page (except slug which will be auto-generated if needed)
     if new_page.validate_title().is_err() {

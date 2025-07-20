@@ -77,6 +77,7 @@
     {% endif %}
     
     <form method="post">
+        <!-- Basic Properties -->
         <div class="form-group">
             <label for="title">Page Title</label>
             <input type="text" id="title" name="title" required 
@@ -95,6 +96,82 @@
                 The page will be accessible at: {{ current_path }}/<span id="slug-preview">slug</span>
             </div>
         </div>
+        
+        <div class="form-group">
+            <label for="description">Description (Optional)</label>
+            <textarea id="description" name="description" placeholder="Brief description of the page content"></textarea>
+            <div class="help-text">Used for SEO and may appear in search results (max 500 characters)</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="keywords">Keywords (Optional)</label>
+            <input type="text" id="keywords" name="keywords" placeholder="comma, separated, keywords">
+            <div class="help-text">Comma-separated keywords for SEO (max 255 characters)</div>
+        </div>
+        
+        <div class="form-group">
+            <label for="template">Page Template</label>
+            <select id="template" name="template">
+                <option value="default" selected>Default</option>
+                <option value="full_width">Full Width</option>
+                <option value="landing">Landing</option>
+                <option value="blog">Blog</option>
+            </select>
+            <div class="help-text">Choose the layout template for this page</div>
+        </div>
+        
+        <!-- Advanced Settings (collapsible) -->
+        <details style="margin-top: 30px;">
+            <summary style="cursor: pointer; font-weight: bold; margin-bottom: 15px;">Advanced Settings (Optional)</summary>
+            
+            <!-- SEO Settings -->
+            <fieldset style="border: 1px solid #ddd; padding: 15px; margin-bottom: 20px;">
+                <legend style="font-weight: bold;">SEO Settings</legend>
+                
+                <div class="form-group">
+                    <label for="meta_robots">Search Engine Instructions</label>
+                    <select id="meta_robots" name="meta_robots">
+                        <option value="index,follow" selected>Index & Follow (Default)</option>
+                        <option value="noindex,follow">Don't Index, Follow Links</option>
+                        <option value="index,nofollow">Index, Don't Follow Links</option>
+                        <option value="noindex,nofollow">Don't Index or Follow</option>
+                    </select>
+                    <div class="help-text">Control how search engines index this page</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="canonical_url">Canonical URL</label>
+                    <input type="text" id="canonical_url" name="canonical_url" placeholder="https://example.com/preferred-url">
+                    <div class="help-text">Override the canonical URL if this page has duplicate content (optional)</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="structured_data_type">Content Type</label>
+                    <select id="structured_data_type" name="structured_data_type">
+                        <option value="WebPage" selected>WebPage</option>
+                        <option value="Article">Article</option>
+                        <option value="BlogPosting">BlogPosting</option>
+                        <option value="NewsArticle">NewsArticle</option>
+                        <option value="AboutPage">AboutPage</option>
+                        <option value="ContactPage">ContactPage</option>
+                        <option value="FAQPage">FAQPage</option>
+                        <option value="ProfilePage">ProfilePage</option>
+                    </select>
+                    <div class="help-text">Schema.org type for structured data</div>
+                </div>
+            </fieldset>
+            
+            <!-- Social Media -->
+            <fieldset style="border: 1px solid #ddd; padding: 15px;">
+                <legend style="font-weight: bold;">Social Media</legend>
+                
+                <div class="form-group">
+                    <label for="og_image_url">Social Media Image URL</label>
+                    <input type="text" id="og_image_url" name="og_image_url" placeholder="https://example.com/image.jpg">
+                    <div class="help-text">Image URL for social media sharing (recommended: 1200x630px)</div>
+                </div>
+            </fieldset>
+        </details>
         
         <div style="margin-top: 30px;">
             <button type="submit" class="button">Create Page</button>
