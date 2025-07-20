@@ -19,14 +19,20 @@ use axum::{
     http::{header, StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
+use once_cell::sync::Lazy;
 
 use crate::{
+    action_registry::ActionRegistry,
     auth::{CurrentUser, OptionalUser},
     error::AppError,
     handlers::serve_image_handler,
     AppState,
 };
+
+// Global action registry
+static ACTION_REGISTRY: Lazy<ActionRegistry> = Lazy::new(ActionRegistry::build_default);
 
 /// Represents a parsed content path with optional action
 #[derive(Debug)]
@@ -71,77 +77,56 @@ impl ContentPath {
     }
 }
 
-/// Main content handler - resolves sites and pages dynamically
-pub async fn content_handler(
-    Host(host): Host,
-    uri: Uri,
-    State(state): State<AppState>,
-    user: OptionalUser,
-) -> Result<Response, AppError> {
-    // Parse the path to extract content path and action
-    let path = uri.path();
-
-    // Check if this is an image request (format: /slug.extension)
-    if let Some((slug, format)) = check_image_pattern(path) {
-        return handle_image_request(state, host.to_string(), slug, format).await;
-    }
-
-    let content_path = ContentPath::parse(path);
-
-    tracing::debug!(
-        path = %path,
-        content_path = ?content_path,
-        "Processing content request"
-    );
-
-    // Use the full host as domain (including port if present)
-    let domain = &host;
-
-    // Find the site by domain
+/// Resolve site from host
+async fn resolve_site(state: &AppState, host: &str) -> Result<Site, AppError> {
     let site_repo = SiteRepository::new(state.db.clone());
-    let site = match site_repo.find_by_domain(domain).await {
-        Ok(Some(site)) => site,
+    match site_repo.find_by_domain(host).await {
+        Ok(Some(site)) => Ok(site),
         Ok(None) => {
-            return Err(AppError::not_found(format!(
+            Err(AppError::not_found(format!(
                 "Site not found for domain: {}",
-                domain
+                host
             )))
         }
         Err(e) => {
             tracing::error!(
                 error = ?e,
-                domain = %domain,
+                domain = %host,
                 "Failed to query site by domain"
             );
-            return Err(
+            Err(
                 AppError::internal_server_error("Failed to query site by domain")
                     .with_details(format!("{:?}", e)),
-            );
+            )
         }
-    };
+    }
+}
 
-    // Navigate the page hierarchy
-    let page_repo = PageRepository::new(state.db.clone());
-    let page = if content_path.path == "/" {
+/// Navigate to page through path segments
+async fn navigate_to_page(
+    page_repo: &PageRepository,
+    site_id: i64,
+    path: &str,
+) -> Result<Page, AppError> {
+    if path == "/" {
         // Get root page
-        tracing::debug!("Getting root page for site {}", site.id.unwrap());
-        match page_repo.get_root_page(site.id.unwrap()).await {
-            Ok(Some(page)) => page,
-            Ok(None) => return Err(AppError::not_found("Root page not found")),
+        tracing::debug!("Getting root page for site {}", site_id);
+        match page_repo.get_root_page(site_id).await {
+            Ok(Some(page)) => Ok(page),
+            Ok(None) => Err(AppError::not_found("Root page not found")),
             Err(e) => {
                 tracing::error!(
                     error = ?e,
-                    site_id = ?site.id,
+                    site_id = ?site_id,
                     "Failed to get root page"
                 );
-                return Err(AppError::internal_server_error("Failed to get root page")
-                    .with_details(format!("{:?}", e)));
+                Err(AppError::internal_server_error("Failed to get root page")
+                    .with_details(format!("{:?}", e)))
             }
         }
     } else {
         // Navigate through the path segments
-        let segments: Vec<&str> = content_path
-            .path
+        let segments: Vec<&str> = path
             .split('/')
             .filter(|s| !s.is_empty())
             .collect();
@@ -149,13 +134,13 @@ pub async fn content_handler(
         tracing::debug!("Navigating to page through segments: {:?}", segments);
 
         // Start from root page
-        let mut current_page = match page_repo.get_root_page(site.id.unwrap()).await {
+        let mut current_page = match page_repo.get_root_page(site_id).await {
             Ok(Some(page)) => page,
             Ok(None) => return Err(AppError::not_found("Root page not found")),
             Err(e) => {
                 tracing::error!(
                     error = ?e,
-                    site_id = ?site.id,
+                    site_id = ?site_id,
                     "Failed to get root page for navigation"
                 );
                 return Err(AppError::internal_server_error(
@@ -191,10 +176,15 @@ pub async fn content_handler(
                 .ok_or_else(|| AppError::not_found(format!("Page not found: {}", segment)))?;
         }
 
-        current_page
-    };
+        Ok(current_page)
+    }
+}
 
-    // Handle trailing slash redirects for canonical URLs
+/// Handle trailing slash redirects for canonical URLs
+fn handle_trailing_slash_redirect(
+    uri: &Uri,
+    content_path: &ContentPath,
+) -> Option<Response> {
     let original_path = uri.path();
 
     match content_path.action {
@@ -203,16 +193,54 @@ pub async fn content_handler(
             // But only for non-root pages
             if content_path.path != "/" && !original_path.ends_with('/') {
                 let redirect_path = format!("{}/", original_path);
-                return Ok(axum::response::Redirect::permanent(&redirect_path).into_response());
+                return Some(axum::response::Redirect::permanent(&redirect_path).into_response());
             }
         }
         Some(ref _action) => {
             // For actions, remove trailing slash for canonical URLs
             if original_path.ends_with('/') {
                 let redirect_path = original_path.trim_end_matches('/');
-                return Ok(axum::response::Redirect::permanent(redirect_path).into_response());
+                return Some(axum::response::Redirect::permanent(redirect_path).into_response());
             }
         }
+    }
+
+    None
+}
+
+/// Main content handler - resolves sites and pages dynamically
+pub async fn content_handler(
+    Host(host): Host,
+    uri: Uri,
+    State(state): State<AppState>,
+    user: OptionalUser,
+) -> Result<Response, AppError> {
+    // Parse the path to extract content path and action
+    let path = uri.path();
+
+    // Check if this is an image request (format: /slug.extension)
+    if let Some((slug, format)) = check_image_pattern(path) {
+        return handle_image_request(state, host.to_string(), slug, format).await;
+    }
+
+    let content_path = ContentPath::parse(path);
+
+    tracing::debug!(
+        path = %path,
+        content_path = ?content_path,
+        "Processing content request"
+    );
+
+    // Resolve site from host
+    let site = resolve_site(&state, &host).await?;
+
+    // Navigate to the requested page
+    let page_repo = PageRepository::new(state.db.clone());
+    let page = navigate_to_page(&page_repo, site.id.unwrap(), &content_path.path).await?;
+
+    // Handle trailing slash redirects
+    if let Some(redirect) = handle_trailing_slash_redirect(&uri, &content_path) {
+        return Ok(redirect);
     }
 
     tracing::info!(
@@ -222,273 +250,19 @@ pub async fn content_handler(
         "Routing request to handler"
     );
 
-    // Route based on action
-    match content_path.action.as_deref() {
-        None => {
-            // Display the page
-            crate::handlers::pages::show_page_handler(state, site, page, user)
-                .await
-                .map(|r| r.into_response())
-                .map_err(|e| {
-                    AppError::internal_server_error("Failed to render page")
-                        .with_details(format!("Status: {:?}", e))
-                })
-        }
-        Some(".edit") => {
-            // Edit page content handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::edit_page_content_handler(state, site, page, current_user)
-                    .await
-                {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render edit page"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to edit this page",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render edit page"),
-                            ),
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".content") => {
-            // Content handler (same as .edit for now) - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::edit_page_content_handler(state, site, page, current_user)
-                    .await
-                {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render content edit page"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to edit this page",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => {
-                                Err(AppError::internal_server_error(
-                                    "Failed to render content edit page",
-                                ))
-                            }
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".properties") => {
-            // Edit page properties handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::page_properties_handler(state, site, page, current_user)
-                    .await
-                {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render properties page"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to edit this page",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render properties page"),
-                            ),
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".new") => {
-            // New page handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::new_page_handler(state, site, page, current_user).await {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render new page form"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to create pages",
-                            )),
-                            StatusCode::NOT_FOUND => {
-                                Err(AppError::not_found("Parent page not found"))
-                            }
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render new page form"),
-                            ),
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".move") => {
-            // Move page handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::move_page_handler(state, site, page, current_user).await {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render move page form"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to move this page",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render move page form"),
-                            ),
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".reorder") => {
-            // Reorder children handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::reorder_page_handler(
-                    State(state.clone().into()),
-                    site,
-                    page,
-                    current_user,
-                )
-                .await
-                {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render reorder page form"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to reorder pages",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => {
-                                Err(AppError::internal_server_error(
-                                    "Failed to render reorder page form",
-                                ))
-                            }
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".upload-image") => {
-            // Image upload handler - requires authentication
-            if let OptionalUser(Some(_current_user)) = user {
-                // This will be handled by POST action handler
-                Err(AppError::new(
-                    StatusCode::METHOD_NOT_ALLOWED,
-                    "Use POST for image upload",
-                ))
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".upload-component-image") => {
-            // Component image upload handler - requires authentication
-            if let OptionalUser(Some(_current_user)) = user {
-                // This will be handled by POST action handler
-                Err(AppError::new(
-                    StatusCode::METHOD_NOT_ALLOWED,
-                    "Use POST for component image upload",
-                ))
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".delete") => {
-            // Delete page handler - requires authentication
-            if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::delete_page_handler(state, site, page, current_user).await {
-                    Ok(response) => Ok(response),
-                    Err(status) => {
-                        tracing::error!(
-                            status = ?status,
-                            "Failed to render delete page"
-                        );
-                        match status {
-                            StatusCode::FORBIDDEN => Err(AppError::forbidden(
-                                "You don't have permission to delete this page",
-                            )),
-                            StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render delete page"),
-                            ),
-                            _ => Err(AppError::new(status, "An error occurred")),
-                        }
-                    }
-                }
-            } else {
-                // Redirect to login
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(".add-component") => {
-            // Add component handler - requires authentication
-            if let OptionalUser(Some(_current_user)) = user {
-                // This should be a POST request with form data
-                // For now, redirect to edit page
-                Ok(
-                    axum::response::Redirect::to(&format!("{}/.edit", content_path.path))
-                        .into_response(),
-                )
-            } else {
-                Ok(axum::response::Redirect::to("/.login").into_response())
-            }
-        }
-        Some(action) => {
-            // Unknown action
-            tracing::warn!(
-                action = %action,
-                "Unknown action requested"
-            );
-            Err(AppError::not_found(format!("Unknown action: {}", action)))
-        }
+    // Get the action name (empty string for display)
+    let action_name = content_path.action.as_deref().unwrap_or("");
+
+    // Look up handler in registry
+    if let Some(handler) = ACTION_REGISTRY.get(action_name) {
+        handler(state, site, page, user).await
+    } else {
+        // Unknown action
+        tracing::warn!(
+            action = %action_name,
+            "Unknown action requested"
+        );
+        Err(AppError::not_found(format!("Unknown action: {}", action_name)))
     }
 }
 

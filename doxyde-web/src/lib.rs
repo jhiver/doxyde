@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod action_registry;
 pub mod auth;
 pub mod autoreload_templates;
 pub mod component_registry;
