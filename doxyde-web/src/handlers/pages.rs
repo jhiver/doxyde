@@ -56,7 +56,7 @@ pub async fn show_page_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get components if we have a published version
-    let components = if let Some(version) = &published_version {
+    let mut components = if let Some(version) = &published_version {
         component_repo
             .list_by_page_version(version.id.unwrap())
             .await
@@ -64,6 +64,64 @@ pub async fn show_page_handler(
     } else {
         Vec::new()
     };
+
+    // Process dynamic components (e.g., blog_summary)
+    for component in &mut components {
+        if component.component_type == "blog_summary" {
+            // Parse the config
+            if let Ok(mut config) =
+                serde_json::from_value::<serde_json::Value>(component.content.clone())
+            {
+                if let Some(parent_page_id) = config.get("parent_page_id").and_then(|v| v.as_i64())
+                {
+                    // Fetch child pages
+                    let child_pages = page_repo
+                        .list_children_sorted(parent_page_id)
+                        .await
+                        .unwrap_or_default();
+
+                    // Get item count
+                    let item_count = config
+                        .get("item_count")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(5) as usize;
+
+                    // Build page data with URLs
+                    let mut pages_data = Vec::new();
+                    for child in child_pages.iter().take(item_count) {
+                        // Build URL for child page
+                        let child_breadcrumb = page_repo
+                            .get_breadcrumb_trail(child.id.unwrap())
+                            .await
+                            .unwrap_or_default();
+
+                        let child_url = if child_breadcrumb.len() <= 1 {
+                            "/".to_string()
+                        } else {
+                            let path_parts: Vec<&str> = child_breadcrumb[1..]
+                                .iter()
+                                .map(|p| p.slug.as_str())
+                                .collect();
+                            format!("/{}", path_parts.join("/"))
+                        };
+
+                        pages_data.push(serde_json::json!({
+                            "id": child.id,
+                            "title": child.title,
+                            "slug": child.slug,
+                            "description": child.description,
+                            "created_at": child.created_at.format("%B %d, %Y").to_string(),
+                            "url": child_url
+                        }));
+                    }
+
+                    // Inject pages data into component content
+                    config["pages"] = serde_json::json!(pages_data);
+                    component.content = config;
+                }
+            }
+        }
+    }
 
     // Get child pages using sorted method
     let children = page_repo

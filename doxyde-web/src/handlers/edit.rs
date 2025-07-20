@@ -26,7 +26,8 @@ use serde::Deserialize;
 use tera::Context;
 
 use crate::{
-    auth::CurrentUser, draft::get_or_create_draft, template_context::add_base_context, AppState,
+    auth::CurrentUser, component_registry::get_component_registry, draft::get_or_create_draft,
+    template_context::add_base_context, AppState,
 };
 
 #[derive(Debug, Deserialize)]
@@ -234,9 +235,27 @@ pub async fn edit_page_content_handler(
     };
     context.insert("can_delete", &can_delete);
 
+    // Get all pages for blog summary parent page dropdown
+    let all_pages = match page_repo.list_by_site_id(site.id.unwrap()).await {
+        Ok(pages) => pages,
+        Err(e) => {
+            tracing::error!(
+                error = ?e,
+                site_id = ?site.id,
+                "Failed to list all pages for site"
+            );
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    context.insert("all_pages", &all_pages);
+
     // Render the edit template
+    tracing::info!("About to render page_edit.html template");
     let html = match state.templates.render("page_edit.html", &context) {
-        Ok(rendered) => rendered,
+        Ok(rendered) => {
+            tracing::info!("Successfully rendered page_edit.html");
+            rendered
+        },
         Err(e) => {
             tracing::error!(
                 error = ?e,
@@ -258,6 +277,12 @@ pub async fn add_component_handler(
     user: CurrentUser,
     Form(form): Form<AddComponentForm>,
 ) -> Result<Response, StatusCode> {
+    tracing::info!(
+        "Adding component - type: {}, content: {}",
+        form.component_type,
+        form.content
+    );
+
     // Check permissions
     if !can_edit_page(&state, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
@@ -272,63 +297,74 @@ pub async fn add_component_handler(
         Some(user.user.username.clone()),
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!("Failed to get or create draft: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Get current components to determine position
     let components = component_repo
         .list_by_page_version(draft_version.id.unwrap())
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to list components: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     let next_position = components.len() as i32;
 
-    // Create component content based on type
-    let content = match form.component_type.as_str() {
-        "text" | "markdown" => serde_json::json!({
-            "text": form.content
-        }),
-        "html" => serde_json::json!({
-            "html": form.content
-        }),
-        "code" => serde_json::json!({
-            "code": form.content,
-            "language": "plaintext"
-        }),
-        "image" => {
-            // Try to parse as JSON first (in case it's coming from our updated form)
-            if let Ok(json_content) = serde_json::from_str::<serde_json::Value>(&form.content) {
-                json_content
-            } else {
-                // Fallback to old format
-                serde_json::json!({
-                    "src": form.content,
-                    "alt": ""
-                })
-            }
+    // Use the component registry to parse content
+    let registry = get_component_registry();
+    let content = match registry.parse_content(&form.component_type, &form.content) {
+        Ok(parsed_content) => {
+            tracing::info!("Parsed content: {:?}", parsed_content);
+            parsed_content
+        },
+        Err(e) => {
+            tracing::error!("Failed to parse component content: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
         }
-        _ => serde_json::json!({
-            "content": form.content
-        }),
     };
 
+    // Validate the content if the handler provides validation
+    if let Some(handler) = registry.get_handler(&form.component_type) {
+        if let Err(e) = handler.validate_content(&content) {
+            tracing::error!("Component content validation failed: {}", e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
     // Create new component
-    let component = Component::new(
+    let mut component = Component::new(
         draft_version.id.unwrap(),
-        form.component_type,
+        form.component_type.clone(),
         next_position,
         content,
     );
 
+    // Set the correct template for blog_summary components
+    if form.component_type == "blog_summary" {
+        component.template = "cards".to_string();
+    }
+
+    tracing::info!("Creating component: {:?}", component);
+
     component_repo
         .create(&component)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to create component: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Normalize positions after adding component
     component_repo
         .normalize_positions(draft_version.id.unwrap())
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!("Failed to normalize positions: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Redirect back to edit page
     let redirect_path = build_page_path(&state, &page).await?;
@@ -490,7 +526,7 @@ pub async fn create_page_handler(
         .list_children(parent_page.id.unwrap())
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Set position to be after all existing siblings
     new_page.position = siblings.len() as i32;
 
@@ -723,34 +759,31 @@ pub async fn save_draft_handler(
         tracing::info!("  Title: {:?}", title);
         tracing::info!("  Content: {}", content_str);
 
-        // Parse content based on component type
-        let content = match component_type.as_str() {
-            "text" | "markdown" => serde_json::json!({
-                "text": content_str
-            }),
-            "html" => serde_json::json!({
-                "html": content_str
-            }),
-            "code" => serde_json::json!({
-                "code": content_str,
-                "language": "plaintext"
-            }),
-            "image" => {
-                // Try to parse as JSON first (in case it's already JSON)
-                if let Ok(json_content) = serde_json::from_str::<serde_json::Value>(content_str) {
-                    json_content
-                } else {
-                    // Fallback to old format
-                    serde_json::json!({
-                        "src": content_str,
-                        "alt": ""
-                    })
-                }
+        // Use the component registry to parse content
+        let registry = get_component_registry();
+        let content = match registry.parse_content(&component_type, content_str) {
+            Ok(parsed_content) => parsed_content,
+            Err(e) => {
+                tracing::error!(
+                    "Failed to parse component content for type {}: {}",
+                    component_type,
+                    e
+                );
+                return Err(StatusCode::BAD_REQUEST);
             }
-            _ => serde_json::json!({
-                "content": content_str
-            }),
         };
+
+        // Validate the content if the handler provides validation
+        if let Some(handler) = registry.get_handler(&component_type) {
+            if let Err(e) = handler.validate_content(&content) {
+                tracing::error!(
+                    "Component content validation failed for type {}: {}",
+                    component_type,
+                    e
+                );
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
 
         // Update the component
         match component_repo

@@ -76,7 +76,7 @@ pub async fn reorder_page_handler(
         .collect();
 
     let has_children = !children.is_empty();
-    
+
     let context = ReorderContext {
         site: site.clone(),
         page: page.clone(),
@@ -89,22 +89,22 @@ pub async fn reorder_page_handler(
 
     // Convert to Tera context
     let mut tera_context = tera::Context::new();
-    
+
     // Add base context (site_title, root_page_title, logo data, navigation)
     add_base_context(&mut tera_context, &state, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     // Build current path by traversing parent pages
     let mut path_parts = Vec::new();
     let mut current_page = Some(page.clone());
-    
+
     // Build path from bottom to top
     while let Some(p) = current_page {
         if p.parent_page_id.is_some() {
             path_parts.push(p.slug.clone());
         }
-        
+
         // Get parent page
         if let Some(parent_id) = p.parent_page_id {
             match page_repo.find_by_id(parent_id).await {
@@ -115,17 +115,17 @@ pub async fn reorder_page_handler(
             current_page = None;
         }
     }
-    
+
     // Reverse to get top-to-bottom order
     path_parts.reverse();
-    
+
     // Build the path
     let current_path = if path_parts.is_empty() {
         "/".to_string()
     } else {
         format!("/{}", path_parts.join("/"))
     };
-    
+
     tera_context.insert("page", &context.page);
     tera_context.insert("children", &context.children);
     tera_context.insert("sort_mode", &context.sort_mode);
@@ -133,7 +133,7 @@ pub async fn reorder_page_handler(
     tera_context.insert("action", &context.action);
     tera_context.insert("has_children", &context.has_children);
     tera_context.insert("current_path", &current_path);
-    
+
     match state.templates.render("page_reorder.html", &tera_context) {
         Ok(html) => Ok(Html(html).into_response()),
         Err(e) => {
@@ -160,25 +160,19 @@ pub async fn update_page_order_handler(
     if page.sort_mode != sort_mode {
         let mut updated_page = page.clone();
         updated_page.sort_mode = sort_mode.clone();
-        page_repo
-            .update(&updated_page)
-            .await
-            .map_err(|e| {
-                tracing::error!(error = ?e, "Failed to update page sort mode");
-                AppError::internal_server_error("Failed to update page sort mode")
-            })?;
+        page_repo.update(&updated_page).await.map_err(|e| {
+            tracing::error!(error = ?e, "Failed to update page sort mode");
+            AppError::internal_server_error("Failed to update page sort mode")
+        })?;
     }
 
     // If manual mode and positions provided, update them
     if sort_mode == "manual" {
         if let Some(positions) = positions {
-            page_repo
-                .update_positions(&positions)
-                .await
-                .map_err(|e| {
-                    tracing::error!(error = ?e, "Failed to update page positions");
-                    AppError::internal_server_error("Failed to update page positions")
-                })?;
+            page_repo.update_positions(&positions).await.map_err(|e| {
+                tracing::error!(error = ?e, "Failed to update page positions");
+                AppError::internal_server_error("Failed to update page positions")
+            })?;
         }
     }
 

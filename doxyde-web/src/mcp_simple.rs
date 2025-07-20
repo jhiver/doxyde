@@ -1,9 +1,9 @@
-use crate::services::McpService;
 use crate::services::mcp_service::PageInfo;
+use crate::services::McpService;
 use anyhow::Result;
+use doxyde_core::models::Page;
 use serde_json::{json, Value};
 use sqlx::SqlitePool;
-use doxyde_core::models::Page;
 
 // Define JSON-RPC types
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -172,30 +172,33 @@ impl SimpleMcpServer {
     async fn handle_resources_list(&self, id: Value) -> Result<Value> {
         // Get pages in breadth-first order with 100 page limit
         let pages = self.get_pages_breadth_first(100).await?;
-        
+
         // Convert pages to MCP resources
-        let resources: Vec<Value> = pages.into_iter().map(|page| {
-            let page_type = if page.parent_id.is_none() {
-                "Homepage"
-            } else {
-                "Page"
-            };
-            
-            let description = format!(
-                "{} • Template: {} • Path: {}",
-                page_type,
-                page.template.as_deref().unwrap_or("default"),
-                page.path
-            );
-            
-            json!({
-                "uri": format!("page://{}", page.id),
-                "name": page.title,
-                "description": description,
-                "mimeType": "text/html"
+        let resources: Vec<Value> = pages
+            .into_iter()
+            .map(|page| {
+                let page_type = if page.parent_id.is_none() {
+                    "Homepage"
+                } else {
+                    "Page"
+                };
+
+                let description = format!(
+                    "{} • Template: {} • Path: {}",
+                    page_type,
+                    page.template.as_deref().unwrap_or("default"),
+                    page.path
+                );
+
+                json!({
+                    "uri": format!("page://{}", page.id),
+                    "name": page.title,
+                    "description": description,
+                    "mimeType": "text/html"
+                })
             })
-        }).collect();
-        
+            .collect();
+
         Ok(json!({
             "jsonrpc": "2.0",
             "id": id,
@@ -815,7 +818,12 @@ impl SimpleMcpServer {
         let service = McpService::new(self.pool.clone(), self.site_id);
 
         let component_info = service
-            .update_component_markdown(params.component_id, params.text, params.title, params.template)
+            .update_component_markdown(
+                params.component_id,
+                params.text,
+                params.title,
+                params.template,
+            )
             .await?;
 
         Ok(vec![json!({
@@ -888,39 +896,43 @@ impl SimpleMcpServer {
     async fn get_pages_breadth_first(&self, limit: usize) -> Result<Vec<PageInfo>> {
         use doxyde_db::repositories::PageRepository;
         use std::collections::VecDeque;
-        
+
         let page_repo = PageRepository::new(self.pool.clone());
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        
+
         // Create a map of page_id to children
-        let mut children_map: std::collections::HashMap<Option<i64>, Vec<&Page>> = std::collections::HashMap::new();
-        
+        let mut children_map: std::collections::HashMap<Option<i64>, Vec<&Page>> =
+            std::collections::HashMap::new();
+
         for page in &all_pages {
-            children_map.entry(page.parent_page_id).or_insert_with(Vec::new).push(page);
+            children_map
+                .entry(page.parent_page_id)
+                .or_insert_with(Vec::new)
+                .push(page);
         }
-        
+
         // Sort children by position
         for children in children_map.values_mut() {
             children.sort_by_key(|p| p.position);
         }
-        
+
         // Breadth-first traversal
         let mut result = Vec::new();
         let mut queue = VecDeque::new();
-        
+
         // Start with root pages (parent_page_id = None)
         if let Some(roots) = children_map.get(&None) {
             for root in roots {
                 queue.push_back(root);
             }
         }
-        
+
         // Process queue in breadth-first order
         while let Some(page) = queue.pop_front() {
             if result.len() >= limit {
                 break;
             }
-            
+
             // Convert to PageInfo
             let page_info = PageInfo {
                 id: page.id.unwrap(),
@@ -932,9 +944,9 @@ impl SimpleMcpServer {
                 has_children: children_map.contains_key(&page.id),
                 template: Some(page.template.clone()),
             };
-            
+
             result.push(page_info);
-            
+
             // Add children to queue
             if let Some(children) = children_map.get(&page.id) {
                 for child in children {
@@ -942,20 +954,20 @@ impl SimpleMcpServer {
                 }
             }
         }
-        
+
         Ok(result)
     }
-    
+
     // Helper to build page path
     async fn build_page_path(&self, all_pages: &[Page], page: &Page) -> Result<String> {
         // Special case for root page
         if page.parent_page_id.is_none() {
             return Ok("/".to_string());
         }
-        
+
         let mut path_parts = vec![page.slug.clone()];
         let mut current_parent = page.parent_page_id;
-        
+
         while let Some(parent_id) = current_parent {
             if let Some(parent) = all_pages.iter().find(|p| p.id == Some(parent_id)) {
                 // Don't include root page slug in path
@@ -967,7 +979,7 @@ impl SimpleMcpServer {
                 break;
             }
         }
-        
+
         path_parts.reverse();
         Ok(format!("/{}", path_parts.join("/")))
     }
@@ -1210,7 +1222,9 @@ fn extract_component_id(arguments: &Value) -> Result<i64> {
         .ok_or_else(|| anyhow::anyhow!("component_id is required"))
 }
 
-fn extract_create_component_markdown_params(arguments: &Value) -> Result<CreateComponentMarkdownParams> {
+fn extract_create_component_markdown_params(
+    arguments: &Value,
+) -> Result<CreateComponentMarkdownParams> {
     let page_id = arguments
         .get("page_id")
         .and_then(|v| v.as_i64())
@@ -1240,7 +1254,9 @@ fn extract_create_component_markdown_params(arguments: &Value) -> Result<CreateC
     })
 }
 
-fn extract_update_component_markdown_params(arguments: &Value) -> Result<UpdateComponentMarkdownParams> {
+fn extract_update_component_markdown_params(
+    arguments: &Value,
+) -> Result<UpdateComponentMarkdownParams> {
     let component_id = arguments
         .get("component_id")
         .and_then(|v| v.as_i64())
@@ -2181,7 +2197,10 @@ mod tests {
         assert_eq!(component["component_type"], "markdown");
         assert_eq!(component["title"], "Welcome Section");
         assert_eq!(component["template"], "hero");
-        assert_eq!(component["content"]["text"], "# Hello World\n\nThis is a **markdown** component.");
+        assert_eq!(
+            component["content"]["text"],
+            "# Hello World\n\nThis is a **markdown** component."
+        );
 
         Ok(())
     }
@@ -2252,7 +2271,7 @@ mod tests {
             .unwrap();
         let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
         let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
-        
+
         // Create a test page
         let create_page_req = json!({
             "jsonrpc": "2.0",
@@ -2267,9 +2286,11 @@ mod tests {
                 }
             }
         });
-        
+
         let create_resp = server.handle_request(create_page_req).await?;
-        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_text = create_resp["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
         let page_info: serde_json::Value = serde_json::from_str(page_text)?;
         let page_id = page_info["id"].as_i64().unwrap();
 
@@ -2338,7 +2359,7 @@ mod tests {
             .unwrap();
         let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
         let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
-        
+
         // Create a test page
         let create_page_req = json!({
             "jsonrpc": "2.0",
@@ -2353,9 +2374,11 @@ mod tests {
                 }
             }
         });
-        
+
         let create_resp = server.handle_request(create_page_req).await?;
-        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_text = create_resp["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
         let page_info: serde_json::Value = serde_json::from_str(page_text)?;
         let page_id = page_info["id"].as_i64().unwrap();
 
@@ -2396,17 +2419,19 @@ mod tests {
         assert!(discard_text.contains("Successfully discarded draft"));
 
         // Try to discard again - should fail
-        let discard_again = server.handle_request(json!({
-            "jsonrpc": "2.0",
-            "id": 5,
-            "method": "tools/call",
-            "params": {
-                "name": "discard_draft",
-                "arguments": {
-                    "page_id": page_id
+        let discard_again = server
+            .handle_request(json!({
+                "jsonrpc": "2.0",
+                "id": 5,
+                "method": "tools/call",
+                "params": {
+                    "name": "discard_draft",
+                    "arguments": {
+                        "page_id": page_id
+                    }
                 }
-            }
-        })).await?;
+            }))
+            .await?;
 
         assert!(discard_again.get("error").is_some());
         let error_msg = discard_again["error"]["message"].as_str().unwrap();
@@ -2435,7 +2460,7 @@ mod tests {
             .unwrap();
         let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
         let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
-        
+
         // Create a test page
         let create_page_req = json!({
             "jsonrpc": "2.0",
@@ -2450,9 +2475,11 @@ mod tests {
                 }
             }
         });
-        
+
         let create_resp = server.handle_request(create_page_req).await?;
-        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_text = create_resp["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
         let page_info: serde_json::Value = serde_json::from_str(page_text)?;
         let page_id = page_info["id"].as_i64().unwrap();
 
@@ -2515,10 +2542,13 @@ mod tests {
             .as_str()
             .unwrap();
         let updated_component: serde_json::Value = serde_json::from_str(component_text)?;
-        
+
         assert_eq!(updated_component["title"], "Updated Title");
         assert_eq!(updated_component["template"], "card");
-        assert_eq!(updated_component["content"]["text"], "Updated content with **bold** text");
+        assert_eq!(
+            updated_component["content"]["text"],
+            "Updated content with **bold** text"
+        );
 
         Ok(())
     }
@@ -2543,7 +2573,7 @@ mod tests {
             .unwrap();
         let pages: Vec<serde_json::Value> = serde_json::from_str(pages_text)?;
         let root_page_id = pages[0]["page"]["id"].as_i64().unwrap();
-        
+
         // Create a test page
         let create_page_req = json!({
             "jsonrpc": "2.0",
@@ -2558,9 +2588,11 @@ mod tests {
                 }
             }
         });
-        
+
         let create_resp = server.handle_request(create_page_req).await?;
-        let page_text = create_resp["result"]["content"][0]["text"].as_str().unwrap();
+        let page_text = create_resp["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap();
         let page_info: serde_json::Value = serde_json::from_str(page_text)?;
         let page_id = page_info["id"].as_i64().unwrap();
 
@@ -2602,7 +2634,10 @@ mod tests {
         let delete_text = delete_response["result"]["content"][0]["text"]
             .as_str()
             .unwrap();
-        assert!(delete_text.contains(&format!("Successfully deleted component with ID {}", component_id)));
+        assert!(delete_text.contains(&format!(
+            "Successfully deleted component with ID {}",
+            component_id
+        )));
 
         // Try to get the deleted component - should fail
         let get_request = json!({
@@ -2676,21 +2711,35 @@ mod tests {
         let resources_response = server.handle_request(resources_request).await?;
         assert_eq!(resources_response["jsonrpc"], "2.0");
         assert_eq!(resources_response["id"], 10);
-        
-        let resources = resources_response["result"]["resources"].as_array().unwrap();
+
+        let resources = resources_response["result"]["resources"]
+            .as_array()
+            .unwrap();
         assert!(resources.len() >= 4); // At least root + 3 created pages
-        
+
         // Check first resource (should be root page)
         let root_resource = &resources[0];
-        assert!(root_resource["uri"].as_str().unwrap().starts_with("page://"));
-        assert!(root_resource["description"].as_str().unwrap().contains("Homepage"));
+        assert!(root_resource["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("page://"));
+        assert!(root_resource["description"]
+            .as_str()
+            .unwrap()
+            .contains("Homepage"));
         assert_eq!(root_resource["mimeType"], "text/html");
-        
+
         // Check that pages are in breadth-first order
         // Root should come first, then its children
-        assert!(resources[0]["description"].as_str().unwrap().contains("Path: /"));
-        assert!(resources[1]["description"].as_str().unwrap().contains("Path: /page-"));
-        
+        assert!(resources[0]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Path: /"));
+        assert!(resources[1]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Path: /page-"));
+
         Ok(())
     }
 
@@ -2769,15 +2818,20 @@ mod tests {
         });
 
         let resources_response = server.handle_request(resources_request).await?;
-        let resources = resources_response["result"]["resources"].as_array().unwrap();
-        
+        let resources = resources_response["result"]["resources"]
+            .as_array()
+            .unwrap();
+
         // Should be limited to 100 pages
         assert_eq!(resources.len(), 100);
-        
+
         // Verify breadth-first order:
         // 1. Root page should be first
-        assert!(resources[0]["description"].as_str().unwrap().contains("Homepage"));
-        
+        assert!(resources[0]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Homepage"));
+
         // 2. All parent pages should come before any child pages
         let mut found_child = false;
         for (i, resource) in resources.iter().enumerate() {
@@ -2789,8 +2843,7 @@ mod tests {
                 panic!("Found parent page at index {} after child pages", i);
             }
         }
-        
+
         Ok(())
     }
-
 }

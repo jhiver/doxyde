@@ -257,6 +257,17 @@ function addNewComponent() {
                 alt: ''
             });
             break;
+        case 'blog_summary':
+            // Create default blog summary configuration
+            emptyContent = JSON.stringify({
+                parent_page_id: null,
+                display_title: 'Latest Posts',
+                item_count: 5,
+                show_descriptions: true,
+                sort_order: 'created_at_desc',
+                template: 'cards'
+            });
+            break;
         default:
             emptyContent = '';
     }
@@ -502,6 +513,31 @@ function moveComponent(componentId, direction) {
     form.submit();
 }
 
+function updateBlogSummaryContent(componentId) {
+    const contentInput = document.getElementById(`content_${componentId}`);
+    if (!contentInput) return;
+    
+    // Get all the form values
+    const parentSelect = document.getElementById(`blog_parent_${componentId}`);
+    const titleInput = document.getElementById(`blog_title_${componentId}`);
+    const countInput = document.getElementById(`blog_count_${componentId}`);
+    const descriptionsCheck = document.getElementById(`blog_descriptions_${componentId}`);
+    const sortSelect = document.getElementById(`blog_sort_${componentId}`);
+    const templateSelect = document.getElementById(`blog_template_${componentId}`);
+    
+    // Build the content object
+    const content = {
+        parent_page_id: parentSelect.value ? parseInt(parentSelect.value) : null,
+        display_title: titleInput.value.trim(),
+        item_count: parseInt(countInput.value) || 5,
+        show_descriptions: descriptionsCheck.checked,
+        sort_order: sortSelect.value,
+        template: templateSelect.value
+    };
+    
+    // Update the hidden input
+    contentInput.value = JSON.stringify(content);
+}
 
 </script>
 {% endblock %}
@@ -683,6 +719,94 @@ function moveComponent(componentId, direction) {
                                     </div>
                                 </div>
                             {% endif %}
+                        {% elif component.component_type == "blog_summary" %}
+                            <div class="blog-summary-editor">
+                                <input type="hidden" 
+                                       id="content_{{ component.id }}" 
+                                       name="component_contents" 
+                                       value="{{ component.content|json_encode }}">
+                                
+                                <div class="form-group">
+                                    <label for="blog_parent_{{ component.id }}">Parent Page</label>
+                                    <select id="blog_parent_{{ component.id }}" 
+                                            onchange="updateBlogSummaryContent({{ component.id }})"
+                                            style="width: 100%;">
+                                        <option value="">Select a parent page...</option>
+                                        {% for p in all_pages %}
+                                            <option value="{{ p.id }}" 
+                                                    {% if component.content.parent_page_id == p.id %}selected{% endif %}>
+                                                {{ p.title }} ({{ p.slug }})
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="blog_title_{{ component.id }}">Display Title</label>
+                                    <input type="text" 
+                                           id="blog_title_{{ component.id }}" 
+                                           value="{{ component.content.display_title|default(value='') }}"
+                                           onchange="updateBlogSummaryContent({{ component.id }})"
+                                           placeholder="e.g., Latest Posts">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="blog_count_{{ component.id }}">Number of Items</label>
+                                    <input type="number" 
+                                           id="blog_count_{{ component.id }}" 
+                                           value="{{ component.content.item_count|default(value=5) }}"
+                                           min="1" max="50"
+                                           onchange="updateBlogSummaryContent({{ component.id }})">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>
+                                        <input type="checkbox" 
+                                               id="blog_descriptions_{{ component.id }}"
+                                               {% if component.content.show_descriptions %}checked{% endif %}
+                                               onchange="updateBlogSummaryContent({{ component.id }})">
+                                        Show descriptions
+                                    </label>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="blog_sort_{{ component.id }}">Sort Order</label>
+                                    <select id="blog_sort_{{ component.id }}" 
+                                            onchange="updateBlogSummaryContent({{ component.id }})">
+                                        <option value="created_at_desc" {% if component.content.sort_order == "created_at_desc" %}selected{% endif %}>
+                                            Newest First
+                                        </option>
+                                        <option value="created_at_asc" {% if component.content.sort_order == "created_at_asc" %}selected{% endif %}>
+                                            Oldest First
+                                        </option>
+                                        <option value="title_asc" {% if component.content.sort_order == "title_asc" %}selected{% endif %}>
+                                            Title A-Z
+                                        </option>
+                                        <option value="title_desc" {% if component.content.sort_order == "title_desc" %}selected{% endif %}>
+                                            Title Z-A
+                                        </option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="blog_template_{{ component.id }}">Display Template</label>
+                                    <select id="blog_template_{{ component.id }}" 
+                                            onchange="updateBlogSummaryContent({{ component.id }})">
+                                        <option value="cards" {% if component.content.template == "cards" %}selected{% endif %}>
+                                            Cards Grid
+                                        </option>
+                                        <option value="list" {% if component.content.template == "list" %}selected{% endif %}>
+                                            List View
+                                        </option>
+                                        <option value="compact" {% if component.content.template == "compact" %}selected{% endif %}>
+                                            Compact List
+                                        </option>
+                                        <option value="timeline" {% if component.content.template == "timeline" %}selected{% endif %}>
+                                            Timeline
+                                        </option>
+                                    </select>
+                                </div>
+                            </div>
                         {% else %}
                             <textarea id="content_{{ component.id }}" 
                                       name="component_contents" 
@@ -714,6 +838,7 @@ function moveComponent(componentId, direction) {
                 <option value="html">HTML</option>
                 <option value="code">Code</option>
                 <option value="image">Image</option>
+                <option value="blog_summary">Blog Summary</option>
             </select>
             
             <button type="button" class="button" onclick="addNewComponent()">Add</button>

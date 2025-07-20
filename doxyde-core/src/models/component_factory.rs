@@ -15,10 +15,18 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::models::component::Component;
+use crate::models::component_handler::{create_default_registry, ComponentRegistry};
 use crate::models::component_trait::ComponentRenderer;
 use crate::models::components::{
-    CodeComponent, CustomComponent, HtmlComponent, ImageComponent, MarkdownComponent, TextComponent,
+    BlogSummaryComponent, CodeComponent, CustomComponent, HtmlComponent, ImageComponent,
+    MarkdownComponent, TextComponent,
 };
+use once_cell::sync::Lazy;
+use std::sync::Arc;
+
+// Global component registry instance
+static COMPONENT_REGISTRY: Lazy<Arc<ComponentRegistry>> =
+    Lazy::new(|| Arc::new(create_default_registry()));
 
 /// Create a renderer for the given component based on its type
 pub fn create_renderer(component: &Component) -> Box<dyn ComponentRenderer> {
@@ -28,42 +36,19 @@ pub fn create_renderer(component: &Component) -> Box<dyn ComponentRenderer> {
         "html" => Box::new(HtmlComponent::from_component(component)),
         "code" => Box::new(CodeComponent::from_component(component)),
         "image" => Box::new(ImageComponent::from_component(component)),
+        "blog_summary" => Box::new(BlogSummaryComponent::from_component(component)),
         _ => Box::new(CustomComponent::from_component(component)),
     }
 }
 
 /// Get available templates for a given component type
 pub fn get_templates_for_type(component_type: &str) -> Vec<&'static str> {
-    match component_type {
-        "text" => vec![
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hidden",
-        ],
-        "markdown" => vec![
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hidden",
-            "hero",
-        ],
-        "html" => vec!["default"],
-        "code" => vec!["default", "with_title"],
-        "image" => vec![
-            "default",
-            "figure",
-            "hero",
-            "gallery",
-            "thumbnail",
-            "responsive",
-            "hidden",
-        ],
-        _ => vec!["default"],
+    // Use the component registry to get templates
+    if let Some(handler) = COMPONENT_REGISTRY.get_handler(component_type) {
+        handler.available_templates()
+    } else {
+        // Fallback for unknown types
+        vec!["default"]
     }
 }
 

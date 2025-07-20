@@ -382,7 +382,14 @@ pub async fn content_handler(
         Some(".reorder") => {
             // Reorder children handler - requires authentication
             if let OptionalUser(Some(current_user)) = user {
-                match crate::handlers::reorder_page_handler(State(state.clone().into()), site, page, current_user).await {
+                match crate::handlers::reorder_page_handler(
+                    State(state.clone().into()),
+                    site,
+                    page,
+                    current_user,
+                )
+                .await
+                {
                     Ok(response) => Ok(response),
                     Err(status) => {
                         tracing::error!(
@@ -394,9 +401,11 @@ pub async fn content_handler(
                                 "You don't have permission to reorder pages",
                             )),
                             StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                            StatusCode::INTERNAL_SERVER_ERROR => Err(
-                                AppError::internal_server_error("Failed to render reorder page form"),
-                            ),
+                            StatusCode::INTERNAL_SERVER_ERROR => {
+                                Err(AppError::internal_server_error(
+                                    "Failed to render reorder page form",
+                                ))
+                            }
                             _ => Err(AppError::new(status, "An error occurred")),
                         }
                     }

@@ -1,0 +1,61 @@
+<div class="blog-summary definition">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+    
+    <dl class="summary-definition-list">
+        {% for page in component.content.pages %}
+        <dt class="summary-term">
+            <a href="{{ page.url }}">{{ page.title }}</a>
+        </dt>
+        {% if component.content.show_descriptions and page.description %}
+            <dd class="summary-description">{{ page.description }}</dd>
+        {% endif %}
+        {% endfor %}
+    </dl>
+</div>
+
+<style>
+.blog-summary.definition {
+    margin: 2rem 0;
+}
+
+.summary-definition-list {
+    margin: 0;
+}
+
+.summary-term {
+    font-weight: 600;
+    margin: 1rem 0 0.5rem 0;
+    color: var(--color-heading);
+}
+
+.summary-term:first-child {
+    margin-top: 0;
+}
+
+.summary-term a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.summary-term a:hover {
+    color: var(--color-primary);
+}
+
+.summary-description {
+    margin: 0 0 1rem 1.5rem;
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+}
+
+.summary-description:last-child {
+    margin-bottom: 0;
+}
+
+@media (max-width: 768px) {
+    .summary-description {
+        margin-left: 1rem;
+    }
+}
+</style>

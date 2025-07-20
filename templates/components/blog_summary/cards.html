@@ -1,0 +1,84 @@
+<div class="blog-summary cards">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+    
+    <div class="summary-grid">
+        {% for page in component.content.pages %}
+        <div class="summary-card">
+            <h3 class="summary-card-title">
+                <a href="{{ page.url }}">{{ page.title }}</a>
+            </h3>
+            
+            {% if component.content.show_descriptions and page.description %}
+                <p class="summary-card-description">{{ page.description }}</p>
+            {% endif %}
+            
+            <time class="summary-card-date" datetime="{{ page.created_at }}">
+                {{ page.created_at }}
+            </time>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.blog-summary.cards {
+    margin: 2rem 0;
+}
+
+.summary-title {
+    margin-bottom: 1.5rem;
+    color: var(--color-heading);
+}
+
+.summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.summary-card {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    padding: 1.5rem;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.summary-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+}
+
+.summary-card-title {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.25rem;
+}
+
+.summary-card-title a {
+    color: var(--color-heading);
+    text-decoration: none;
+}
+
+.summary-card-title a:hover {
+    color: var(--color-primary);
+}
+
+.summary-card-description {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin-bottom: 0.75rem;
+}
+
+.summary-card-date {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+    .summary-grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>

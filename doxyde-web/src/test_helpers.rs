@@ -55,6 +55,7 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             og_image_url TEXT,
             structured_data_type TEXT DEFAULT 'WebPage',
             position INTEGER NOT NULL DEFAULT 0,
+            sort_mode TEXT NOT NULL DEFAULT 'position',
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,

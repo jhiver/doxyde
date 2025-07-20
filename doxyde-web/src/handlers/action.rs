@@ -23,7 +23,7 @@ use axum::{
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 
 use crate::{
-    auth::{CurrentUser},
+    auth::CurrentUser,
     content::ContentPath,
     handlers::{
         delete_page::DeletePageForm,
@@ -45,6 +45,13 @@ pub async fn handle_action(
     // Parse the path to extract content path and action
     let path = uri.path();
     let content_path = ContentPath::parse(path);
+    
+    tracing::info!(
+        "handle_action called - path: {}, action: {:?}, body length: {}",
+        path,
+        content_path.action,
+        body.len()
+    );
 
     // Use the full host as domain (including port if present)
     let domain = &host;
@@ -97,8 +104,13 @@ pub async fn handle_action(
     match content_path.action.as_deref() {
         Some(".edit") | Some(".content") => {
             // Parse the form data to find the action
-            let form_data: Vec<(String, String)> =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
+            let form_data: Vec<(String, String)> = match serde_urlencoded::from_str(&body) {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::error!("Failed to parse form data: {:?}. Body: {}", e, body);
+                    return Err(StatusCode::BAD_REQUEST);
+                }
+            };
 
             // Find the action field
             let action = form_data
@@ -107,8 +119,11 @@ pub async fn handle_action(
                 .map(|(_, v)| v.as_str())
                 .ok_or(StatusCode::BAD_REQUEST)?;
 
+            tracing::info!("Form action: {}", action);
+            
             match action {
                 "save_draft" | "publish_draft" => {
+                    tracing::info!("Processing save_draft/publish_draft action");
                     // Parse arrays from form data
                     let mut component_ids = Vec::new();
                     let mut component_types = Vec::new();
@@ -355,7 +370,9 @@ pub async fn handle_action(
             if sort_mode == "manual" {
                 for (key, value) in &form_data {
                     if let Some(page_id_str) = key.strip_prefix("position_") {
-                        if let (Ok(page_id), Ok(position)) = (page_id_str.parse::<i64>(), value.parse::<i32>()) {
+                        if let (Ok(page_id), Ok(position)) =
+                            (page_id_str.parse::<i64>(), value.parse::<i32>())
+                        {
                             positions.push((page_id, position));
                         }
                     }
@@ -368,7 +385,11 @@ pub async fn handle_action(
                 page.clone(),
                 user,
                 sort_mode,
-                if positions.is_empty() { None } else { Some(positions) },
+                if positions.is_empty() {
+                    None
+                } else {
+                    Some(positions)
+                },
             )
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;

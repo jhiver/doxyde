@@ -28,7 +28,7 @@ pub async fn init_database(database_url: &str) -> Result<SqlitePool> {
 /// Run database migrations, handling cases where schema already exists
 async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
     tracing::info!("Checking for pending migrations...");
-    
+
     // First ensure the migrations table exists
     sqlx::query!(
         r#"
@@ -45,9 +45,9 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
     .execute(pool)
     .await
     .context("Failed to create migrations table")?;
-    
+
     let migrator = sqlx::migrate!("../migrations");
-    
+
     // Iterate through each migration
     for migration in migrator.migrations.iter() {
         // Check if this migration has already been applied
@@ -59,15 +59,16 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
         .await
         .unwrap_or(None)
         .is_some();
-        
+
         if !applied {
-            tracing::info!("Running migration {}: {}", migration.version, migration.description);
-            
+            tracing::info!(
+                "Running migration {}: {}",
+                migration.version,
+                migration.description
+            );
+
             // Try to run this specific migration
-            match sqlx::query(&migration.sql)
-                .execute(pool)
-                .await
-            {
+            match sqlx::query(&migration.sql).execute(pool).await {
                 Ok(_) => {
                     // Record successful migration
                     let checksum_bytes: &[u8] = &migration.checksum;
@@ -82,24 +83,24 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                     .execute(pool)
                     .await
                     .context("Failed to record migration")?;
-                    
+
                     tracing::info!("Migration {} applied successfully", migration.version);
-                },
+                }
                 Err(e) => {
                     let error_str = e.to_string();
-                    
+
                     // Check if migration was already applied based on the error
                     let already_applied = match migration.version {
                         // For 20250712: check if is_published column exists
                         20250712 if error_str.contains("duplicate column name: is_published") => {
                             tracing::info!("Checking if migration 20250712 was already applied...");
                             true
-                        },
+                        }
                         // For 20250713: check if style_options column exists
                         20250713 if error_str.contains("duplicate column name: style_options") => {
                             tracing::info!("Checking if migration 20250713 was already applied...");
                             true
-                        },
+                        }
                         // For 20250714: check if components table exists without style_options
                         20250714 if error_str.contains("components_new already exists") => {
                             tracing::info!("Checking if migration 20250714 was already applied...");
@@ -110,7 +111,7 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                                 .map(|rows| rows.iter().any(|r| r.name == "style_options"))
                                 .unwrap_or(false);
                             !has_style_options // If no style_options, migration was already applied
-                        },
+                        }
                         // For 20250715: check if mcp_tokens table exists
                         20250715 if error_str.contains("already exists") => {
                             tracing::info!("Checking if migration 20250715 was already applied...");
@@ -119,19 +120,22 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                                 .await
                                 .map(|r| r.is_some())
                                 .unwrap_or(false)
-                        },
+                        }
                         // For 20250719: check if sort_mode column exists
                         20250719 if error_str.contains("duplicate column name: sort_mode") => {
                             tracing::info!("Checking if migration 20250719 was already applied...");
                             true
-                        },
+                        }
                         // For any other error or migration, it's a real failure
-                        _ => false
+                        _ => false,
                     };
-                    
+
                     if already_applied {
-                        tracing::warn!("Migration {} was already applied, marking as complete", migration.version);
-                        
+                        tracing::warn!(
+                            "Migration {} was already applied, marking as complete",
+                            migration.version
+                        );
+
                         // Record it as applied
                         let checksum_bytes: &[u8] = &migration.checksum;
                         sqlx::query!(
@@ -146,14 +150,18 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                         .await
                         .context("Failed to record migration")?;
                     } else {
-                        return Err(anyhow!("Failed to run migration {}: {}", migration.version, e));
+                        return Err(anyhow!(
+                            "Failed to run migration {}: {}",
+                            migration.version,
+                            e
+                        ));
                     }
                 }
             }
         }
     }
-    
+
     tracing::info!("All migrations processed successfully");
-    
+
     Ok(())
 }

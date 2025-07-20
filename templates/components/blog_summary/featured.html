@@ -1,0 +1,151 @@
+<div class="blog-summary featured">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+    
+    <div class="featured-items">
+        {% for page in component.content.pages %}
+        {% if loop.first %}
+        <!-- First item is featured prominently -->
+        <div class="featured-primary">
+            <h3 class="featured-title">
+                <a href="{{ page.url }}">{{ page.title }}</a>
+            </h3>
+            
+            {% if component.content.show_descriptions and page.description %}
+                <p class="featured-description">{{ page.description }}</p>
+            {% endif %}
+            
+            <time class="featured-date" datetime="{{ page.created_at }}">
+                {{ page.created_at }}
+            </time>
+        </div>
+        {% else %}
+        <!-- Other items in a sidebar -->
+        {% if loop.index == 2 %}
+        <div class="featured-secondary">
+            <h4 class="featured-section-title">More Posts</h4>
+        {% endif %}
+            <div class="featured-item">
+                <h5 class="featured-item-title">
+                    <a href="{{ page.url }}">{{ page.title }}</a>
+                </h5>
+                <time class="featured-item-date" datetime="{{ page.created_at }}">
+                    {{ page.created_at }}
+                </time>
+            </div>
+        {% if loop.last %}
+        </div>
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.blog-summary.featured {
+    margin: 2rem 0;
+}
+
+.featured-items {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 2rem;
+}
+
+.featured-primary {
+    background: var(--color-bg-secondary);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius);
+    padding: 2rem;
+}
+
+.featured-title {
+    margin: 0 0 1rem 0;
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+.featured-title a {
+    color: var(--color-heading);
+    text-decoration: none;
+}
+
+.featured-title a:hover {
+    color: var(--color-primary);
+}
+
+.featured-description {
+    font-size: 1.125rem;
+    line-height: 1.6;
+    color: var(--color-text-secondary);
+    margin-bottom: 1rem;
+}
+
+.featured-date {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+
+.featured-secondary {
+    background: var(--color-bg);
+    padding: 1.5rem;
+    border-left: 3px solid var(--color-primary);
+}
+
+.featured-section-title {
+    margin: 0 0 1rem 0;
+    font-size: 1rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.featured-item {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.featured-item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+.featured-item-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+.featured-item-title a {
+    color: var(--color-heading);
+    text-decoration: none;
+}
+
+.featured-item-title a:hover {
+    color: var(--color-primary);
+}
+
+.featured-item-date {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+}
+
+@media (max-width: 768px) {
+    .featured-items {
+        grid-template-columns: 1fr;
+    }
+    
+    .featured-title {
+        font-size: 1.5rem;
+    }
+    
+    .featured-secondary {
+        border-left: none;
+        border-top: 3px solid var(--color-primary);
+        margin-top: 1rem;
+    }
+}
+</style>

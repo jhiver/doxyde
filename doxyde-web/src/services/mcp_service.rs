@@ -1,5 +1,5 @@
 use anyhow::Result;
-use doxyde_core::models::{Page, Component};
+use doxyde_core::models::{Component, Page};
 use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -267,8 +267,12 @@ impl McpService {
 
         // Create the page object
         let mut new_page = match (parent_page_id, slug) {
-            (Some(parent_id), Some(slug)) => Page::new_with_parent(self.site_id, parent_id, slug, title),
-            (Some(parent_id), None) => Page::new_with_parent_and_title(self.site_id, parent_id, title),
+            (Some(parent_id), Some(slug)) => {
+                Page::new_with_parent(self.site_id, parent_id, slug, title)
+            }
+            (Some(parent_id), None) => {
+                Page::new_with_parent_and_title(self.site_id, parent_id, title)
+            }
             (None, Some(slug)) => Page::new(self.site_id, slug, title),
             (None, None) => Page::new_with_title(self.site_id, title),
         };
@@ -276,6 +280,9 @@ impl McpService {
         // Set template and position
         new_page.template = template.unwrap_or_else(|| "default".to_string());
         new_page.position = position;
+
+        // Validate the page before creation
+        new_page.is_valid().map_err(|e| anyhow::anyhow!(e))?;
 
         // Create the page with auto-generated unique slug if needed
         let page_id = page_repo.create_with_auto_slug(&mut new_page).await?;
@@ -366,7 +373,12 @@ impl McpService {
     }
 
     /// Move a page to a new parent or reorder within siblings
-    pub async fn move_page(&self, page_id: i64, new_parent_id: i64, position: Option<i32>) -> Result<PageInfo> {
+    pub async fn move_page(
+        &self,
+        page_id: i64,
+        new_parent_id: i64,
+        position: Option<i32>,
+    ) -> Result<PageInfo> {
         let page_repo = PageRepository::new(self.pool.clone());
 
         // Verify both pages exist and belong to this site
@@ -383,7 +395,7 @@ impl McpService {
                 .find_by_id(page_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Page not found after move"))?;
-            
+
             updated_page.position = new_position;
             page_repo.update(&updated_page).await?;
         }
@@ -414,7 +426,9 @@ impl McpService {
 
         // Get or create draft version
         let draft = crate::draft::get_or_create_draft(&self.pool, page_id, None).await?;
-        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
+        let draft_id = draft
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
 
         // Get current components to determine position
         let existing_components = component_repo.list_by_page_version(draft_id).await?;
@@ -425,13 +439,9 @@ impl McpService {
             "text": content_text
         });
 
-        let mut component = Component::new(
-            draft_id,
-            "markdown".to_string(),
-            next_position,
-            content,
-        );
-        
+        let mut component =
+            Component::new(draft_id, "markdown".to_string(), next_position, content);
+
         component.title = title;
         component.template = template.unwrap_or_else(|| "default".to_string());
 
@@ -488,11 +498,11 @@ impl McpService {
         component.content = json!({
             "text": content_text
         });
-        
+
         if let Some(new_title) = title {
             component.title = Some(new_title);
         }
-        
+
         if let Some(new_template) = template {
             component.template = new_template;
         }
@@ -558,7 +568,9 @@ impl McpService {
             return Ok(vec![]); // No versions exist
         };
 
-        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version ID not found"))?;
+        let version_id = version
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Version ID not found"))?;
 
         // Get components
         let components = component_repo.list_by_page_version(version_id).await?;
@@ -602,24 +614,26 @@ impl McpService {
     pub async fn publish_draft(&self, page_id: i64) -> Result<DraftInfo> {
         // Verify page exists and belongs to this site
         let _page = self.get_page(page_id).await?;
-        
+
         let version_repo = PageVersionRepository::new(self.pool.clone());
-        
+
         // Get the draft
         let draft = version_repo
             .get_draft(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("No draft version found for this page"))?;
-        
-        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
-        
+
+        let draft_id = draft
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
+
         // Publish it
         crate::draft::publish_draft(&self.pool, page_id).await?;
-        
+
         // Get component count for info
         let component_repo = ComponentRepository::new(self.pool.clone());
         let components = component_repo.list_by_page_version(draft_id).await?;
-        
+
         Ok(DraftInfo {
             page_id,
             version_id: draft_id,
@@ -629,23 +643,23 @@ impl McpService {
             component_count: components.len() as i32,
         })
     }
-    
+
     /// Discard the draft version of a page
     pub async fn discard_draft(&self, page_id: i64) -> Result<()> {
         // Verify page exists and belongs to this site
         let _page = self.get_page(page_id).await?;
-        
+
         let version_repo = PageVersionRepository::new(self.pool.clone());
-        
+
         // Check if there's a draft
         let draft = version_repo.get_draft(page_id).await?;
         if draft.is_none() {
             return Err(anyhow::anyhow!("No draft version found for this page"));
         }
-        
+
         // Delete it
         crate::draft::delete_draft_if_exists(&self.pool, page_id).await?;
-        
+
         Ok(())
     }
 
@@ -803,7 +817,7 @@ mod tests {
         let pages = service.list_pages().await?;
         // Site creation creates a root page
         assert_eq!(pages.len(), 1);
-        assert_eq!(pages[0].page.slug, "home");
+        assert_eq!(pages[0].page.slug, "");
         assert!(pages[0].children.is_empty());
         Ok(())
     }
@@ -828,7 +842,7 @@ mod tests {
         let page_info = service
             .create_page(
                 Some(root_page_id),
-                "about".to_string(),
+                Some("about".to_string()),
                 "About Us".to_string(),
                 Some("default".to_string()),
             )
@@ -858,7 +872,7 @@ mod tests {
         let page_info = service
             .create_page(
                 Some(root_page_id),
-                "team".to_string(),
+                Some("team".to_string()),
                 "Our Team".to_string(),
                 Some("full_width".to_string()),
             )
@@ -883,26 +897,33 @@ mod tests {
         let pages = service.list_pages().await?;
         let root_page_id = pages[0].page.id;
 
-        // Test empty slug
+        // Test invalid slug characters - special characters
         let result = service
             .create_page(
                 Some(root_page_id),
-                "".to_string(),
+                Some("invalid-slug!".to_string()),
                 "Title".to_string(),
                 None,
             )
             .await;
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Slug cannot be empty"));
+
+        match &result {
+            Ok(page) => panic!("Expected error but got page with slug: {}", page.slug),
+            Err(e) => {
+                let error_msg = e.to_string();
+                assert!(
+                    error_msg.contains("Slug can only contain letters"),
+                    "Expected error about slug characters, got: {}",
+                    error_msg
+                );
+            }
+        }
 
         // Test empty title
         let result = service
             .create_page(
                 Some(root_page_id),
-                "valid-slug".to_string(),
+                Some("valid-slug".to_string()),
                 "".to_string(),
                 None,
             )
@@ -913,11 +934,11 @@ mod tests {
             .to_string()
             .contains("Title cannot be empty"));
 
-        // Test invalid slug characters (space in slug)
+        // Test invalid slug characters - space
         let result = service
             .create_page(
                 Some(root_page_id),
-                "invalid slug!".to_string(),
+                Some("invalid slug".to_string()),
                 "Title".to_string(),
                 None,
             )
@@ -939,7 +960,7 @@ mod tests {
         let result = service
             .create_page(
                 None,
-                "new-root".to_string(),
+                Some("new-root".to_string()),
                 "New Root Page".to_string(),
                 None,
             )
@@ -959,7 +980,7 @@ mod tests {
         let result = service
             .create_page(
                 Some(9999),
-                "orphan".to_string(),
+                Some("orphan".to_string()),
                 "Orphan Page".to_string(),
                 None,
             )
@@ -986,7 +1007,7 @@ mod tests {
         let page_info = service
             .create_page(
                 Some(root_page_id),
-                "contact".to_string(),
+                Some("contact".to_string()),
                 "Contact Us".to_string(),
                 None,
             )
@@ -1127,7 +1148,7 @@ mod tests {
         let page_info = service
             .create_page(
                 Some(root_page_id),
-                "delete-me".to_string(),
+                Some("delete-me".to_string()),
                 "Delete Me".to_string(),
                 None,
             )
@@ -1152,16 +1173,16 @@ mod tests {
         // Create a page in a different site
         let main_site = create_test_site(&state.db, "main.com", "Main Site").await?;
         let main_service = McpService::new(state.db.clone(), main_site.id.unwrap());
-        
+
         // Get root page of main site
         let pages = main_service.list_pages().await?;
         let root_page_id = pages[0].page.id;
-        
+
         // Create a page in main site
         let page_info = main_service
             .create_page(
                 Some(root_page_id),
-                "test-page".to_string(),
+                Some("test-page".to_string()),
                 "Test Page".to_string(),
                 None,
             )
@@ -1201,7 +1222,7 @@ mod tests {
         let page1_info = service
             .create_page(
                 Some(root_page_id),
-                "page1".to_string(),
+                Some("page1".to_string()),
                 "Page 1".to_string(),
                 None,
             )
@@ -1210,14 +1231,16 @@ mod tests {
         let page2_info = service
             .create_page(
                 Some(root_page_id),
-                "page2".to_string(),
+                Some("page2".to_string()),
                 "Page 2".to_string(),
                 None,
             )
             .await?;
 
         // Move page1 under page2
-        let moved_page = service.move_page(page1_info.id, page2_info.id, None).await?;
+        let moved_page = service
+            .move_page(page1_info.id, page2_info.id, None)
+            .await?;
 
         assert_eq!(moved_page.id, page1_info.id);
         assert_eq!(moved_page.parent_id, Some(page2_info.id));
@@ -1238,7 +1261,7 @@ mod tests {
         let parent_info = service
             .create_page(
                 Some(root_page_id),
-                "parent".to_string(),
+                Some("parent".to_string()),
                 "Parent".to_string(),
                 None,
             )
@@ -1248,7 +1271,7 @@ mod tests {
         let _child1_info = service
             .create_page(
                 Some(parent_info.id),
-                "child1".to_string(),
+                Some("child1".to_string()),
                 "Child 1".to_string(),
                 None,
             )
@@ -1257,7 +1280,7 @@ mod tests {
         let _child2_info = service
             .create_page(
                 Some(parent_info.id),
-                "child2".to_string(),
+                Some("child2".to_string()),
                 "Child 2".to_string(),
                 None,
             )
@@ -1266,7 +1289,7 @@ mod tests {
         let _child3_info = service
             .create_page(
                 Some(parent_info.id),
-                "child3".to_string(),
+                Some("child3".to_string()),
                 "Child 3".to_string(),
                 None,
             )
@@ -1276,7 +1299,7 @@ mod tests {
         let other_page_info = service
             .create_page(
                 Some(root_page_id),
-                "other".to_string(),
+                Some("other".to_string()),
                 "Other".to_string(),
                 None,
             )
@@ -1299,7 +1322,7 @@ mod tests {
         let state = create_test_app_state().await?;
         let site1 = create_test_site(&state.db, "site1.com", "Site 1").await?;
         let site2 = create_test_site(&state.db, "site2.com", "Site 2").await?;
-        
+
         let service1 = McpService::new(state.db.clone(), site1.id.unwrap());
         let service2 = McpService::new(state.db.clone(), site2.id.unwrap());
 
@@ -1314,7 +1337,7 @@ mod tests {
         let page_info = service1
             .create_page(
                 Some(root1_id),
-                "test-page".to_string(),
+                Some("test-page".to_string()),
                 "Test Page".to_string(),
                 None,
             )

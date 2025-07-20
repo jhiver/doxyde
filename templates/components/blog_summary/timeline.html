@@ -1,0 +1,106 @@
+<div class="blog-summary timeline">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+    
+    <div class="timeline-items">
+        {% for page in component.content.pages %}
+        <div class="timeline-item">
+            <time class="timeline-date" datetime="{{ page.created_at }}">
+                {{ page.created_at }}
+            </time>
+            <div class="timeline-content">
+                <h3 class="timeline-title">
+                    <a href="{{ page.url }}">{{ page.title }}</a>
+                </h3>
+                
+                {% if component.content.show_descriptions and page.description %}
+                    <p class="timeline-description">{{ page.description }}</p>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.blog-summary.timeline {
+    margin: 2rem 0;
+}
+
+.timeline-items {
+    position: relative;
+    padding-left: 2rem;
+}
+
+.timeline-items::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    bottom: 0.5rem;
+    width: 2px;
+    background: var(--color-border);
+}
+
+.timeline-item {
+    position: relative;
+    padding: 1rem 0 1rem 2rem;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -2.25rem;
+    top: 1.5rem;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-primary);
+    border: 2px solid var(--color-bg);
+}
+
+.timeline-date {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+    font-weight: 600;
+}
+
+.timeline-content {
+    margin-top: 0.5rem;
+}
+
+.timeline-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.125rem;
+}
+
+.timeline-title a {
+    color: var(--color-heading);
+    text-decoration: none;
+}
+
+.timeline-title a:hover {
+    color: var(--color-primary);
+}
+
+.timeline-description {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin: 0;
+}
+
+@media (max-width: 768px) {
+    .timeline-items {
+        padding-left: 1rem;
+    }
+    
+    .timeline-item {
+        padding-left: 1.5rem;
+    }
+    
+    .timeline-item::before {
+        left: -1.25rem;
+    }
+}
+</style>

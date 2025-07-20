@@ -16,6 +16,7 @@
 
 pub mod auth;
 pub mod autoreload_templates;
+pub mod component_registry;
 pub mod component_render;
 pub mod config;
 pub mod content;

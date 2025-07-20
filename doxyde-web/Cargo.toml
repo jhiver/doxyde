@@ -38,6 +38,7 @@ multer.workspace = true
 image.workspace = true
 futures.workspace = true
 url.workspace = true
+once_cell = "1.19"
 
 [dev-dependencies]
 pretty_assertions.workspace = true

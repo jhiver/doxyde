@@ -1,0 +1,74 @@
+<div class="blog-summary list">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+    
+    <ul class="summary-list">
+        {% for page in component.content.pages %}
+        <li class="summary-item">
+            <h3 class="summary-item-title">
+                <a href="{{ page.url }}">{{ page.title }}</a>
+            </h3>
+            
+            {% if component.content.show_descriptions and page.description %}
+                <p class="summary-item-description">{{ page.description }}</p>
+            {% endif %}
+            
+            <time class="summary-item-date" datetime="{{ page.created_at }}">
+                {{ page.created_at }}
+            </time>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+
+<style>
+.blog-summary.list {
+    margin: 2rem 0;
+}
+
+.summary-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.summary-item {
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.summary-item:first-child {
+    padding-top: 0;
+}
+
+.summary-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.summary-item-title {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+}
+
+.summary-item-title a {
+    color: var(--color-heading);
+    text-decoration: none;
+}
+
+.summary-item-title a:hover {
+    color: var(--color-primary);
+}
+
+.summary-item-description {
+    color: var(--color-text-secondary);
+    line-height: 1.6;
+    margin: 0.5rem 0;
+}
+
+.summary-item-date {
+    font-size: 0.875rem;
+    color: var(--color-text-muted);
+}
+</style>

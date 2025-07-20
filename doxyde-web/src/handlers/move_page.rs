@@ -183,14 +183,47 @@ pub async fn do_move_page_handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
+    // Log the move operation
+    tracing::info!(
+        page_id = page_id,
+        page_slug = %page.slug,
+        page_title = %page.title,
+        old_parent_id = ?page.parent_page_id,
+        new_parent_id = form.target_parent_id,
+        user = %user.user.username,
+        "Starting page move operation"
+    );
+
     // Perform the move
-    page_repo
-        .move_page(page_id, form.target_parent_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to move page: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    match page_repo.move_page(page_id, form.target_parent_id).await {
+        Ok(()) => {
+            tracing::info!(
+                page_id = page_id,
+                page_slug = %page.slug,
+                new_parent_id = form.target_parent_id,
+                "Page move completed successfully"
+            );
+        }
+        Err(e) => {
+            tracing::error!(
+                page_id = page_id,
+                page_slug = %page.slug,
+                old_parent_id = ?page.parent_page_id,
+                new_parent_id = form.target_parent_id,
+                error = %e,
+                "Failed to move page"
+            );
+
+            // Return a more specific error based on the error message
+            if e.to_string().contains("slug") && e.to_string().contains("already exists") {
+                return Err(StatusCode::CONFLICT);
+            } else if e.to_string().contains("descendant") {
+                return Err(StatusCode::BAD_REQUEST);
+            } else {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    }
 
     // Get the new parent to build redirect URL
     let _new_parent = page_repo

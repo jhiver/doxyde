@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod blog_summary_component;
 pub mod code_component;
 pub mod custom_component;
 pub mod html_component;
@@ -21,6 +22,7 @@ pub mod image_component;
 pub mod markdown_component;
 pub mod text_component;
 
+pub use blog_summary_component::BlogSummaryComponent;
 pub use code_component::CodeComponent;
 pub use custom_component::CustomComponent;
 pub use html_component::HtmlComponent;

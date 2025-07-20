@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::utils::slug::generate_slug_from_title;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use crate::utils::slug::generate_slug_from_title;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Page {
@@ -426,12 +426,15 @@ mod tests {
         let root_page = Page::new(1, String::new(), "Test".to_string());
         let result = root_page.validate_slug();
         assert!(result.is_ok());
-        
+
         // Empty slug is invalid for child pages
         let child_page = Page::new_with_parent(1, 10, String::new(), "Test".to_string());
         let result = child_page.validate_slug();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Slug cannot be empty for non-root pages");
+        assert_eq!(
+            result.unwrap_err(),
+            "Slug cannot be empty for non-root pages"
+        );
     }
 
     #[test]
@@ -596,7 +599,7 @@ mod tests {
         let root_page = Page::new(1, "".to_string(), "Valid Title".to_string());
         let result = root_page.is_valid();
         assert!(result.is_ok());
-        
+
         // Root page with empty slug and empty title should fail on title validation
         let page = Page::new(1, "".to_string(), "".to_string());
         let result = page.is_valid();

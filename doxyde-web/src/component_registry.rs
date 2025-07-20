@@ -14,28 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod component;
-pub mod component_factory;
-pub mod component_handler;
-pub mod component_trait;
-pub mod components;
-pub mod mcp_token;
-pub mod page;
-pub mod permission;
-pub mod session;
-pub mod site;
-pub mod user;
-pub mod version;
+use doxyde_core::models::component_handler::{create_default_registry, ComponentRegistry};
+use once_cell::sync::Lazy;
+use std::sync::Arc;
 
-pub use component::*;
-pub use component_factory::*;
-pub use component_handler::*;
-pub use component_trait::*;
-pub use components::*;
-pub use mcp_token::*;
-pub use page::*;
-pub use permission::*;
-pub use session::*;
-pub use site::*;
-pub use user::*;
-pub use version::*;
+/// Global component registry instance
+pub static COMPONENT_REGISTRY: Lazy<Arc<ComponentRegistry>> =
+    Lazy::new(|| Arc::new(create_default_registry()));
+
+/// Get a reference to the global component registry
+pub fn get_component_registry() -> Arc<ComponentRegistry> {
+    COMPONENT_REGISTRY.clone()
+}

@@ -120,6 +120,7 @@ mod tests {
                 slug TEXT NOT NULL,
                 title TEXT NOT NULL,
                 position INTEGER NOT NULL DEFAULT 0,
+                sort_mode TEXT NOT NULL DEFAULT 'position',
                 description TEXT,
                 keywords TEXT,
                 template TEXT NOT NULL DEFAULT 'default',

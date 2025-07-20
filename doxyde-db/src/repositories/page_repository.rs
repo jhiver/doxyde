@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use anyhow::{Context, Result};
-use doxyde_core::{Page, utils::slug::generate_slug_from_title};
+use doxyde_core::{utils::slug::generate_slug_from_title, Page};
 use sqlx::SqlitePool;
 
 pub struct PageRepository {
@@ -423,12 +423,31 @@ impl PageRepository {
             order_by
         );
 
-        let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(&query)
-            .bind(parent_page_id)
-            .fetch_all(&self.pool)
-            .await
-            .context("Failed to list children pages")?;
+        let results = sqlx::query_as::<
+            _,
+            (
+                i64,
+                i64,
+                Option<i64>,
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                String,
+                String,
+                Option<String>,
+                Option<String>,
+                String,
+                i32,
+                String,
+                String,
+                String,
+            ),
+        >(&query)
+        .bind(parent_page_id)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to list children pages")?;
 
         let mut pages = Vec::new();
         for (
@@ -707,6 +726,51 @@ impl PageRepository {
         Ok(true)
     }
 
+    // Transaction version of is_descendant_of for use within move_page
+    async fn is_descendant_of_tx(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        page_id: i64,
+        potential_ancestor_id: i64,
+    ) -> Result<bool> {
+        // A page cannot be a descendant of itself
+        if page_id == potential_ancestor_id {
+            return Ok(false);
+        }
+
+        // Get the page to check within transaction
+        let page_parent =
+            sqlx::query_scalar::<_, Option<i64>>("SELECT parent_page_id FROM pages WHERE id = ?")
+                .bind(page_id)
+                .fetch_optional(&mut **tx)
+                .await
+                .context("Failed to fetch page parent")?;
+
+        // If page doesn't exist or has no parent, it's not a descendant of anything
+        let mut current_parent_id = match page_parent {
+            Some(Some(id)) => id,
+            _ => return Ok(false),
+        };
+
+        // Walk up the tree looking for the potential ancestor
+        while current_parent_id != potential_ancestor_id {
+            let next_parent = sqlx::query_scalar::<_, Option<i64>>(
+                "SELECT parent_page_id FROM pages WHERE id = ?",
+            )
+            .bind(current_parent_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .context("Failed to fetch parent")?;
+
+            match next_parent {
+                Some(Some(parent_id)) => current_parent_id = parent_id,
+                _ => return Ok(false), // Reached root or broken chain
+            }
+        }
+
+        Ok(true)
+    }
+
     pub async fn get_all_descendants(&self, page_id: i64) -> Result<Vec<Page>> {
         let mut descendants = Vec::new();
         let mut pages_to_process = vec![page_id];
@@ -832,25 +896,84 @@ impl PageRepository {
     }
 
     pub async fn move_page(&self, page_id: i64, new_parent_id: i64) -> Result<()> {
-        // Get the page to be moved
-        let page = self
-            .find_by_id(page_id)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Page with id {} not found", page_id))?;
+        // Start a transaction
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .context("Failed to start transaction")?;
+
+        // Get the page to be moved (within transaction)
+        let page = sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            r#"
+            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            FROM pages
+            WHERE id = ?
+            "#
+        )
+        .bind(page_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .context("Failed to fetch page")?
+        .ok_or_else(|| anyhow::anyhow!("Page with id {} not found", page_id))?;
+
+        let page = Page {
+            id: Some(page.0),
+            site_id: page.1,
+            parent_page_id: page.2,
+            slug: page.3,
+            title: page.4,
+            description: page.5,
+            keywords: page.6,
+            template: page.7,
+            meta_robots: page.8,
+            canonical_url: page.9,
+            og_image_url: page.10,
+            structured_data_type: page.11,
+            position: page.12,
+            sort_mode: page.13,
+            created_at: chrono::DateTime::parse_from_rfc3339(&page.14)
+                .unwrap_or_else(|_| {
+                    chrono::NaiveDateTime::parse_from_str(&page.14, "%Y-%m-%d %H:%M:%S")
+                        .unwrap()
+                        .and_utc()
+                        .fixed_offset()
+                })
+                .with_timezone(&chrono::Utc),
+            updated_at: chrono::DateTime::parse_from_rfc3339(&page.15)
+                .unwrap_or_else(|_| {
+                    chrono::NaiveDateTime::parse_from_str(&page.15, "%Y-%m-%d %H:%M:%S")
+                        .unwrap()
+                        .and_utc()
+                        .fixed_offset()
+                })
+                .with_timezone(&chrono::Utc),
+        };
 
         // Cannot move root page
         if page.parent_page_id.is_none() {
             return Err(anyhow::anyhow!("Cannot move root page"));
         }
 
-        // Get the new parent
-        let new_parent = self.find_by_id(new_parent_id).await?.ok_or_else(|| {
-            anyhow::anyhow!("New parent page with id {} not found", new_parent_id)
-        })?;
+        // Get the new parent (within transaction)
+        let new_parent_site =
+            sqlx::query_scalar::<_, i64>("SELECT site_id FROM pages WHERE id = ?")
+                .bind(new_parent_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .context("Failed to check new parent")?;
 
-        // Pages must be in the same site
-        if page.site_id != new_parent.site_id {
-            return Err(anyhow::anyhow!("Cannot move page to a different site"));
+        match new_parent_site {
+            None => {
+                return Err(anyhow::anyhow!(
+                    "New parent page with id {} not found",
+                    new_parent_id
+                ))
+            }
+            Some(parent_site_id) if parent_site_id != page.site_id => {
+                return Err(anyhow::anyhow!("Cannot move page to a different site"));
+            }
+            Some(_) => {} // Same site, continue
         }
 
         // Check if already at this parent (no-op)
@@ -863,15 +986,18 @@ impl PageRepository {
             return Err(anyhow::anyhow!("Cannot move page to itself"));
         }
 
-        // Cannot move to a descendant
-        if self.is_descendant_of(new_parent_id, page_id).await? {
+        // Cannot move to a descendant - check within transaction
+        let is_descendant = self
+            .is_descendant_of_tx(&mut tx, new_parent_id, page_id)
+            .await?;
+        if is_descendant {
             return Err(anyhow::anyhow!(
                 "Cannot move page to one of its descendants"
             ));
         }
 
         // Check for slug conflict at destination
-        let conflict = sqlx::query_as::<_, (i64,)>(
+        let conflict = sqlx::query_scalar::<_, i64>(
             r#"
             SELECT id 
             FROM pages 
@@ -882,7 +1008,7 @@ impl PageRepository {
         .bind(new_parent_id)
         .bind(&page.slug)
         .bind(page_id)
-        .fetch_optional(&self.pool)
+        .fetch_optional(&mut *tx)
         .await
         .context("Failed to check for slug conflict")?;
 
@@ -894,21 +1020,17 @@ impl PageRepository {
         }
 
         // Get the max position at destination
-        let max_position: Option<(Option<i32>,)> = sqlx::query_as(
-            r#"
-            SELECT MAX(position) 
-            FROM pages 
-            WHERE parent_page_id = ?
-            "#,
+        let max_position = sqlx::query_scalar::<_, Option<i32>>(
+            "SELECT MAX(position) FROM pages WHERE parent_page_id = ?",
         )
         .bind(new_parent_id)
-        .fetch_optional(&self.pool)
+        .fetch_one(&mut *tx)
         .await
         .context("Failed to get max position")?;
 
         let new_position = match max_position {
-            Some((Some(max),)) => max + 1,
-            _ => 0,
+            Some(max) => max + 1,
+            None => 0,
         };
 
         // Update the page
@@ -922,9 +1044,12 @@ impl PageRepository {
         .bind(new_parent_id)
         .bind(new_position)
         .bind(page_id)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await
         .context("Failed to move page")?;
+
+        // Commit the transaction
+        tx.commit().await.context("Failed to commit transaction")?;
 
         Ok(())
     }
@@ -4941,12 +5066,14 @@ mod tests {
         assert_eq!(page1.slug, "custom-slug");
 
         // Create page with empty slug - should auto-generate
-        let mut page2 = Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+        let mut page2 =
+            Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
         let id2 = repo.create_with_auto_slug(&mut page2).await?;
         assert_eq!(page2.slug, "my-page");
 
         // Create another page with same title - should get suffix
-        let mut page3 = Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+        let mut page3 =
+            Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
         let id3 = repo.create_with_auto_slug(&mut page3).await?;
         assert_eq!(page3.slug, "my-page-2");
 
