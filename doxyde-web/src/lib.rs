@@ -25,6 +25,7 @@ pub mod db;
 pub mod debug_middleware;
 pub mod draft;
 pub mod error;
+pub mod error_middleware;
 pub mod handlers;
 pub mod logo;
 pub mod markdown;

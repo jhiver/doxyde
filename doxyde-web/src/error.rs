@@ -16,16 +16,29 @@
 
 use axum::{
     http::StatusCode,
-    response::{IntoResponse, Response},
+    response::{Html, IntoResponse, Response},
 };
 use std::fmt;
+use tera::Context;
+use crate::autoreload_templates::TemplateEngine;
 
 /// Application error type that includes context for better debugging
-#[derive(Debug)]
 pub struct AppError {
     pub status: StatusCode,
     pub message: String,
     pub details: Option<String>,
+    pub templates: Option<TemplateEngine>,
+}
+
+impl fmt::Debug for AppError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AppError")
+            .field("status", &self.status)
+            .field("message", &self.message)
+            .field("details", &self.details)
+            .field("templates", &self.templates.is_some())
+            .finish()
+    }
 }
 
 impl AppError {
@@ -34,11 +47,17 @@ impl AppError {
             status,
             message: message.into(),
             details: None,
+            templates: None,
         }
     }
 
     pub fn with_details(mut self, details: impl Into<String>) -> Self {
         self.details = Some(details.into());
+        self
+    }
+
+    pub fn with_templates(mut self, templates: TemplateEngine) -> Self {
+        self.templates = Some(templates);
         self
     }
 
@@ -81,8 +100,71 @@ impl IntoResponse for AppError {
             "Request failed"
         );
 
-        // Return a simple error response to the client
+        // Try to render a nice HTML error page if we have templates
+        if let Some(templates) = &self.templates {
+            if let Ok(html) = self.render_error_page(templates) {
+                return (self.status, Html(html)).into_response();
+            }
+        }
+
+        // Fall back to simple error response
         (self.status, self.message).into_response()
+    }
+}
+
+impl AppError {
+    fn render_error_page(&self, templates: &TemplateEngine) -> Result<String, ()> {
+        // Create template context
+        let mut context = Context::new();
+        
+        // Add error-specific context
+        context.insert("error_code", &self.status.as_u16());
+        context.insert("error_message", &self.message);
+        context.insert("error_details", &self.details);
+        
+        // Add helpful context based on error type
+        match self.status {
+            StatusCode::NOT_FOUND => {
+                context.insert("error_title", "Page Not Found");
+                context.insert("error_description", "The page you're looking for doesn't exist.");
+            }
+            StatusCode::FORBIDDEN => {
+                context.insert("error_title", "Access Denied");
+                context.insert("error_description", "You don't have permission to access this page.");
+            }
+            StatusCode::INTERNAL_SERVER_ERROR => {
+                context.insert("error_title", "Server Error");
+                context.insert("error_description", "Something went wrong on our end. Please try again later.");
+            }
+            _ => {
+                context.insert("error_title", "Error");
+                context.insert("error_description", &self.message);
+            }
+        }
+
+        // Determine template based on status code
+        let template_name = match self.status {
+            StatusCode::NOT_FOUND => "errors/404.html",
+            StatusCode::FORBIDDEN => "errors/403.html",
+            StatusCode::INTERNAL_SERVER_ERROR => "errors/500.html",
+            _ => "errors/generic.html",
+        };
+
+        // Try to render the error template
+        match templates.render(template_name, &context) {
+            Ok(html) => Ok(html),
+            Err(e) => {
+                tracing::error!("Failed to render error template: {:?}", e);
+                // Try fallback to generic error template
+                if template_name != "errors/generic.html" {
+                    templates
+                        .render("errors/generic.html", &context)
+                        .map_err(|_| ())
+                } else {
+                    Err(())
+                }
+            }
+        }
     }
 }
 

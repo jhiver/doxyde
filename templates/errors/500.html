@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: var(--color-danger);
+        line-height: 1;
+        margin: 0;
+        opacity: 0.3;
+        position: relative;
+    }
+    
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: var(--color-text-primary);
+    }
+    
+    .error-description {
+        font-size: 18px;
+        color: var(--color-text-secondary);
+        margin-bottom: 40px;
+        max-width: 600px;
+        line-height: 1.6;
+    }
+    
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 40px;
+    }
+    
+    .status-info {
+        background: var(--color-bg-secondary);
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 40px;
+        max-width: 500px;
+        width: 100%;
+    }
+    
+    .status-info h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: var(--color-text-primary);
+    }
+    
+    .status-info p {
+        color: var(--color-text-secondary);
+        margin: 8px 0;
+        font-size: 14px;
+    }
+    
+    .tech-details {
+        margin-top: 40px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: #666;
+        max-width: 800px;
+        width: 100%;
+        text-align: left;
+        display: none;
+    }
+    
+    .tech-details.show {
+        display: block;
+    }
+    
+    .toggle-details {
+        font-size: 14px;
+        color: var(--color-primary);
+        cursor: pointer;
+        text-decoration: underline;
+        background: none;
+        border: none;
+        padding: 0;
+    }
+    
+    /* Animation */
+    @keyframes pulse {
+        0% { opacity: 0.3; }
+        50% { opacity: 0.5; }
+        100% { opacity: 0.3; }
+    }
+    
+    .error-code {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    
+    /* Gear animation for server error */
+    .error-icon {
+        width: 100px;
+        height: 100px;
+        margin: 0 auto 20px;
+        position: relative;
+    }
+    
+    .gear {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border: 8px solid var(--color-text-secondary);
+        border-radius: 50%;
+        opacity: 0.3;
+    }
+    
+    .gear::before {
+        content: '';
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: var(--color-text-secondary);
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+    }
+    
+    .gear-1 {
+        top: 10px;
+        left: 10px;
+        animation: rotate 3s linear infinite;
+    }
+    
+    .gear-2 {
+        top: 30px;
+        right: 10px;
+        animation: rotate-reverse 3s linear infinite;
+    }
+    
+    @keyframes rotate {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    @keyframes rotate-reverse {
+        from { transform: rotate(360deg); }
+        to { transform: rotate(0deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <div class="gear gear-1"></div>
+        <div class="gear gear-2"></div>
+    </div>
+    
+    <h1 class="error-code">500</h1>
+    <h2 class="error-title">{{ error_title }}</h2>
+    <p class="error-description">
+        {{ error_description }}
+        <br><br>
+        Our team has been notified and we're working to fix this issue. 
+        Please try again in a few minutes.
+    </p>
+    
+    <div class="error-actions">
+        <a href="/" class="button">Go to Homepage</a>
+        <a href="javascript:location.reload()" class="button button-secondary">Try Again</a>
+    </div>
+    
+    <div class="status-info">
+        <h3>What can you do?</h3>
+        <p>• Try refreshing the page in a minute</p>
+        <p>• Clear your browser cache and cookies</p>
+        <p>• Check back later if the problem persists</p>
+        <p>• Contact support if this is urgent</p>
+    </div>
+    
+    {% if error_details %}
+    <div style="margin-top: 20px;">
+        <button class="toggle-details" onclick="document.getElementById('tech-details').classList.toggle('show')">
+            Show technical details
+        </button>
+        <div id="tech-details" class="tech-details">
+            <strong>Error Details:</strong><br>
+            {{ error_details }}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

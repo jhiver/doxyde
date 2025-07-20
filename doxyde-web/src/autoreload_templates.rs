@@ -22,6 +22,7 @@ use crate::component_render::{GetComponentTemplatesFunction, RenderComponentFunc
 use crate::markdown::make_markdown_filter;
 use std::collections::HashMap;
 use tera::{to_value, Filter, Value};
+use std::fmt;
 
 /// A wrapper around Tera that can reload templates in development mode
 pub enum TemplateEngine {
@@ -32,6 +33,15 @@ pub enum TemplateEngine {
         templates_dir: String,
         cached: Arc<RwLock<Tera>>,
     },
+}
+
+impl fmt::Debug for TemplateEngine {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Static(_) => write!(f, "TemplateEngine::Static"),
+            Self::Reloadable { templates_dir, .. } => write!(f, "TemplateEngine::Reloadable({})", templates_dir),
+        }
+    }
 }
 
 impl TemplateEngine {

@@ -86,7 +86,7 @@ async fn resolve_site(state: &AppState, host: &str) -> Result<Site, AppError> {
             Err(AppError::not_found(format!(
                 "Site not found for domain: {}",
                 host
-            )))
+            )).with_templates(state.templates.clone()))
         }
         Err(e) => {
             tracing::error!(
@@ -96,7 +96,8 @@ async fn resolve_site(state: &AppState, host: &str) -> Result<Site, AppError> {
             );
             Err(
                 AppError::internal_server_error("Failed to query site by domain")
-                    .with_details(format!("{:?}", e)),
+                    .with_details(format!("{:?}", e))
+                    .with_templates(state.templates.clone()),
             )
         }
     }
@@ -107,13 +108,14 @@ async fn navigate_to_page(
     page_repo: &PageRepository,
     site_id: i64,
     path: &str,
+    templates: &crate::autoreload_templates::TemplateEngine,
 ) -> Result<Page, AppError> {
     if path == "/" {
         // Get root page
         tracing::debug!("Getting root page for site {}", site_id);
         match page_repo.get_root_page(site_id).await {
             Ok(Some(page)) => Ok(page),
-            Ok(None) => Err(AppError::not_found("Root page not found")),
+            Ok(None) => Err(AppError::not_found("Root page not found").with_templates(templates.clone())),
             Err(e) => {
                 tracing::error!(
                     error = ?e,
@@ -121,7 +123,8 @@ async fn navigate_to_page(
                     "Failed to get root page"
                 );
                 Err(AppError::internal_server_error("Failed to get root page")
-                    .with_details(format!("{:?}", e)))
+                    .with_details(format!("{:?}", e))
+                    .with_templates(templates.clone()))
             }
         }
     } else {
@@ -136,7 +139,7 @@ async fn navigate_to_page(
         // Start from root page
         let mut current_page = match page_repo.get_root_page(site_id).await {
             Ok(Some(page)) => page,
-            Ok(None) => return Err(AppError::not_found("Root page not found")),
+            Ok(None) => return Err(AppError::not_found("Root page not found").with_templates(templates.clone())),
             Err(e) => {
                 tracing::error!(
                     error = ?e,
@@ -146,7 +149,8 @@ async fn navigate_to_page(
                 return Err(AppError::internal_server_error(
                     "Failed to get root page for navigation",
                 )
-                .with_details(format!("{:?}", e)));
+                .with_details(format!("{:?}", e))
+                .with_templates(templates.clone()));
             }
         };
 
@@ -165,7 +169,8 @@ async fn navigate_to_page(
                             "Failed to list children for page {}: {:?}",
                             current_page.id.unwrap(),
                             e
-                        )));
+                        ))
+                        .with_templates(templates.clone()));
                 }
             };
 
@@ -173,7 +178,7 @@ async fn navigate_to_page(
             current_page = children
                 .into_iter()
                 .find(|p| p.slug == segment)
-                .ok_or_else(|| AppError::not_found(format!("Page not found: {}", segment)))?;
+                .ok_or_else(|| AppError::not_found(format!("Page not found: {}", segment)).with_templates(templates.clone()))?;
         }
 
         Ok(current_page)
@@ -236,7 +241,7 @@ pub async fn content_handler(
 
     // Navigate to the requested page
     let page_repo = PageRepository::new(state.db.clone());
-    let page = navigate_to_page(&page_repo, site.id.unwrap(), &content_path.path).await?;
+    let page = navigate_to_page(&page_repo, site.id.unwrap(), &content_path.path, &state.templates).await?;
 
     // Handle trailing slash redirects
     if let Some(redirect) = handle_trailing_slash_redirect(&uri, &content_path) {
@@ -262,7 +267,7 @@ pub async fn content_handler(
             action = %action_name,
             "Unknown action requested"
         );
-        Err(AppError::not_found(format!("Unknown action: {}", action_name)))
+        Err(AppError::not_found(format!("Unknown action: {}", action_name)).with_templates(state.templates.clone()))
     }
 }
 
@@ -361,20 +366,21 @@ async fn handle_image_request(
 ) -> Result<Response, AppError> {
     // Find the site by domain
     let site_repo = SiteRepository::new(state.db.clone());
+    let templates = state.templates.clone();
     let site = match site_repo.find_by_domain(&host).await {
         Ok(Some(site)) => site,
-        Ok(None) => return Err(AppError::not_found("Site not found")),
+        Ok(None) => return Err(AppError::not_found("Site not found").with_templates(templates.clone())),
         Err(e) => {
             tracing::error!(error = ?e, "Failed to query site");
-            return Err(AppError::internal_server_error("Failed to query site"));
+            return Err(AppError::internal_server_error("Failed to query site").with_templates(templates.clone()));
         }
     };
 
     // Serve the image
     match serve_image_handler(State(state), site, axum::extract::Path((slug, format))).await {
         Ok(response) => Ok(response),
-        Err(StatusCode::NOT_FOUND) => Err(AppError::not_found("Image not found")),
-        Err(_) => Err(AppError::internal_server_error("Failed to serve image")),
+        Err(StatusCode::NOT_FOUND) => Err(AppError::not_found("Image not found").with_templates(templates.clone())),
+        Err(_) => Err(AppError::internal_server_error("Failed to serve image").with_templates(templates)),
     }
 }
 
@@ -405,12 +411,13 @@ pub async fn content_post_handler(
         // Handle image upload with multipart
         // Find the site
         let site_repo = SiteRepository::new(state.db.clone());
+        let templates = state.templates.clone();
         let site = match site_repo.find_by_domain(&host).await {
             Ok(Some(site)) => site,
-            Ok(None) => return Err(AppError::not_found("Site not found")),
+            Ok(None) => return Err(AppError::not_found("Site not found").with_templates(templates.clone())),
             Err(e) => {
                 tracing::error!(error = ?e, "Failed to query site");
-                return Err(AppError::internal_server_error("Failed to query site"));
+                return Err(AppError::internal_server_error("Failed to query site").with_templates(templates));
             }
         };
 
@@ -424,9 +431,10 @@ pub async fn content_post_handler(
         // Extract multipart from request - note this consumes the request
         let parts = request.into_parts();
         let request = Request::from_parts(parts.0, parts.1);
+        let templates = state.templates.clone();
         let multipart = match axum::extract::Multipart::from_request(request, &state).await {
             Ok(mp) => mp,
-            Err(_) => return Err(AppError::bad_request("Invalid multipart data")),
+            Err(_) => return Err(AppError::bad_request("Invalid multipart data").with_templates(templates.clone())),
         };
 
         // Handle upload based on action
@@ -442,29 +450,28 @@ pub async fn content_post_handler(
         } else {
             crate::handlers::upload_image_handler(State(state), site, page, user, multipart).await
         };
-
         match response {
             Ok(response) => Ok(response),
             Err(StatusCode::FORBIDDEN) => Err(AppError::forbidden(
                 "You don't have permission to upload images",
-            )),
+            ).with_templates(templates.clone())),
             Err(StatusCode::PAYLOAD_TOO_LARGE) => Err(AppError::new(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "File too large",
-            )),
-            Err(_) => Err(AppError::internal_server_error("Failed to upload image")),
+            ).with_templates(templates.clone())),
+            Err(_) => Err(AppError::internal_server_error("Failed to upload image").with_templates(templates)),
         }
     } else {
         // Handle regular form POST - convert request body to String
         let body = match axum::body::to_bytes(request.into_body(), usize::MAX).await {
             Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
-            Err(_) => return Err(AppError::bad_request("Invalid request body")),
+            Err(_) => return Err(AppError::bad_request("Invalid request body").with_templates(state.templates.clone())),
         };
 
         // Call the existing action handler
-        match crate::handlers::handle_action(Host(host), uri, State(state), user, body).await {
+        match crate::handlers::handle_action(Host(host), uri, State(state.clone()), user, body).await {
             Ok(response) => Ok(response),
-            Err(status) => Err(AppError::new(status, "Action failed")),
+            Err(status) => Err(AppError::new(status, "Action failed").with_templates(state.templates)),
         }
     }
 }

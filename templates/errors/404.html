@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: var(--color-primary);
+        line-height: 1;
+        margin: 0;
+        opacity: 0.2;
+        position: relative;
+    }
+    
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: var(--color-text-primary);
+    }
+    
+    .error-description {
+        font-size: 18px;
+        color: var(--color-text-secondary);
+        margin-bottom: 40px;
+        max-width: 500px;
+    }
+    
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .error-search {
+        margin: 40px 0;
+        width: 100%;
+        max-width: 500px;
+    }
+    
+    .search-form {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .search-form input {
+        flex: 1;
+        padding: 12px 16px;
+        border: 2px solid var(--color-border);
+        border-radius: 8px;
+        font-size: 16px;
+        outline: none;
+        transition: border-color 0.2s;
+    }
+    
+    .search-form input:focus {
+        border-color: var(--color-primary);
+    }
+    
+    .search-form button {
+        padding: 12px 24px;
+        background: var(--color-primary);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .search-form button:hover {
+        background: var(--color-primary-dark);
+    }
+    
+    .suggestions {
+        margin-top: 60px;
+        padding-top: 40px;
+        border-top: 1px solid var(--color-border);
+        width: 100%;
+        max-width: 800px;
+    }
+    
+    .suggestions h3 {
+        font-size: 20px;
+        margin-bottom: 20px;
+        color: var(--color-text-primary);
+    }
+    
+    .suggestion-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 16px;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .suggestion-item {
+        text-align: left;
+    }
+    
+    .suggestion-item a {
+        display: block;
+        padding: 16px;
+        background: var(--color-bg-secondary);
+        border-radius: 8px;
+        text-decoration: none;
+        color: var(--color-text-primary);
+        transition: all 0.2s;
+        border: 1px solid transparent;
+    }
+    
+    .suggestion-item a:hover {
+        background: white;
+        border-color: var(--color-border);
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+    
+    .suggestion-title {
+        font-weight: 500;
+        margin-bottom: 4px;
+    }
+    
+    .suggestion-description {
+        font-size: 14px;
+        color: var(--color-text-secondary);
+        line-height: 1.4;
+    }
+    
+    /* Animation */
+    @keyframes bounce {
+        0%, 100% { transform: translateY(0); }
+        50% { transform: translateY(-10px); }
+    }
+    
+    .error-code {
+        animation: bounce 2s ease-in-out infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <h1 class="error-code">404</h1>
+    <h2 class="error-title">{{ error_title }}</h2>
+    <p class="error-description">
+        {{ error_description }}
+        {% if error_details %}
+            <br><small>{{ error_details }}</small>
+        {% endif %}
+    </p>
+    
+    <div class="error-actions">
+        <a href="/" class="button">Go to Homepage</a>
+        {% if navigation %}
+            <a href="{{ navigation[0].url | default(value='/') }}" class="button button-secondary">Browse Pages</a>
+        {% endif %}
+    </div>
+    
+    <div class="error-search">
+        <form class="search-form" action="/search" method="get">
+            <input type="text" name="q" placeholder="Search for pages..." autocomplete="off">
+            <button type="submit">Search</button>
+        </form>
+    </div>
+    
+    {% if navigation and navigation|length > 0 %}
+    <div class="suggestions">
+        <h3>Popular Pages</h3>
+        <ul class="suggestion-list">
+            {% for page in navigation %}
+                {% if loop.index <= 6 %}
+                <li class="suggestion-item">
+                    <a href="{{ page.url }}">
+                        <div class="suggestion-title">{{ page.title }}</div>
+                        {% if page.description %}
+                        <div class="suggestion-description">{{ page.description | truncate(length=80) }}</div>
+                        {% endif %}
+                    </a>
+                </li>
+                {% endif %}
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

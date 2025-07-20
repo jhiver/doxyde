@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: var(--color-warning);
+        line-height: 1;
+        margin: 0;
+        opacity: 0.3;
+        position: relative;
+    }
+    
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: var(--color-text-primary);
+    }
+    
+    .error-description {
+        font-size: 18px;
+        color: var(--color-text-secondary);
+        margin-bottom: 40px;
+        max-width: 500px;
+        line-height: 1.6;
+    }
+    
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    /* Lock icon */
+    .error-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        position: relative;
+    }
+    
+    .lock {
+        width: 60px;
+        height: 50px;
+        background: var(--color-warning);
+        border-radius: 8px;
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0.3;
+    }
+    
+    .lock::before {
+        content: '';
+        position: absolute;
+        width: 40px;
+        height: 30px;
+        border: 8px solid var(--color-warning);
+        border-bottom: none;
+        border-radius: 20px 20px 0 0;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+    
+    .lock::after {
+        content: '';
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: white;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+    
+    .permission-info {
+        background: var(--color-bg-secondary);
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 40px;
+        max-width: 500px;
+        width: 100%;
+        text-align: left;
+    }
+    
+    .permission-info h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: var(--color-text-primary);
+    }
+    
+    .permission-info p {
+        color: var(--color-text-secondary);
+        margin: 8px 0;
+        font-size: 14px;
+    }
+    
+    /* Animation */
+    @keyframes shake {
+        0%, 100% { transform: translateX(-50%) rotate(0deg); }
+        25% { transform: translateX(-50%) rotate(-5deg); }
+        75% { transform: translateX(-50%) rotate(5deg); }
+    }
+    
+    .lock {
+        animation: shake 2s ease-in-out infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <div class="lock"></div>
+    </div>
+    
+    <h1 class="error-code">403</h1>
+    <h2 class="error-title">{{ error_title }}</h2>
+    <p class="error-description">
+        {{ error_description }}
+        {% if error_message != error_description %}
+            <br><br>{{ error_message }}
+        {% endif %}
+    </p>
+    
+    <div class="error-actions">
+        <a href="/" class="button">Go to Homepage</a>
+        {% if user %}
+            <a href="/.logout" class="button button-secondary">Switch Account</a>
+        {% else %}
+            <a href="/.login" class="button button-primary">Sign In</a>
+        {% endif %}
+    </div>
+    
+    <div class="permission-info">
+        <h3>Why am I seeing this?</h3>
+        <p>This page requires special permissions to access. Possible reasons:</p>
+        <p>• You need to be logged in to view this page</p>
+        <p>• Your account doesn't have the required permissions</p>
+        <p>• The page is restricted to certain users or roles</p>
+        <p>• The content has been made private</p>
+        
+        {% if not user %}
+        <p style="margin-top: 16px;">
+            <strong>If you have an account, please <a href="/.login">sign in</a> to continue.</strong>
+        </p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

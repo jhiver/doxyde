@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ error_title | default(value="Error") }} - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+    
+    .error-code {
+        font-size: 80px;
+        font-weight: 700;
+        color: var(--color-text-secondary);
+        line-height: 1;
+        margin: 0 0 20px 0;
+        opacity: 0.3;
+    }
+    
+    .error-title {
+        font-size: 32px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: var(--color-text-primary);
+    }
+    
+    .error-description {
+        font-size: 18px;
+        color: var(--color-text-secondary);
+        margin-bottom: 40px;
+        max-width: 500px;
+        line-height: 1.6;
+    }
+    
+    .error-message {
+        background: var(--color-bg-secondary);
+        border-radius: 8px;
+        padding: 16px 24px;
+        margin-bottom: 30px;
+        color: var(--color-text-primary);
+        max-width: 600px;
+        width: 100%;
+    }
+    
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .error-details {
+        margin-top: 40px;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: #666;
+        max-width: 800px;
+        width: 100%;
+        text-align: left;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    {% if error_code %}
+    <h1 class="error-code">{{ error_code }}</h1>
+    {% endif %}
+    
+    <h2 class="error-title">{{ error_title | default(value="Something went wrong") }}</h2>
+    
+    {% if error_description %}
+    <p class="error-description">{{ error_description }}</p>
+    {% endif %}
+    
+    {% if error_message and error_message != error_description %}
+    <div class="error-message">{{ error_message }}</div>
+    {% endif %}
+    
+    <div class="error-actions">
+        <a href="/" class="button">Go to Homepage</a>
+        <a href="javascript:history.back()" class="button button-secondary">Go Back</a>
+    </div>
+    
+    {% if error_details %}
+    <div class="error-details">
+        <strong>Details:</strong><br>
+        {{ error_details }}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
