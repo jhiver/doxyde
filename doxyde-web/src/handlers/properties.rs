@@ -102,7 +102,7 @@ pub async fn page_properties_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    
+
     // Add all action bar context variables
     add_action_bar_context(&mut context, &state, &page, &user, ".properties").await?;
 
@@ -157,7 +157,7 @@ pub async fn update_page_properties_handler(
 
     // Update page properties
     page.title = form.title;
-    
+
     // Handle slug change (only for non-root pages)
     if page.parent_page_id.is_some() {
         if let Some(new_slug) = form.slug.filter(|s| !s.is_empty()) {
@@ -170,7 +170,7 @@ pub async fn update_page_properties_handler(
             page.slug = generate_slug_from_title(&page.title);
         }
     }
-    
+
     page.description = form.description.filter(|s| !s.is_empty());
     page.keywords = form.keywords.filter(|s| !s.is_empty());
     page.template = form.template;
@@ -185,7 +185,7 @@ pub async fn update_page_properties_handler(
     // Validate the page
     if let Err(validation_error) = page.is_valid() {
         tracing::error!("Page validation failed: {}", validation_error);
-        
+
         // Create an error response with the validation details
         let error_html = format!(
             r#"<!DOCTYPE html>
@@ -216,7 +216,7 @@ pub async fn update_page_properties_handler(
 </html>"#,
             html_escape::encode_text(&validation_error)
         );
-        
+
         return Ok((StatusCode::BAD_REQUEST, Html(error_html)).into_response());
     }
 

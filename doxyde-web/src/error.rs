@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::autoreload_templates::TemplateEngine;
 use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Response},
 };
 use std::fmt;
 use tera::Context;
-use crate::autoreload_templates::TemplateEngine;
 
 /// Application error type that includes context for better debugging
 pub struct AppError {
@@ -116,25 +116,34 @@ impl AppError {
     fn render_error_page(&self, templates: &TemplateEngine) -> Result<String, ()> {
         // Create template context
         let mut context = Context::new();
-        
+
         // Add error-specific context
         context.insert("error_code", &self.status.as_u16());
         context.insert("error_message", &self.message);
         context.insert("error_details", &self.details);
-        
+
         // Add helpful context based on error type
         match self.status {
             StatusCode::NOT_FOUND => {
                 context.insert("error_title", "Page Not Found");
-                context.insert("error_description", "The page you're looking for doesn't exist.");
+                context.insert(
+                    "error_description",
+                    "The page you're looking for doesn't exist.",
+                );
             }
             StatusCode::FORBIDDEN => {
                 context.insert("error_title", "Access Denied");
-                context.insert("error_description", "You don't have permission to access this page.");
+                context.insert(
+                    "error_description",
+                    "You don't have permission to access this page.",
+                );
             }
             StatusCode::INTERNAL_SERVER_ERROR => {
                 context.insert("error_title", "Server Error");
-                context.insert("error_description", "Something went wrong on our end. Please try again later.");
+                context.insert(
+                    "error_description",
+                    "Something went wrong on our end. Please try again later.",
+                );
             }
             _ => {
                 context.insert("error_title", "Error");

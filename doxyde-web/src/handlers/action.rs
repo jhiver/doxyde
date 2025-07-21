@@ -20,6 +20,7 @@ use axum::{
     http::{StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use doxyde_core::models::{Page, Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 
 use crate::{
@@ -42,10 +43,9 @@ pub async fn handle_action(
     user: CurrentUser,
     body: String,
 ) -> Result<Response, StatusCode> {
-    // Parse the path to extract content path and action
     let path = uri.path();
     let content_path = ContentPath::parse(path);
-    
+
     tracing::info!(
         "handle_action called - path: {}, action: {:?}, body length: {}",
         path,
@@ -53,355 +53,480 @@ pub async fn handle_action(
         body.len()
     );
 
-    // Use the full host as domain (including port if present)
-    let domain = &host;
+    let site = resolve_site(&state, &host).await?;
+    let page = resolve_page(&state, &site, &content_path).await?;
 
-    // Find the site by domain
-    let site_repo = SiteRepository::new(state.db.clone());
-    let site = site_repo
-        .find_by_domain(domain)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .ok_or(StatusCode::NOT_FOUND)?;
+    route_to_handler(state, site, page, user, body, content_path).await
+}
 
-    // Navigate to find the page
-    let page_repo = PageRepository::new(state.db.clone());
-    let page = if content_path.path == "/" {
-        page_repo
-            .get_root_page(site.id.unwrap())
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::NOT_FOUND)?
-    } else {
-        let segments: Vec<&str> = content_path
-            .path
-            .split('/')
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        let mut current_page = page_repo
-            .get_root_page(site.id.unwrap())
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .ok_or(StatusCode::NOT_FOUND)?;
-
-        for segment in segments {
-            let children = page_repo
-                .list_children(current_page.id.unwrap())
-                .await
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            current_page = children
-                .into_iter()
-                .find(|p| p.slug == segment)
-                .ok_or(StatusCode::NOT_FOUND)?;
-        }
-
-        current_page
-    };
-
-    // Route based on action
+/// Route to the appropriate handler based on action
+async fn route_to_handler(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+    content_path: ContentPath,
+) -> Result<Response, StatusCode> {
     match content_path.action.as_deref() {
-        Some(".edit") | Some(".content") => {
-            // Parse the form data to find the action
-            let form_data: Vec<(String, String)> = match serde_urlencoded::from_str(&body) {
-                Ok(data) => data,
-                Err(e) => {
-                    tracing::error!("Failed to parse form data: {:?}. Body: {}", e, body);
-                    return Err(StatusCode::BAD_REQUEST);
-                }
-            };
-
-            // Find the action field
-            let action = form_data
-                .iter()
-                .find(|(k, _)| k == "action")
-                .map(|(_, v)| v.as_str())
-                .ok_or(StatusCode::BAD_REQUEST)?;
-
-            tracing::info!("Form action: {}", action);
-            
-            match action {
-                "save_draft" | "publish_draft" => {
-                    tracing::info!("Processing save_draft/publish_draft action");
-                    // Parse arrays from form data
-                    let mut component_ids = Vec::new();
-                    let mut component_types = Vec::new();
-                    let mut component_titles = Vec::new();
-                    let mut component_templates = Vec::new();
-                    let mut component_contents = Vec::new();
-
-                    for (key, value) in &form_data {
-                        match key.as_str() {
-                            "component_ids" => {
-                                if let Ok(id) = value.parse::<i64>() {
-                                    component_ids.push(id);
-                                }
-                            }
-                            "component_types" => component_types.push(value.clone()),
-                            "component_titles" => component_titles.push(value.clone()),
-                            "component_templates" => component_templates.push(value.clone()),
-                            "component_contents" => component_contents.push(value.clone()),
-                            _ => {}
-                        }
-                    }
-
-                    let save_form = SaveDraftForm {
-                        component_ids,
-                        component_types,
-                        component_titles,
-                        component_templates,
-                        component_contents,
-                        action: Some("save_draft".to_string()),
-                    };
-
-                    if action == "save_draft" {
-                        crate::handlers::save_draft_handler(
-                            state,
-                            site,
-                            page,
-                            user,
-                            axum::extract::Form(save_form),
-                        )
-                        .await
-                    } else {
-                        // publish_draft - save first, then publish
-                        crate::handlers::save_draft_handler(
-                            state.clone(),
-                            site.clone(),
-                            page.clone(),
-                            user.clone(),
-                            axum::extract::Form(save_form),
-                        )
-                        .await?;
-
-                        crate::handlers::publish_draft_handler(state, site, page, user).await
-                    }
-                }
-                "discard_draft" => {
-                    crate::handlers::discard_draft_handler(state, site, page, user).await
-                }
-                "add_component" => {
-                    // Parse AddComponentForm from form_data
-                    let content = form_data
-                        .iter()
-                        .find(|(k, _)| k == "content")
-                        .map(|(_, v)| v.clone())
-                        .unwrap_or_default();
-
-                    let component_type = form_data
-                        .iter()
-                        .find(|(k, _)| k == "component_type")
-                        .map(|(_, v)| v.clone())
-                        .unwrap_or_else(|| "text".to_string());
-
-                    let add_form = AddComponentForm {
-                        content,
-                        component_type,
-                    };
-
-                    crate::handlers::add_component_handler(
-                        state,
-                        site,
-                        page,
-                        user,
-                        axum::extract::Form(add_form),
-                    )
-                    .await
-                }
-                "delete_component" => {
-                    // Get the component to delete
-                    let delete_component_id = form_data
-                        .iter()
-                        .find(|(k, _)| k == "delete_component_id")
-                        .and_then(|(_, v)| v.parse::<i64>().ok())
-                        .ok_or(StatusCode::BAD_REQUEST)?;
-
-                    // Delete the component directly
-                    crate::handlers::delete_component_handler(
-                        state,
-                        site,
-                        page,
-                        user,
-                        delete_component_id,
-                    )
-                    .await
-                }
-                "move_component" => {
-                    // First save all components
-                    let mut component_ids = Vec::new();
-                    let mut component_types = Vec::new();
-                    let mut component_titles = Vec::new();
-                    let mut component_templates = Vec::new();
-                    let mut component_contents = Vec::new();
-
-                    // Get the component to move and direction
-                    let move_component_id = form_data
-                        .iter()
-                        .find(|(k, _)| k == "move_component_id")
-                        .and_then(|(_, v)| v.parse::<i64>().ok())
-                        .ok_or(StatusCode::BAD_REQUEST)?;
-
-                    let move_direction = form_data
-                        .iter()
-                        .find(|(k, _)| k == "move_direction")
-                        .map(|(_, v)| v.as_str())
-                        .ok_or(StatusCode::BAD_REQUEST)?;
-
-                    // Collect all component data in order
-                    for (key, value) in &form_data {
-                        match key.as_str() {
-                            "component_ids" => {
-                                if let Ok(id) = value.parse::<i64>() {
-                                    component_ids.push(id);
-                                }
-                            }
-                            "component_types" => component_types.push(value.clone()),
-                            "component_titles" => component_titles.push(value.clone()),
-                            "component_templates" => component_templates.push(value.clone()),
-                            "component_contents" => component_contents.push(value.clone()),
-                            _ => {}
-                        }
-                    }
-
-                    let save_form = SaveDraftForm {
-                        component_ids,
-                        component_types,
-                        component_titles,
-                        component_templates,
-                        component_contents,
-                        action: Some("save_draft".to_string()),
-                    };
-
-                    // Save all components
-                    crate::handlers::save_draft_handler(
-                        state.clone(),
-                        site.clone(),
-                        page.clone(),
-                        user.clone(),
-                        axum::extract::Form(save_form),
-                    )
-                    .await?;
-
-                    // Move the component
-                    crate::handlers::move_component_handler(
-                        state,
-                        site,
-                        page,
-                        user,
-                        move_component_id,
-                        move_direction,
-                    )
-                    .await
-                }
-                _ => Err(StatusCode::BAD_REQUEST),
-            }
-        }
-        Some(".new") => {
-            // Parse NewPageForm from body
-            let new_form: NewPageForm =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-            crate::handlers::create_page_handler(
-                state,
-                site,
-                page,
-                user,
-                axum::extract::Form(new_form),
-            )
-            .await
-        }
-        Some(".properties") => {
-            // Parse PagePropertiesForm from body
-            let props_form: PagePropertiesForm =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-            crate::handlers::update_page_properties_handler(
-                state,
-                site,
-                page,
-                user,
-                axum::extract::Form(props_form),
-            )
-            .await
-        }
-        Some(".move") => {
-            // Parse MovePageForm from body
-            let move_form: MovePageForm =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-            crate::handlers::do_move_page_handler(
-                state,
-                site,
-                page,
-                user,
-                axum::extract::Form(move_form),
-            )
-            .await
-        }
-        Some(".delete") => {
-            // Parse DeletePageForm from body
-            let delete_form: DeletePageForm =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-            crate::handlers::do_delete_page_handler(
-                state,
-                site,
-                page,
-                user,
-                axum::extract::Form(delete_form),
-            )
-            .await
-        }
-        Some(".reorder") => {
-            // Parse form data for reorder
-            let form_data: Vec<(String, String)> =
-                serde_urlencoded::from_str(&body).map_err(|_| StatusCode::BAD_REQUEST)?;
-
-            // Extract sort mode
-            let sort_mode = form_data
-                .iter()
-                .find(|(k, _)| k == "sort_mode")
-                .map(|(_, v)| v.clone())
-                .unwrap_or_else(|| "created_at_asc".to_string());
-
-            // Extract positions if in manual mode
-            let mut positions = Vec::new();
-            if sort_mode == "manual" {
-                for (key, value) in &form_data {
-                    if let Some(page_id_str) = key.strip_prefix("position_") {
-                        if let (Ok(page_id), Ok(position)) =
-                            (page_id_str.parse::<i64>(), value.parse::<i32>())
-                        {
-                            positions.push((page_id, position));
-                        }
-                    }
-                }
-            }
-
-            crate::handlers::update_page_order_handler(
-                State(state.clone().into()),
-                site,
-                page.clone(),
-                user,
-                sort_mode,
-                if positions.is_empty() {
-                    None
-                } else {
-                    Some(positions)
-                },
-            )
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-            // Redirect back to the page
-            let redirect_path = if content_path.path == "/" {
-                "/".to_string()
-            } else {
-                format!("{}/", content_path.path)
-            };
-            Ok(axum::response::Redirect::to(&redirect_path).into_response())
-        }
+        Some(".edit") | Some(".content") => handle_edit_action(state, site, page, user, body).await,
+        Some(".new") => handle_new_page(state, site, page, user, body).await,
+        Some(".properties") => handle_properties(state, site, page, user, body).await,
+        Some(".move") => handle_move_page(state, site, page, user, body).await,
+        Some(".delete") => handle_delete_page(state, site, page, user, body).await,
+        Some(".reorder") => handle_reorder(state, site, page, user, body, content_path).await,
         _ => Err(StatusCode::NOT_FOUND),
     }
+}
+
+/// Handle edit/content action
+async fn handle_edit_action(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+) -> Result<Response, StatusCode> {
+    let form_data = parse_form_data(&body)?;
+    let action = extract_action(&form_data);
+
+    match action.as_deref() {
+        Some("save_draft") | Some("publish_draft") => {
+            handle_save_or_publish(state, site, page, user, form_data, &action).await
+        }
+        Some("discard_draft") => handle_discard_draft(state, site, page, user).await,
+        Some("add_component") => handle_add_component(state, site, page, user, form_data).await,
+        Some("delete_component") => {
+            handle_delete_component(state, site, page, user, form_data).await
+        }
+        Some("move_component") => handle_move_component(state, site, page, user, form_data).await,
+        _ => Err(StatusCode::BAD_REQUEST),
+    }
+}
+
+/// Handle save_draft or publish_draft actions
+async fn handle_save_or_publish(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    form_data: Vec<(String, String)>,
+    action: &Option<String>,
+) -> Result<Response, StatusCode> {
+    tracing::info!("Processing save_draft/publish_draft action");
+
+    let save_form = parse_save_draft_form(&form_data)?;
+
+    if action.as_deref() == Some("save_draft") {
+        save_draft(state, site, page, user, save_form).await
+    } else {
+        save_and_publish(state, site, page, user, save_form).await
+    }
+}
+
+/// Save draft
+async fn save_draft(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    save_form: SaveDraftForm,
+) -> Result<Response, StatusCode> {
+    crate::handlers::save_draft_handler(state, site, page, user, axum::extract::Form(save_form))
+        .await
+}
+
+/// Save and publish draft
+async fn save_and_publish(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    save_form: SaveDraftForm,
+) -> Result<Response, StatusCode> {
+    // First save the draft
+    crate::handlers::save_draft_handler(
+        state.clone(),
+        site.clone(),
+        page.clone(),
+        user.clone(),
+        axum::extract::Form(save_form),
+    )
+    .await?;
+
+    // Then publish it
+    crate::handlers::publish_draft_handler(state, site, page, user).await
+}
+
+/// Handle discard draft
+async fn handle_discard_draft(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+) -> Result<Response, StatusCode> {
+    crate::handlers::discard_draft_handler(state, site, page, user).await
+}
+
+/// Handle add component
+async fn handle_add_component(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    form_data: Vec<(String, String)>,
+) -> Result<Response, StatusCode> {
+    let add_form = parse_add_component_form(&form_data);
+
+    crate::handlers::add_component_handler(state, site, page, user, axum::extract::Form(add_form))
+        .await
+}
+
+/// Handle delete component
+async fn handle_delete_component(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    form_data: Vec<(String, String)>,
+) -> Result<Response, StatusCode> {
+    let component_id = extract_component_id(&form_data, "delete_component_id")?;
+
+    crate::handlers::delete_component_handler(state, site, page, user, component_id).await
+}
+
+/// Handle move component
+async fn handle_move_component(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    form_data: Vec<(String, String)>,
+) -> Result<Response, StatusCode> {
+    // First save all components
+    let save_form = parse_save_draft_form(&form_data)?;
+
+    crate::handlers::save_draft_handler(
+        state.clone(),
+        site.clone(),
+        page.clone(),
+        user.clone(),
+        axum::extract::Form(save_form),
+    )
+    .await?;
+
+    // Then move the component
+    let move_component_id = extract_component_id(&form_data, "move_component_id")?;
+    let move_direction = extract_field(&form_data, "move_direction")?;
+
+    crate::handlers::move_component_handler(
+        state,
+        site,
+        page,
+        user,
+        move_component_id,
+        move_direction.as_str(),
+    )
+    .await
+}
+
+/// Handle new page creation
+async fn handle_new_page(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+) -> Result<Response, StatusCode> {
+    let new_form: NewPageForm = parse_form(&body)?;
+
+    crate::handlers::create_page_handler(state, site, page, user, axum::extract::Form(new_form))
+        .await
+}
+
+/// Handle properties update
+async fn handle_properties(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+) -> Result<Response, StatusCode> {
+    let props_form: PagePropertiesForm = parse_form(&body)?;
+
+    crate::handlers::update_page_properties_handler(
+        state,
+        site,
+        page,
+        user,
+        axum::extract::Form(props_form),
+    )
+    .await
+}
+
+/// Handle page move
+async fn handle_move_page(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+) -> Result<Response, StatusCode> {
+    let move_form: MovePageForm = parse_form(&body)?;
+
+    crate::handlers::do_move_page_handler(state, site, page, user, axum::extract::Form(move_form))
+        .await
+}
+
+/// Handle page deletion
+async fn handle_delete_page(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+) -> Result<Response, StatusCode> {
+    let delete_form: DeletePageForm = parse_form(&body)?;
+
+    crate::handlers::do_delete_page_handler(
+        state,
+        site,
+        page,
+        user,
+        axum::extract::Form(delete_form),
+    )
+    .await
+}
+
+/// Handle reorder pages
+async fn handle_reorder(
+    state: AppState,
+    site: Site,
+    page: Page,
+    user: CurrentUser,
+    body: String,
+    content_path: ContentPath,
+) -> Result<Response, StatusCode> {
+    let form_data = parse_form_data(&body)?;
+    let sort_mode = extract_sort_mode(&form_data);
+    let positions = extract_positions(&form_data, &sort_mode);
+
+    crate::handlers::update_page_order_handler(
+        State(state.into()),
+        site,
+        page.clone(),
+        user,
+        sort_mode,
+        positions,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Redirect back to the page
+    let redirect_path = build_redirect_path(&content_path);
+    Ok(axum::response::Redirect::to(&redirect_path).into_response())
+}
+
+// Helper functions
+
+/// Parse form data from body
+fn parse_form_data(body: &str) -> Result<Vec<(String, String)>, StatusCode> {
+    serde_urlencoded::from_str(body).map_err(|_| StatusCode::BAD_REQUEST)
+}
+
+/// Parse a specific form type
+fn parse_form<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, StatusCode> {
+    serde_urlencoded::from_str(body).map_err(|_| StatusCode::BAD_REQUEST)
+}
+
+/// Extract action from form data
+fn extract_action(form_data: &[(String, String)]) -> Option<String> {
+    form_data
+        .iter()
+        .find(|(k, _)| k == "action")
+        .map(|(_, v)| v.clone())
+}
+
+/// Extract a field value from form data
+fn extract_field(form_data: &[(String, String)], field: &str) -> Result<String, StatusCode> {
+    form_data
+        .iter()
+        .find(|(k, _)| k == field)
+        .map(|(_, v)| v.clone())
+        .ok_or(StatusCode::BAD_REQUEST)
+}
+
+/// Extract component ID from form data
+fn extract_component_id(form_data: &[(String, String)], field: &str) -> Result<i64, StatusCode> {
+    form_data
+        .iter()
+        .find(|(k, _)| k == field)
+        .and_then(|(_, v)| v.parse::<i64>().ok())
+        .ok_or(StatusCode::BAD_REQUEST)
+}
+
+/// Extract sort mode from form data
+fn extract_sort_mode(form_data: &[(String, String)]) -> String {
+    form_data
+        .iter()
+        .find(|(k, _)| k == "sort_mode")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| "created_at_asc".to_string())
+}
+
+/// Extract positions for manual sorting
+fn extract_positions(form_data: &[(String, String)], sort_mode: &str) -> Option<Vec<(i64, i32)>> {
+    if sort_mode != "manual" {
+        return None;
+    }
+
+    let mut positions = Vec::new();
+    for (key, value) in form_data {
+        if let Some(page_id_str) = key.strip_prefix("position_") {
+            if let (Ok(page_id), Ok(position)) = (page_id_str.parse::<i64>(), value.parse::<i32>())
+            {
+                positions.push((page_id, position));
+            }
+        }
+    }
+
+    if positions.is_empty() {
+        None
+    } else {
+        Some(positions)
+    }
+}
+
+/// Build redirect path
+fn build_redirect_path(content_path: &ContentPath) -> String {
+    if content_path.path == "/" {
+        "/".to_string()
+    } else {
+        format!("{}/", content_path.path)
+    }
+}
+
+/// Parse SaveDraftForm from form data
+fn parse_save_draft_form(form_data: &[(String, String)]) -> Result<SaveDraftForm, StatusCode> {
+    let mut component_ids = Vec::new();
+    let mut component_types = Vec::new();
+    let mut component_titles = Vec::new();
+    let mut component_templates = Vec::new();
+    let mut component_contents = Vec::new();
+
+    for (key, value) in form_data {
+        match key.as_str() {
+            "component_ids" => {
+                if let Ok(id) = value.parse::<i64>() {
+                    component_ids.push(id);
+                }
+            }
+            "component_types" => component_types.push(value.clone()),
+            "component_titles" => component_titles.push(value.clone()),
+            "component_templates" => component_templates.push(value.clone()),
+            "component_contents" => component_contents.push(value.clone()),
+            _ => {}
+        }
+    }
+
+    Ok(SaveDraftForm {
+        component_ids,
+        component_types,
+        component_titles,
+        component_templates,
+        component_contents,
+        action: Some("save_draft".to_string()),
+    })
+}
+
+/// Parse AddComponentForm from form data
+fn parse_add_component_form(form_data: &[(String, String)]) -> AddComponentForm {
+    let content = form_data
+        .iter()
+        .find(|(k, _)| k == "content")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_default();
+
+    let component_type = form_data
+        .iter()
+        .find(|(k, _)| k == "component_type")
+        .map(|(_, v)| v.clone())
+        .unwrap_or_else(|| "text".to_string());
+
+    AddComponentForm {
+        content,
+        component_type,
+    }
+}
+
+/// Resolve site from host domain
+async fn resolve_site(state: &AppState, host: &str) -> Result<Site, StatusCode> {
+    let site_repo = SiteRepository::new(state.db.clone());
+    site_repo
+        .find_by_domain(host)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+/// Resolve page from content path
+async fn resolve_page(
+    state: &AppState,
+    site: &Site,
+    content_path: &ContentPath,
+) -> Result<Page, StatusCode> {
+    let page_repo = PageRepository::new(state.db.clone());
+
+    if content_path.path == "/" {
+        get_root_page(&page_repo, site.id.unwrap()).await
+    } else {
+        navigate_to_page(&page_repo, site.id.unwrap(), &content_path.path).await
+    }
+}
+
+/// Get root page for a site
+async fn get_root_page(page_repo: &PageRepository, site_id: i64) -> Result<Page, StatusCode> {
+    page_repo
+        .get_root_page(site_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .ok_or(StatusCode::NOT_FOUND)
+}
+
+/// Navigate through page hierarchy to find target page
+async fn navigate_to_page(
+    page_repo: &PageRepository,
+    site_id: i64,
+    path: &str,
+) -> Result<Page, StatusCode> {
+    let segments = parse_path_segments(path);
+    let mut current_page = get_root_page(page_repo, site_id).await?;
+
+    for segment in segments {
+        current_page = find_child_by_slug(page_repo, current_page.id.unwrap(), segment).await?;
+    }
+
+    Ok(current_page)
+}
+
+/// Parse path into segments
+fn parse_path_segments(path: &str) -> Vec<&str> {
+    path.split('/').filter(|s| !s.is_empty()).collect()
+}
+
+/// Find child page by slug
+async fn find_child_by_slug(
+    page_repo: &PageRepository,
+    parent_id: i64,
+    slug: &str,
+) -> Result<Page, StatusCode> {
+    let children = page_repo
+        .list_children(parent_id)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    children
+        .into_iter()
+        .find(|p| p.slug == slug)
+        .ok_or(StatusCode::NOT_FOUND)
 }

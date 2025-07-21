@@ -51,7 +51,6 @@ pub async fn reorder_page_handler(
     page: Page,
     current_user: CurrentUser,
 ) -> Result<Response, StatusCode> {
-
     // Get child pages using the sorted method
     let page_repo = PageRepository::new(state.db.clone());
     let children = page_repo
@@ -127,7 +126,7 @@ pub async fn reorder_page_handler(
     tera_context.insert("sort_mode", &context.sort_mode);
     tera_context.insert("current_path", &current_path);
     tera_context.insert("user", &current_user.user);
-    
+
     // Add all action bar context variables
     add_action_bar_context(&mut tera_context, &state, &page, &current_user, ".reorder").await?;
 

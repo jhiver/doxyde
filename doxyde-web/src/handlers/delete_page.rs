@@ -98,7 +98,7 @@ pub async fn delete_page_handler(
     context.insert("page", &page);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    
+
     // Add all action bar context variables
     add_action_bar_context(&mut context, &state, &page, &user, ".delete").await?;
 

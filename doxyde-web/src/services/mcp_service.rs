@@ -204,6 +204,48 @@ impl McpService {
         Ok(Some(self.components_to_info(components)))
     }
 
+    /// Get or create a draft for editing. Returns draft info with all components.
+    pub async fn get_or_create_draft(&self, page_id: i64) -> Result<serde_json::Value> {
+        // Verify page belongs to this site
+        let page = self.get_page(page_id).await?;
+
+        // Get or create draft version
+        let draft = crate::draft::get_or_create_draft(&self.pool, page_id, None).await?;
+        let draft_id = draft
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
+
+        // Get components in the draft
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let components = component_repo.list_by_page_version(draft_id).await?;
+        let component_infos = self.components_to_info(components);
+
+        // Check if this was newly created by comparing with published version
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let published_version = version_repo.get_published(page_id).await?;
+        let is_new_draft = published_version
+            .map(|pv| pv.version_number < draft.version_number)
+            .unwrap_or(true);
+
+        Ok(json!({
+            "draft": {
+                "version_id": draft_id,
+                "version_number": draft.version_number,
+                "created_by": draft.created_by,
+                "created_at": draft.created_at.to_rfc3339(),
+                "is_published": draft.is_published,
+                "is_new": is_new_draft
+            },
+            "page": {
+                "id": page.id,
+                "title": page.title,
+                "slug": page.slug
+            },
+            "components": component_infos,
+            "component_count": component_infos.len()
+        }))
+    }
+
     /// Search pages by title or content
     pub async fn search_pages(&self, query: &str) -> Result<Vec<PageInfo>> {
         let page_repo = PageRepository::new(self.pool.clone());
@@ -494,6 +536,15 @@ impl McpService {
 
         let _page = self.get_page(version.page_id).await?;
 
+        // Check if this component belongs to a published version
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot update component {} - it belongs to published version {}. Use get_or_create_draft first to create a draft version, then update components in the draft.",
+                component_id,
+                version.version_number
+            ));
+        }
+
         // Update the component
         component.content = json!({
             "text": content_text
@@ -544,6 +595,15 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
 
         let _page = self.get_page(version.page_id).await?;
+
+        // Check if this component belongs to a published version
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot delete component {} - it belongs to published version {}. Use get_or_create_draft first to create a draft version, then delete components from the draft.",
+                component_id,
+                version.version_number
+            ));
+        }
 
         // Delete the component
         component_repo.delete(component_id).await?;
@@ -621,7 +681,7 @@ impl McpService {
         let draft = version_repo
             .get_draft(page_id)
             .await?
-            .ok_or_else(|| anyhow::anyhow!("No draft version found for this page"))?;
+            .ok_or_else(|| anyhow::anyhow!("No draft version exists for page {}. Use get_or_create_draft first to create a draft, make your changes, then publish.", page_id))?;
 
         let draft_id = draft
             .id
@@ -654,7 +714,7 @@ impl McpService {
         // Check if there's a draft
         let draft = version_repo.get_draft(page_id).await?;
         if draft.is_none() {
-            return Err(anyhow::anyhow!("No draft version found for this page"));
+            return Err(anyhow::anyhow!("No draft version exists for page {} to discard. Drafts are created automatically when you start editing with get_or_create_draft.", page_id));
         }
 
         // Delete it
@@ -801,6 +861,7 @@ impl McpService {
 mod tests {
     use super::*;
     use crate::test_helpers::{create_test_app_state, create_test_site};
+    use doxyde_core::models::version::PageVersion;
     use serde_json::json;
 
     async fn create_test_service() -> Result<(McpService, i64)> {
@@ -1350,6 +1411,123 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("does not belong to this site"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_or_create_draft() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "draft-test".to_string(),
+            "Draft Test".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // First call should create a new draft
+        let draft_info1 = service.get_or_create_draft(page_id).await?;
+        assert!(draft_info1["draft"]["version_id"].is_i64());
+        assert_eq!(draft_info1["draft"]["version_number"], 1);
+        assert_eq!(draft_info1["draft"]["is_published"], false);
+        assert_eq!(draft_info1["draft"]["is_new"], true);
+        assert_eq!(draft_info1["components"].as_array().unwrap().len(), 0);
+
+        // Second call should return the same draft
+        let draft_info2 = service.get_or_create_draft(page_id).await?;
+        assert_eq!(
+            draft_info1["draft"]["version_id"],
+            draft_info2["draft"]["version_id"]
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_update_component_markdown_draft_check() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+        let version_repo = PageVersionRepository::new(service.pool.clone());
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "update-test".to_string(),
+            "Update Test".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // Create a published version with a component
+        let published_version = PageVersion::new(page_id, 1, Some("test".to_string()));
+        let version_id = version_repo.create(&published_version).await?;
+        version_repo.publish(version_id).await?;
+
+        let component = Component::new(
+            version_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Original text"}),
+        );
+        let component_id = component_repo.create(&component).await?;
+
+        // Try to update - should fail because it's published
+        let result = service
+            .update_component_markdown(component_id, "Updated text".to_string(), None, None)
+            .await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("belongs to published version"));
+        assert!(error.to_string().contains("Use get_or_create_draft first"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_delete_component_draft_check() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+        let version_repo = PageVersionRepository::new(service.pool.clone());
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "delete-test".to_string(),
+            "Delete Test".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // Create a published version with a component
+        let published_version = PageVersion::new(page_id, 1, Some("test".to_string()));
+        let version_id = version_repo.create(&published_version).await?;
+        version_repo.publish(version_id).await?;
+
+        let component = Component::new(
+            version_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Test content"}),
+        );
+        let component_id = component_repo.create(&component).await?;
+
+        // Try to delete - should fail because it's published
+        let result = service.delete_component(component_id).await;
+
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("belongs to published version"));
+        assert!(error.to_string().contains("Use get_or_create_draft first"));
 
         Ok(())
     }

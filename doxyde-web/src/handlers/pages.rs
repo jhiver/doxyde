@@ -74,7 +74,7 @@ pub async fn show_page_handler(
             {
                 // Get parent_page_id - could be null, number, or not present
                 let parent_page_id = config.get("parent_page_id").and_then(|v| v.as_i64());
-                
+
                 // Fetch pages based on parent_page_id
                 let child_pages = if let Some(parent_id) = parent_page_id {
                     // Fetch children of specific parent

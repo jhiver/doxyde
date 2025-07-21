@@ -140,6 +140,7 @@ mod tests {
             .uri(&format!("/.mcp/{}", token.id))
             .header("content-type", "application/json")
             .header("accept", "application/json")
+            .header("host", "example.com")
             .body(Body::from(
                 serde_json::json!({
                     "jsonrpc": "2.0",

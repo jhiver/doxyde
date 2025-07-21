@@ -78,11 +78,17 @@ async fn enhance_error_response(
     match status {
         StatusCode::NOT_FOUND => {
             context.insert("error_title", "Page Not Found");
-            context.insert("error_description", "The page you're looking for doesn't exist.");
+            context.insert(
+                "error_description",
+                "The page you're looking for doesn't exist.",
+            );
         }
         StatusCode::FORBIDDEN => {
             context.insert("error_title", "Access Denied");
-            context.insert("error_description", "You don't have permission to access this page.");
+            context.insert(
+                "error_description",
+                "You don't have permission to access this page.",
+            );
         }
         StatusCode::INTERNAL_SERVER_ERROR => {
             context.insert("error_title", "Server Error");
@@ -93,7 +99,10 @@ async fn enhance_error_response(
         }
         _ => {
             context.insert("error_title", "Error");
-            context.insert("error_description", status.canonical_reason().unwrap_or("An error occurred"));
+            context.insert(
+                "error_description",
+                status.canonical_reason().unwrap_or("An error occurred"),
+            );
         }
     }
 

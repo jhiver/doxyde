@@ -520,7 +520,7 @@ mod tests {
             "password123",
         )?;
         let user_id = user_repo.create(&user).await?;
-        
+
         // Star the password in the database
         let starred_hash = format!("*{}", user.password_hash);
         sqlx::query!(

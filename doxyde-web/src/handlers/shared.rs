@@ -30,24 +30,21 @@ pub async fn add_action_bar_context(
     action: &str,
 ) -> Result<(), StatusCode> {
     let page_repo = PageRepository::new(state.db.clone());
-    
+
     // Set the current action
     context.insert("action", action);
-    
+
     // Always set can_edit to true since these handlers require authentication
     context.insert("can_edit", &true);
-    
+
     // Check if page has children for "Reorder" link
     if let Some(page_id) = page.id {
-        let children = page_repo
-            .list_children(page_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to list children: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+        let children = page_repo.list_children(page_id).await.map_err(|e| {
+            tracing::error!("Failed to list children: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
         context.insert("has_children", &!children.is_empty());
-        
+
         // Check if page is movable (has valid move targets)
         let is_movable = if page.parent_page_id.is_some() {
             // Only non-root pages can be moved
@@ -62,7 +59,7 @@ pub async fn add_action_bar_context(
             false
         };
         context.insert("is_movable", &is_movable);
-        
+
         // Check if page can be deleted (not root and has no children)
         let can_delete = page.parent_page_id.is_some() && children.is_empty();
         context.insert("can_delete", &can_delete);
@@ -72,6 +69,6 @@ pub async fn add_action_bar_context(
         context.insert("is_movable", &false);
         context.insert("can_delete", &false);
     }
-    
+
     Ok(())
 }

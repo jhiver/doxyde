@@ -31,11 +31,39 @@ Doxyde is a modern, AI-native content management system built with Rust. It's de
 - Phase 7: Image Upload System - Complete
 - Phase 8: Modern CSS Design - Complete
 
-**📊 Test Coverage:** 300+ tests passing across all crates
+**📊 Test Coverage:** 420+ tests passing across all crates
 
 **🚀 Ready to Use:** See README.md for quick start guide
 
-### Latest Updates (July 15, 2025)
+### Latest Updates (July 21, 2025)
+
+**MCP Draft/Publish Workflow Enhancement:**
+- **Draft-First Editing**: All MCP component operations now require a draft version
+- **New `get_or_create_draft` tool**: Returns comprehensive draft info including all components
+- **Enhanced Error Messages**: Clear, actionable guidance for AI users when operations fail
+- **Workflow Consistency**: MCP tools now follow the same draft/publish pattern as the web UI
+- **Removed Test Tools**: Removed `flip_coin` and `get_current_time` demo tools
+
+**Code Quality Improvements:**
+- **Refactored `handle_action`**: Broke down 400+ line function into 30+ small, focused functions
+- **Improved Code Organization**: Each function now has single responsibility, max 30 lines
+- **Better Error Handling**: Consistent error propagation throughout action handlers
+- **Follows CLAUDE.md Guidelines**: Max 3 levels of nesting, clear function names
+
+**MCP Protocol Compliance:**
+- **Disabled `resources/templates/list`**: Capability disabled due to missing `uriTemplate` support
+- **Clear Error Messages**: Method returns helpful error explaining why it's disabled
+- **Test Coverage**: Added comprehensive tests for disabled capability
+
+### Previous Updates (July 19, 2025)
+
+**MCP Draft/Publish Workflow (Important):**
+- **Draft requirement**: Components can only be modified in draft versions, not published ones
+- **Get or create draft**: Use `get_or_create_draft` before modifying any components
+- **Clear error guidance**: Tools return specific instructions when draft is needed
+- **Workflow**: get_or_create_draft → modify components → publish_draft
+
+### Previous Updates (July 15, 2025)
 
 **MCP Integration:**
 - **MCP Token System**: Users can generate secure tokens to connect Doxyde with Claude Code
@@ -129,7 +157,7 @@ Doxyde is a modern, AI-native content management system built with Rust. It's de
   - UserRepository with full authentication support
   - SessionRepository for session management
   - SiteUserRepository for role-based permissions
-- **Total: 227 tests passing** (73 core + 154 db)
+- **Total: 420+ tests passing** across all crates
 
 #### ✅ Phase 4: Authentication System (Complete)
 - **User Management**:
@@ -664,26 +692,37 @@ Visit http://localhost:3000 and login at http://localhost:3000/.login
 
 **✅ Completed MCP Tools (Phase 1 Complete!):**
 1. **Page Management:**
+   - `list_pages`: Get all pages in the site with hierarchy
+   - `get_page`: Get full page details by ID
+   - `get_page_by_path`: Find page by URL path
+   - `search_pages`: Search pages by title or content
+   - `create_page`: Create a new page
+   - `update_page`: Update page title, slug, or template
    - `delete_page`: Safe page deletion with children/root checks
    - `move_page`: Page hierarchy management with circular reference prevention
-   - `create_page`, `update_page`: Already existed
 
-2. **Component Management (Markdown):**
+2. **Content Access:**
+   - `get_published_content`: Get published content of a page
+   - `get_draft_content`: Get draft content of a page (if exists)
+   - `get_or_create_draft`: Get existing draft or create new one (required before editing)
+
+3. **Component Management (Markdown):**
    - `create_component_markdown`: Create markdown components with content
-   - `update_component_markdown`: Edit existing markdown components
-   - `delete_component`: Remove any component
+   - `update_component_markdown`: Edit existing markdown components (draft only)
+   - `delete_component`: Remove any component (draft only)
    - `list_components`: List all components for a page
    - `get_component`: Get specific component details
 
-3. **Draft/Publish Workflow:**
+4. **Draft/Publish Workflow:**
    - `publish_draft`: Make draft version live
    - `discard_draft`: Cancel draft changes
 
-**✅ Testing Complete (July 19, 2025):**
+**✅ Testing Complete (July 21, 2025):**
 - Created comprehensive_mcp_tests.py with 100% tool coverage
 - All MCP tools tested thoroughly with various scenarios
 - Created specialized test_move_page.py for hierarchy testing
-- Discovered minor issue: move_page doesn't properly check circular references
+- Added draft workflow tests ensuring components can only be modified in drafts
+- All 420+ tests passing across the codebase
 
 **🔮 Future Enhancements:**
 - Support for other component types (image, code, html, etc.)

@@ -222,7 +222,7 @@ pub async fn edit_page_content_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    
+
     // Add all action bar context variables
     add_action_bar_context(&mut context, &state, &page, &user, ".edit").await?;
 
@@ -246,7 +246,7 @@ pub async fn edit_page_content_handler(
         Ok(rendered) => {
             tracing::info!("Successfully rendered page_edit.html");
             rendered
-        },
+        }
         Err(e) => {
             tracing::error!(
                 error = ?e,
@@ -310,7 +310,7 @@ pub async fn add_component_handler(
         Ok(parsed_content) => {
             tracing::info!("Parsed content: {:?}", parsed_content);
             parsed_content
-        },
+        }
         Err(e) => {
             tracing::error!("Failed to parse component content: {}", e);
             return Err(StatusCode::BAD_REQUEST);
@@ -340,13 +340,10 @@ pub async fn add_component_handler(
 
     tracing::info!("Creating component: {:?}", component);
 
-    component_repo
-        .create(&component)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to create component: {:?}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    component_repo.create(&component).await.map_err(|e| {
+        tracing::error!("Failed to create component: {:?}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Normalize positions after adding component
     component_repo
@@ -464,7 +461,7 @@ pub async fn new_page_handler(
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
     context.insert("user", &user.user);
-    
+
     // Add all action bar context variables
     add_action_bar_context(&mut context, &state, &page, &user, ".new").await?;
 

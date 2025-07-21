@@ -30,7 +30,9 @@ type ActionHandlerFn = fn(
     Site,
     Page,
     OptionalUser,
-) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>>;
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>,
+>;
 
 /// Registry for action handlers
 pub struct ActionRegistry {
@@ -109,15 +111,13 @@ fn handle_edit_page(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render edit page");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to edit this page",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to edit this page",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error("Failed to render edit page"))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render edit page",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }
@@ -141,17 +141,13 @@ fn handle_properties(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render properties page");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to edit this page",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to edit this page",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error(
-                                "Failed to render properties page",
-                            ))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render properties page",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }
@@ -175,17 +171,13 @@ fn handle_new_page(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render new page form");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to create pages",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to create pages",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Parent page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error(
-                                "Failed to render new page form",
-                            ))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render new page form",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }
@@ -209,17 +201,13 @@ fn handle_move_page(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render move page form");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to move this page",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to move this page",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error(
-                                "Failed to render move page form",
-                            ))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render move page form",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }
@@ -250,17 +238,13 @@ fn handle_reorder(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render reorder page form");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to reorder pages",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to reorder pages",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error(
-                                "Failed to render reorder page form",
-                            ))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render reorder page form",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }
@@ -284,15 +268,13 @@ fn handle_delete_page(
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render delete page");
                     match status {
-                        StatusCode::FORBIDDEN => {
-                            Err(AppError::forbidden(
-                                "You don't have permission to delete this page",
-                            ))
-                        }
+                        StatusCode::FORBIDDEN => Err(AppError::forbidden(
+                            "You don't have permission to delete this page",
+                        )),
                         StatusCode::NOT_FOUND => Err(AppError::not_found("Page not found")),
-                        StatusCode::INTERNAL_SERVER_ERROR => {
-                            Err(AppError::internal_server_error("Failed to render delete page"))
-                        }
+                        StatusCode::INTERNAL_SERVER_ERROR => Err(AppError::internal_server_error(
+                            "Failed to render delete page",
+                        )),
                         _ => Err(AppError::new(status, "An error occurred")),
                     }
                 }

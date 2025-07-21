@@ -190,6 +190,7 @@ mod tests {
         let request = Request::builder()
             .uri("/.settings/mcp")
             .header("cookie", format!("session_id={}", session.id))
+            .header("host", "example.com")
             .body(Body::empty())?;
 
         let response = app.oneshot(request).await?;
@@ -228,6 +229,7 @@ mod tests {
             .uri("/.settings/mcp")
             .header("cookie", format!("session_id={}", session.id))
             .header("content-type", "application/x-www-form-urlencoded")
+            .header("host", "example.com")
             .body(Body::from(format!(
                 "name=Test+Token&site_id={}",
                 site.id.unwrap()
@@ -244,6 +246,7 @@ mod tests {
         let request = Request::builder()
             .uri(&format!("/.settings/mcp/{}", token_id))
             .header("cookie", format!("session_id={}", session.id))
+            .header("host", "example.com")
             .body(Body::empty())?;
 
         let response = app.oneshot(request).await?;
