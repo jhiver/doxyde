@@ -25,8 +25,6 @@ cd doxyde
 
 2. Build the project:
 ```bash
-# For fresh clones, use offline mode to compile without a database
-export SQLX_OFFLINE=true
 cargo build --release
 ```
 
@@ -85,22 +83,18 @@ TEMPLATES_DIR=templates
 
 ### Building from Source
 
-When building Doxyde from a fresh clone, you need to use SQLx's offline mode since the database doesn't exist yet:
+Doxyde uses SQLx's offline mode by default, so you can build without a database:
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/doxyde.git
 cd doxyde
 
-# Build with offline mode
-export SQLX_OFFLINE=true
+# Build the project (no database needed)
 cargo build --release
 
 # Initialize the database
 ./target/release/doxyde init
-
-# Now you can build normally (database exists)
-cargo build
 ```
 
 ### Updating Database Schema
@@ -108,6 +102,9 @@ cargo build
 If you modify SQL queries or migrations:
 
 ```bash
+# Temporarily disable offline mode to work with the database
+export SQLX_OFFLINE=false
+
 # Ensure database is up to date
 export DATABASE_URL="sqlite:doxyde.db"
 sqlx migrate run --source migrations
@@ -119,6 +116,8 @@ cargo sqlx prepare --workspace
 git add .sqlx
 git commit -m "Update sqlx offline data"
 ```
+
+Note: The project is configured to use SQLx offline mode by default (see `.cargo/config.toml`). This allows building without a database but requires the `.sqlx` cache to be kept up to date.
 
 ## CLI Commands
 

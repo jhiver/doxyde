@@ -1,2 +1,5 @@
 [env]
-SQLX_OFFLINE = "false"
+# Enable SQLx offline mode by default
+# This allows the project to build without a database present
+# The .sqlx directory contains cached query metadata
+SQLX_OFFLINE = "true"
