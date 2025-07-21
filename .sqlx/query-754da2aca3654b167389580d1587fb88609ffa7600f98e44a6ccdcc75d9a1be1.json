@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO _sqlx_migrations (version, description, installed_on, success, checksum, execution_time) \n                             VALUES (?, ?, datetime('now'), 1, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "754da2aca3654b167389580d1587fb88609ffa7600f98e44a6ccdcc75d9a1be1"
+}

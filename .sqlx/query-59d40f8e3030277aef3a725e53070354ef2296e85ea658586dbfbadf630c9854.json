@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT version FROM _sqlx_migrations WHERE version = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "version",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "59d40f8e3030277aef3a725e53070354ef2296e85ea658586dbfbadf630c9854"
+}

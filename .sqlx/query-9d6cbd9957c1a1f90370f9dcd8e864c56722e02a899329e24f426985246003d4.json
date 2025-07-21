@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        CREATE TABLE IF NOT EXISTS _sqlx_migrations (\n            version BIGINT PRIMARY KEY,\n            description TEXT NOT NULL,\n            installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,\n            success BOOLEAN NOT NULL,\n            checksum BLOB NOT NULL,\n            execution_time BIGINT NOT NULL\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "9d6cbd9957c1a1f90370f9dcd8e864c56722e02a899329e24f426985246003d4"
+}
