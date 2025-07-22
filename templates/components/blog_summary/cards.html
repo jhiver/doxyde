@@ -13,10 +13,6 @@
             {% if component.content.show_descriptions and page.description %}
                 <p class="summary-card-description">{{ page.description }}</p>
             {% endif %}
-            
-            <time class="summary-card-date" datetime="{{ page.created_at }}">
-                {{ page.created_at }}
-            </time>
         </article>
         {% endfor %}
     </div>
@@ -107,14 +103,6 @@
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
-}
-
-.summary-card-date {
-    font-size: 0.875rem;
-    color: var(--gray-500);
-    margin-top: auto;
-    padding-top: var(--space-sm);
-    border-top: 1px solid var(--gray-100);
 }
 
 @media (max-width: 768px) {
