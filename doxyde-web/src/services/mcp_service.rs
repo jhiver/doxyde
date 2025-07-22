@@ -287,6 +287,8 @@ impl McpService {
         parent_page_id: Option<i64>,
         slug: Option<String>,
         title: String,
+        description: Option<String>,
+        keywords: Option<String>,
         template: Option<String>,
     ) -> Result<PageInfo> {
         let page_repo = PageRepository::new(self.pool.clone());
@@ -319,9 +321,11 @@ impl McpService {
             (None, None) => Page::new_with_title(self.site_id, title),
         };
 
-        // Set template and position
+        // Set template, position, description, and keywords
         new_page.template = template.unwrap_or_else(|| "default".to_string());
         new_page.position = position;
+        new_page.description = description;
+        new_page.keywords = keywords;
 
         // Validate the page before creation
         new_page.is_valid().map_err(|e| anyhow::anyhow!(e))?;
@@ -357,6 +361,8 @@ impl McpService {
         page_id: i64,
         title: Option<String>,
         slug: Option<String>,
+        description: Option<String>,
+        keywords: Option<String>,
         template: Option<String>,
     ) -> Result<PageInfo> {
         let page_repo = PageRepository::new(self.pool.clone());
@@ -379,6 +385,14 @@ impl McpService {
 
         if let Some(new_slug) = slug {
             page.slug = new_slug;
+        }
+
+        if let Some(new_description) = description {
+            page.description = Some(new_description);
+        }
+
+        if let Some(new_keywords) = keywords {
+            page.keywords = Some(new_keywords);
         }
 
         if let Some(new_template) = template {
@@ -905,6 +919,8 @@ mod tests {
                 Some(root_page_id),
                 Some("about".to_string()),
                 "About Us".to_string(),
+                None, // description
+                None, // keywords
                 Some("default".to_string()),
             )
             .await?;
@@ -935,6 +951,8 @@ mod tests {
                 Some(root_page_id),
                 Some("team".to_string()),
                 "Our Team".to_string(),
+                None, // description
+                None, // keywords
                 Some("full_width".to_string()),
             )
             .await?;
@@ -964,6 +982,8 @@ mod tests {
                 Some(root_page_id),
                 Some("invalid-slug!".to_string()),
                 "Title".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await;
@@ -986,6 +1006,8 @@ mod tests {
                 Some(root_page_id),
                 Some("valid-slug".to_string()),
                 "".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await;
@@ -1001,6 +1023,8 @@ mod tests {
                 Some(root_page_id),
                 Some("invalid slug".to_string()),
                 "Title".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await;
@@ -1023,6 +1047,8 @@ mod tests {
                 None,
                 Some("new-root".to_string()),
                 "New Root Page".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await;
@@ -1043,6 +1069,8 @@ mod tests {
                 Some(9999),
                 Some("orphan".to_string()),
                 "Orphan Page".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await;
@@ -1070,6 +1098,8 @@ mod tests {
                 Some(root_page_id),
                 Some("contact".to_string()),
                 "Contact Us".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1211,6 +1241,8 @@ mod tests {
                 Some(root_page_id),
                 Some("delete-me".to_string()),
                 "Delete Me".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1245,6 +1277,8 @@ mod tests {
                 Some(root_page_id),
                 Some("test-page".to_string()),
                 "Test Page".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1285,6 +1319,8 @@ mod tests {
                 Some(root_page_id),
                 Some("page1".to_string()),
                 "Page 1".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1294,6 +1330,8 @@ mod tests {
                 Some(root_page_id),
                 Some("page2".to_string()),
                 "Page 2".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1324,6 +1362,8 @@ mod tests {
                 Some(root_page_id),
                 Some("parent".to_string()),
                 "Parent".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1334,6 +1374,8 @@ mod tests {
                 Some(parent_info.id),
                 Some("child1".to_string()),
                 "Child 1".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1343,6 +1385,8 @@ mod tests {
                 Some(parent_info.id),
                 Some("child2".to_string()),
                 "Child 2".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1352,6 +1396,8 @@ mod tests {
                 Some(parent_info.id),
                 Some("child3".to_string()),
                 "Child 3".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1362,6 +1408,8 @@ mod tests {
                 Some(root_page_id),
                 Some("other".to_string()),
                 "Other".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;
@@ -1400,6 +1448,8 @@ mod tests {
                 Some(root1_id),
                 Some("test-page".to_string()),
                 "Test Page".to_string(),
+                None, // description
+                None, // keywords
                 None,
             )
             .await?;

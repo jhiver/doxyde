@@ -602,7 +602,7 @@ impl SimpleMcpServer {
     fn create_create_page_tool(&self) -> Value {
         json!({
             "name": "create_page",
-            "description": "Create a new page",
+            "description": "Create a new page with metadata for SEO. Always provide meaningful description and relevant keywords for better search engine visibility.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -618,6 +618,14 @@ impl SimpleMcpServer {
                         "type": "string",
                         "description": "Page title"
                     },
+                    "description": {
+                        "type": "string",
+                        "description": "Page description/summary for SEO (recommended 150-160 characters). This appears in search results."
+                    },
+                    "keywords": {
+                        "type": "string",
+                        "description": "Comma-separated keywords for SEO (e.g., 'cms, content management, rust')"
+                    },
                     "template": {
                         "type": "string",
                         "description": "Page template (default, full_width, landing, blog)"
@@ -631,7 +639,7 @@ impl SimpleMcpServer {
     fn create_update_page_tool(&self) -> Value {
         json!({
             "name": "update_page",
-            "description": "Update page title, slug, or template",
+            "description": "Update page metadata including title, slug, template, description, and keywords. Always maintain meaningful SEO metadata.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
@@ -646,6 +654,14 @@ impl SimpleMcpServer {
                     "slug": {
                         "type": "string",
                         "description": "New URL-friendly identifier (optional)"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New page description/summary for SEO (recommended 150-160 characters)"
+                    },
+                    "keywords": {
+                        "type": "string",
+                        "description": "New comma-separated keywords for SEO"
                     },
                     "template": {
                         "type": "string",
@@ -930,6 +946,8 @@ impl SimpleMcpServer {
                 params.parent_page_id,
                 params.slug,
                 params.title,
+                params.description,
+                params.keywords,
                 params.template,
             )
             .await?;
@@ -950,7 +968,14 @@ impl SimpleMcpServer {
         let service = McpService::new(self.pool.clone(), self.site_id);
 
         let page_info = service
-            .update_page(params.page_id, params.title, params.slug, params.template)
+            .update_page(
+                params.page_id,
+                params.title,
+                params.slug,
+                params.description,
+                params.keywords,
+                params.template,
+            )
             .await?;
 
         Ok(vec![json!({
@@ -1227,6 +1252,8 @@ struct CreatePageParams {
     parent_page_id: Option<i64>,
     slug: Option<String>,
     title: String,
+    description: Option<String>,
+    keywords: Option<String>,
     template: Option<String>,
 }
 
@@ -1234,6 +1261,8 @@ struct UpdatePageParams {
     page_id: i64,
     title: Option<String>,
     slug: Option<String>,
+    description: Option<String>,
+    keywords: Option<String>,
     template: Option<String>,
 }
 
@@ -1270,6 +1299,16 @@ fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
         .ok_or_else(|| anyhow::anyhow!("title is required"))?
         .to_string();
 
+    let description = arguments
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let keywords = arguments
+        .get("keywords")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     let template = arguments
         .get("template")
         .and_then(|v| v.as_str())
@@ -1279,6 +1318,8 @@ fn extract_create_page_params(arguments: &Value) -> Result<CreatePageParams> {
         parent_page_id,
         slug,
         title,
+        description,
+        keywords,
         template,
     })
 }
@@ -1301,6 +1342,16 @@ fn extract_update_page_params(arguments: &Value) -> Result<UpdatePageParams> {
         .and_then(|v| v.as_str())
         .map(String::from);
 
+    let description = arguments
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+    let keywords = arguments
+        .get("keywords")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
     let template = arguments
         .get("template")
         .and_then(|v| v.as_str())
@@ -1310,6 +1361,8 @@ fn extract_update_page_params(arguments: &Value) -> Result<UpdatePageParams> {
         page_id,
         title,
         slug,
+        description,
+        keywords,
         template,
     })
 }
@@ -1498,12 +1551,16 @@ mod tests {
             "parent_page_id": 1,
             "slug": "test-page",
             "title": "Test Page",
+            "description": "Test description",
+            "keywords": "test, page, example",
             "template": "default"
         });
         let params = extract_create_page_params(&args).unwrap();
         assert_eq!(params.parent_page_id, Some(1));
         assert_eq!(params.slug, Some("test-page".to_string()));
         assert_eq!(params.title, "Test Page");
+        assert_eq!(params.description, Some("Test description".to_string()));
+        assert_eq!(params.keywords, Some("test, page, example".to_string()));
         assert_eq!(params.template, Some("default".to_string()));
 
         let args = json!({
@@ -1531,12 +1588,16 @@ mod tests {
             "page_id": 1,
             "title": "New Title",
             "slug": "new-slug",
+            "description": "Updated description",
+            "keywords": "new, keywords",
             "template": "blog"
         });
         let params = extract_update_page_params(&args).unwrap();
         assert_eq!(params.page_id, 1);
         assert_eq!(params.title, Some("New Title".to_string()));
         assert_eq!(params.slug, Some("new-slug".to_string()));
+        assert_eq!(params.description, Some("Updated description".to_string()));
+        assert_eq!(params.keywords, Some("new, keywords".to_string()));
         assert_eq!(params.template, Some("blog".to_string()));
 
         // Test with only page_id
