@@ -136,11 +136,7 @@ impl BlogSummaryComponent {
                 }
             }
 
-            html.push_str(&format!(
-                r#"<time class="summary-date">{}</time>
-                </div>"#,
-                escape_html(&page.created_at)
-            ));
+            html.push_str("</div>");
         }
 
         html.push_str("</div></div>");
