@@ -521,6 +521,28 @@ impl ComponentRepository {
 
         Ok(())
     }
+
+    /// Get component type usage statistics
+    pub async fn get_component_type_usage_stats(&self) -> Result<Vec<(String, i64)>> {
+        let stats = sqlx::query!(
+            r#"
+            SELECT 
+                component_type,
+                COUNT(*) as count
+            FROM components
+            GROUP BY component_type
+            ORDER BY count DESC
+            "#
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to fetch component type usage statistics")?;
+
+        Ok(stats
+            .into_iter()
+            .map(|row| (row.component_type, row.count))
+            .collect())
+    }
 }
 
 #[cfg(test)]

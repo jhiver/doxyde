@@ -726,7 +726,10 @@ mod tests {
 
         let result = page.validate_keywords();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Keywords cannot exceed 255 characters (current: 256 characters)");
+        assert_eq!(
+            result.unwrap_err(),
+            "Keywords cannot exceed 255 characters (current: 256 characters)"
+        );
     }
 
     #[test]
@@ -737,8 +740,11 @@ mod tests {
 
         let result = page.validate_keywords();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Keywords cannot exceed 255 characters (current: 302 characters)");
-        
+        assert_eq!(
+            result.unwrap_err(),
+            "Keywords cannot exceed 255 characters (current: 302 characters)"
+        );
+
         // Check the actual length
         assert_eq!(page.keywords.as_ref().unwrap().len(), 302);
     }

@@ -11,7 +11,8 @@ pub async fn init_database(database_url: &str) -> Result<SqlitePool> {
             let db_path = Path::new(path);
             if let Some(parent) = db_path.parent() {
                 if !parent.as_os_str().is_empty() {
-                    std::fs::create_dir_all(parent).context("Failed to create database directory")?;
+                    std::fs::create_dir_all(parent)
+                        .context("Failed to create database directory")?;
                 }
             }
             // Touch the file to ensure it exists
@@ -95,20 +96,19 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                 }
                 Err(e) => {
                     let error_str = e.to_string();
-                    
+
                     // Check if the error indicates the migration was already applied
-                    let already_applied = 
-                        error_str.contains("already exists") ||
-                        error_str.contains("duplicate column name") ||
-                        error_str.contains("no such column"); // For DROP COLUMN on non-existent column
-                    
+                    let already_applied = error_str.contains("already exists")
+                        || error_str.contains("duplicate column name")
+                        || error_str.contains("no such column"); // For DROP COLUMN on non-existent column
+
                     if already_applied {
                         tracing::warn!(
                             "Migration {} appears to have been already applied: {}",
                             migration.version,
                             error_str
                         );
-                        
+
                         // Record it as applied
                         let checksum_bytes: &[u8] = &migration.checksum;
                         sqlx::query!(
@@ -122,7 +122,7 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
                         .execute(pool)
                         .await
                         .context("Failed to record migration")?;
-                        
+
                         tracing::info!("Migration {} marked as applied", migration.version);
                     } else {
                         return Err(anyhow::anyhow!(

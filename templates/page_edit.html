@@ -5,12 +5,39 @@
 {% block head %}
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <style>
+    /* Component editor - more compact */
     .component-editor {
-        margin: var(--space-lg) 0;
-        padding: var(--space-lg);
+        margin: var(--space-md) 0;
+        padding: var(--space-md) var(--space-lg);
         background: var(--gray-50);
         border: 1px solid var(--gray-200);
         border-radius: var(--border-radius);
+        transition: all 0.2s ease;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    
+    .component-editor:hover {
+        border-color: var(--gray-300);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    /* Highlight animation for newly added components */
+    .component-highlight {
+        animation: highlightComponent 2s ease-out;
+    }
+    
+    @keyframes highlightComponent {
+        0% {
+            background-color: #fef3c7;
+            border-color: var(--warning-color);
+            transform: scale(1.02);
+        }
+        100% {
+            background-color: var(--gray-50);
+            border-color: var(--gray-200);
+            transform: scale(1);
+        }
     }
     
     .component-header {
@@ -18,143 +45,332 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: var(--space-md);
-        padding-bottom: var(--space-md);
+        padding-bottom: var(--space-sm);
         border-bottom: 1px solid var(--gray-200);
+    }
+    
+    .component-info {
+        display: flex;
+        align-items: center;
+        gap: var(--space-md);
     }
     
     .component-type {
         font-weight: 600;
         color: var(--gray-700);
         text-transform: capitalize;
+        font-size: 0.9375rem;
     }
     
     .component-position {
-        font-size: 0.875rem;
+        font-size: 0.75rem;
         color: var(--gray-500);
+        background: var(--gray-100);
+        padding: 2px 8px;
+        border-radius: 12px;
+    }
+    
+    .component-actions {
+        display: flex;
+        gap: var(--space-sm);
+        align-items: center;
+    }
+    
+    /* Form layouts - use more columns on wider screens */
+    .form-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--space-md);
+        margin-bottom: var(--space-md);
+    }
+    
+    @media (min-width: 1600px) {
+        .form-row {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
+    
+    @media (max-width: 1200px) {
+        .form-row {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .form-group {
+        margin-bottom: var(--space-md);
+    }
+    
+    .form-group.full-width {
+        grid-column: 1 / -1;
+    }
+    
+    .form-group label {
+        display: block;
+        font-weight: 500;
+        margin-bottom: 6px;
+        color: var(--gray-700);
+        font-size: 0.875rem;
     }
     
     .form-group input[type="text"],
+    .form-group input[type="number"],
     .form-group select,
     .form-group textarea {
         width: 100%;
-        padding: 8px 12px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        font-size: 16px;
-        transition: border-color 0.15s ease-in-out;
+        padding: 6px 10px;
+        border: 1px solid var(--gray-300);
+        border-radius: var(--border-radius-sm);
+        font-size: 0.9375rem;
+        transition: all 0.15s ease;
+        background-color: white;
     }
     
     .form-group input[type="text"]:focus,
+    .form-group input[type="number"]:focus,
     .form-group select:focus,
     .form-group textarea:focus {
         outline: none;
-        border-color: #80bdff;
-        box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
     }
     
     .form-group textarea {
-        min-height: 150px;
+        min-height: 120px;
         resize: vertical;
-        font-family: monospace;
+        font-family: var(--font-mono);
+        font-size: 0.875rem;
+        line-height: 1.5;
+        width: 100%;
+    }
+    
+    /* Make content textareas larger on wide screens */
+    @media (min-width: 1600px) {
+        .form-group.full-width textarea {
+            min-height: 200px;
+        }
     }
     
     .form-group select {
         cursor: pointer;
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+        background-position: right 0.5rem center;
+        background-repeat: no-repeat;
+        background-size: 1.5em 1.5em;
+        padding-right: 2.5rem;
     }
     
+    /* Buttons - more compact */
     .button {
-        padding: 8px 20px;
-        background: #007bff;
+        padding: 6px 14px;
+        background: var(--primary-color);
         color: white;
         border: none;
-        border-radius: 4px;
+        border-radius: var(--border-radius-sm);
         cursor: pointer;
         text-decoration: none;
         display: inline-block;
-        font-size: 16px;
-        transition: background-color 0.15s ease-in-out;
+        font-size: 0.875rem;
+        font-weight: 500;
+        transition: all 0.15s ease;
+        white-space: nowrap;
     }
     
     .button:hover {
-        background: #0056b3;
+        background: var(--primary-hover);
+        transform: translateY(-1px);
+        box-shadow: var(--shadow-sm);
+    }
+    
+    .button:active {
+        transform: translateY(0);
     }
     
     .button-success {
-        background: #28a745;
+        background: var(--success-color);
     }
     
     .button-success:hover {
-        background: #218838;
+        background: #059669;
     }
     
     .button-danger {
-        background: #dc3545;
+        background: var(--danger-color);
     }
     
     .button-danger:hover {
-        background: #c82333;
+        background: #dc2626;
     }
     
     .button-secondary {
-        background: #6c757d;
+        background: var(--gray-600);
     }
     
     .button-secondary:hover {
-        background: #5a6268;
+        background: var(--gray-700);
     }
     
     .button-small {
-        padding: 5px 10px;
-        font-size: 14px;
+        padding: 4px 8px;
+        font-size: 0.75rem;
     }
     
-    .draft-actions {
+    .button-icon {
+        padding: 4px 8px;
+        font-size: 1rem;
+        min-width: 28px;
+        text-align: center;
+    }
+    
+    .button-block {
+        display: block;
+        width: 100%;
+        text-align: center;
+    }
+    
+    /* Sidebar actions */
+    .edit-sidebar {
         position: sticky;
-        top: 0;
-        background: #fff;
-        padding: 15px 0;
-        margin-bottom: 20px;
-        border-bottom: 2px solid #dee2e6;
-        z-index: 100;
+        top: 80px;
+        height: calc(100vh - 100px);
+        overflow-y: auto;
+        background-color: var(--gray-50);
+    }
+    
+    .sidebar-actions {
+        margin-bottom: var(--space-lg);
+    }
+    
+    .sidebar-actions .button {
+        margin-bottom: var(--space-sm);
+    }
+    
+    .sidebar-divider {
+        height: 1px;
+        background: var(--gray-200);
+        margin: var(--space-lg) 0;
+    }
+    
+    .component-shortcuts {
+        margin-top: var(--space-lg);
+    }
+    
+    .component-shortcuts h4 {
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--gray-500);
+        margin-bottom: var(--space-md);
+    }
+    
+    .shortcut-button {
         display: flex;
-        gap: 10px;
         align-items: center;
+        gap: var(--space-sm);
+        width: 100%;
+        padding: var(--space-sm) var(--space-md);
+        margin-bottom: var(--space-xs);
+        background: white;
+        border: 1px solid var(--gray-200);
+        border-radius: var(--border-radius-sm);
+        color: var(--gray-700);
+        font-size: 0.875rem;
+        font-weight: 500;
+        text-align: left;
+        cursor: pointer;
+        transition: all 0.15s ease;
+    }
+    
+    .shortcut-button:hover {
+        background: var(--gray-50);
+        border-color: var(--primary-color);
+        color: var(--primary-color);
+        transform: translateX(2px);
+    }
+    
+    .shortcut-icon {
+        width: 20px;
+        text-align: center;
     }
     
     .draft-status {
-        margin-left: auto;
-        font-size: 14px;
-        color: #6c757d;
+        font-size: 0.875rem;
+        color: var(--gray-500);
+        background: var(--gray-100);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-weight: 500;
+        text-align: center;
+        margin-bottom: var(--space-md);
     }
     
+    /* Add component section - hidden since we'll use sidebar shortcuts */
     .add-component-section {
-        margin: 30px 0;
-        padding: 15px 20px;
-        background: #e7f3ff;
-        border: 2px dashed #007bff;
-        border-radius: 8px;
-    }
-    
-    .add-component-section form {
-        margin: 0;
-    }
-    
-    .add-component-section select {
-        padding: 6px 12px;
-        border: 1px solid #ced4da;
-        border-radius: 4px;
-        font-size: 14px;
-    }
-    
-    .add-component-section .button {
-        padding: 6px 16px;
-        font-size: 14px;
+        display: none;
     }
     
     .help-text {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-top: 5px;
+        font-size: 0.75rem;
+        color: var(--gray-500);
+        margin-top: 4px;
+    }
+    
+    /* Empty state */
+    .empty-state {
+        text-align: center;
+        padding: var(--space-2xl) var(--space-lg);
+        color: var(--gray-500);
+    }
+    
+    /* Override default form max-width for edit mode */
+    .edit-mode form.edit-form {
+        max-width: none;
+        width: 100%;
+    }
+    
+    .edit-mode {
+        width: 100%;
+    }
+    
+    /* Override container and content for edit mode to use full width */
+    .main-container:has(.edit-sidebar) {
+        max-width: none;
+        width: 100%;
+    }
+    
+    .main-container:has(.edit-sidebar) .content {
+        padding: var(--space-lg) var(--space-xl);
+        max-width: none;
+    }
+    
+    @media (max-width: 1400px) {
+        .main-container:has(.edit-sidebar) .content {
+            padding: var(--space-md) var(--space-lg);
+        }
+    }
+    
+    /* Component list */
+    .components-list {
+        margin-bottom: var(--space-lg);
+        width: 100%;
+    }
+    
+    /* Compact blog summary editor */
+    .blog-summary-editor .form-row {
+        grid-template-columns: 1fr;
+    }
+    
+    .blog-summary-editor .inline-fields {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: var(--space-md);
+    }
+    
+    @media (max-width: 768px) {
+        .blog-summary-editor .inline-fields {
+            grid-template-columns: 1fr;
+        }
     }
     
     /* Template-specific styles */
@@ -236,9 +452,35 @@ function deleteComponent(componentId) {
     });
 }
 
-function addNewComponent() {
-    const addForm = document.getElementById('add-component-form');
-    const componentType = addForm.querySelector('select[name="component_type"]').value;
+function addNewComponentType(componentType) {
+    // Create a temporary form to submit the new component
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.style.display = 'none';
+    
+    const actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'add_component';
+    form.appendChild(actionInput);
+    
+    const typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'component_type';
+    typeInput.value = componentType;
+    form.appendChild(typeInput);
+    
+    const contentInput = document.createElement('input');
+    contentInput.type = 'hidden';
+    contentInput.name = 'content';
+    contentInput.value = getEmptyContentForType(componentType);
+    form.appendChild(contentInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+function getEmptyContentForType(componentType) {
     
     // For all components, including image, just add an empty component
     // The user can upload images after the component is created
@@ -272,11 +514,13 @@ function addNewComponent() {
             emptyContent = '';
     }
     
-    // Update the content field in the add form
-    addForm.querySelector('input[name="content"]').value = emptyContent;
-    
-    // Submit the add component form
-    addForm.submit();
+    return emptyContent;
+}
+
+function addNewComponent() {
+    const addForm = document.getElementById('add-component-form');
+    const componentType = addForm.querySelector('select[name="component_type"]').value;
+    addNewComponentType(componentType);
 }
 
 function uploadImageForComponent(componentId) {
@@ -447,41 +691,48 @@ function updateImageComponent(componentId, imageData) {
                    name="component_contents" 
                    value='${JSON.stringify(newContent)}'>
             <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
-                <div style="margin: 0 0 10px 0;">
-                    <label for="slug_${componentId}" style="font-weight: bold; display: inline-block; width: 100px;">Slug:</label>
-                    <input type="text" 
-                           id="slug_${componentId}" 
-                           value="${imageData.slug}" 
-                           onchange="updateImageSlug(${componentId}, this.value)"
-                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
-                    <span style="color: #6c757d; font-size: 12px;">.${imageData.format}</span>
+                <div class="form-row" style="margin-bottom: 10px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label for="slug_${componentId}" style="font-size: 0.75rem; margin-bottom: 4px;">Slug</label>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <input type="text" 
+                                   id="slug_${componentId}" 
+                                   value="${imageData.slug}" 
+                                   onchange="updateImageSlug(${componentId}, this.value)"
+                                   style="flex: 1; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                            <span style="color: #6c757d; font-size: 0.875rem;">.${imageData.format}</span>
+                        </div>
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.75rem; margin-bottom: 4px;">Display Size</label>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <input type="text" 
+                                   id="display_width_${componentId}" 
+                                   value="${newContent.display_width || ''}" 
+                                   placeholder="auto"
+                                   onchange="updateImageDisplaySize(${componentId})"
+                                   style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                            <span style="color: #6c757d;">×</span>
+                            <input type="text" 
+                                   id="display_height_${componentId}" 
+                                   value="${newContent.display_height || ''}" 
+                                   placeholder="auto"
+                                   onchange="updateImageDisplaySize(${componentId})"
+                                   style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                        </div>
+                    </div>
                 </div>
-                <div style="margin: 0 0 10px 0;">
-                    <label style="font-weight: bold; display: inline-block; width: 100px;">Display Size:</label>
-                    <input type="text" 
-                           id="display_width_${componentId}" 
-                           value="${newContent.display_width || ''}" 
-                           placeholder="auto"
-                           onchange="updateImageDisplaySize(${componentId})"
-                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
-                    <span style="color: #6c757d; font-size: 14px;"> × </span>
-                    <input type="text" 
-                           id="display_height_${componentId}" 
-                           value="${newContent.display_height || ''}" 
-                           placeholder="auto"
-                           onchange="updateImageDisplaySize(${componentId})"
-                           style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
-                    <span style="color: #6c757d; font-size: 12px; margin-left: 10px;">CSS values (px, %, rem, auto)</span>
+                <div style="display: flex; gap: 20px; font-size: 0.75rem; color: #6c757d;">
+                    <span><strong>Format:</strong> ${imageData.format}</span>
+                    <span><strong>Size:</strong> ${(imageData.size / 1024).toFixed(2)} KB</span>
+                    ${imageData.width && imageData.height ? `<span><strong>Dimensions:</strong> ${imageData.width}×${imageData.height}</span>` : ''}
                 </div>
-                <p style="margin: 0 0 5px 0;"><strong>Format:</strong> ${imageData.format}</p>
-                <p style="margin: 0 0 5px 0;"><strong>Size:</strong> ${(imageData.size / 1024).toFixed(2)} KB</p>
-                ${imageData.width && imageData.height ? `<p style="margin: 0;"><strong>Original Dimensions:</strong> ${imageData.width} × ${imageData.height}</p>` : ''}
             </div>
             <button type="button" 
                     class="button button-secondary button-small" 
                     style="margin-top: 10px;"
                     onclick="changeImage(${componentId})">
-                Change Image
+                🔄 Change Image
             </button>
         `;
         
@@ -539,44 +790,72 @@ function updateBlogSummaryContent(componentId) {
     contentInput.value = JSON.stringify(content);
 }
 
+// Smooth scroll to component if there's a hash in the URL
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.location.hash) {
+        const element = document.querySelector(window.location.hash);
+        if (element) {
+            // Wait a bit for the page to fully render
+            setTimeout(() => {
+                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Add a highlight effect
+                element.classList.add('component-highlight');
+                setTimeout(() => {
+                    element.classList.remove('component-highlight');
+                }, 2000);
+            }, 100);
+        }
+    }
+});
 </script>
+{% endblock %}
+
+{% block sidebar %}
+<div class="edit-sidebar">
+    <!-- Draft Status -->
+    <div class="draft-status">Editing Draft</div>
+    
+    <!-- Action Buttons -->
+    <div class="sidebar-actions">
+        <button type="button" class="button button-block" onclick="submitComponentsForm('save_draft')">
+            💾 Save Draft
+        </button>
+        <button type="button" class="button button-success button-block" onclick="submitComponentsForm('publish_draft')">
+            🚀 Save &amp; Publish
+        </button>
+        <form method="post" style="margin: 0;">
+            <input type="hidden" name="action" value="discard_draft">
+            <button type="submit" class="button button-danger button-block" 
+                    onclick="return confirm('Are you sure you want to discard all draft changes?')">
+                ❌ Discard Draft
+            </button>
+        </form>
+        <a href="{{ current_path }}" class="button button-secondary button-block">
+            ← Back to Page
+        </a>
+    </div>
+    
+    <div class="sidebar-divider"></div>
+    
+    <!-- Component Shortcuts -->
+    <div class="component-shortcuts">
+        <h4>Add Component</h4>
+        {% for comp_type in ordered_component_types %}
+        <button type="button" class="shortcut-button" onclick="addNewComponentType('{{ comp_type.type }}')">
+            <span class="shortcut-icon">
+                {% if comp_type.type == "text" %}📝{% elif comp_type.type == "markdown" %}📄{% elif comp_type.type == "html" %}🌐{% elif comp_type.type == "code" %}💻{% elif comp_type.type == "image" %}🖼️{% elif comp_type.type == "blog_summary" %}📰{% else %}📦{% endif %}
+            </span>
+            {{ comp_type.label }}
+        </button>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}
 
 {% block content %}
 <div class="edit-mode">
-    <h1>Edit Page: {{ page.title }}</h1>
-    
-    {% if breadcrumbs %}
-    <nav aria-label="breadcrumb">
-        {% for crumb in breadcrumbs %}
-            {% if not loop.last %}
-                <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
-            {% else %}
-                {{ crumb.title }}
-            {% endif %}
-        {% endfor %}
-        / <strong>Edit</strong>
-    </nav>
-    {% endif %}
-    
-    <!-- Draft Actions -->
-    <div class="draft-actions">
-        <button type="button" class="button" onclick="submitComponentsForm('save_draft')">Save Draft</button>
-        <button type="button" class="button button-success" onclick="submitComponentsForm('publish_draft')">Save &amp; Publish</button>
-        
-        <form method="post" style="display: inline;">
-            <input type="hidden" name="action" value="discard_draft">
-            <button type="submit" class="button button-danger" 
-                    onclick="return confirm('Are you sure you want to discard all draft changes?')">Discard Draft</button>
-        </form>
-        
-        <a href="{{ current_path }}" class="button button-secondary">Cancel</a>
-        
-        <span class="draft-status">Editing draft version</span>
-    </div>
-    
     <!-- Components Form -->
-    <form method="post" id="components-form">
+    <form method="post" id="components-form" class="edit-form">
         <input type="hidden" name="action" value="save_draft">
         
         <!-- Components -->
@@ -585,17 +864,19 @@ function updateBlogSummaryContent(componentId) {
                 {% for component in components %}
                 <div class="component-editor" id="component-{{ component.id }}">
                     <div class="component-header">
-                        <span class="component-type">{{ component.component_type|title }} Component</span>
-                        <div>
-                            <span class="component-position">Position: {{ component.position }}</span>
+                        <div class="component-info">
+                            <span class="component-type">{{ component.component_type|title }} Component</span>
+                            <span class="component-position">#{{ component.position + 1 }}</span>
+                        </div>
+                        <div class="component-actions">
                             <!-- Debug: loop.index0={{ loop.index0 }}, loop.first={{ loop.first }}, loop.last={{ loop.last }}, total={{ components|length }} -->
                             {% if not loop.first %}
-                            <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'up')" title="Move Up">↑</button>
+                            <button type="button" class="button button-secondary button-icon" onclick="moveComponent({{ component.id }}, 'up')" title="Move Up">↑</button>
                             {% else %}
                             <!-- Move up button hidden: loop.first is true -->
                             {% endif %}
                             {% if not loop.last %}
-                            <button type="button" class="button button-secondary button-small" onclick="moveComponent({{ component.id }}, 'down')" title="Move Down">↓</button>
+                            <button type="button" class="button button-secondary button-icon" onclick="moveComponent({{ component.id }}, 'down')" title="Move Down">↓</button>
                             {% else %}
                             <!-- Move down button hidden: loop.last is true -->
                             {% endif %}
@@ -606,28 +887,30 @@ function updateBlogSummaryContent(componentId) {
                     <input type="hidden" name="component_ids" value="{{ component.id }}">
                     <input type="hidden" name="component_types" value="{{ component.component_type }}">
                     
-                    <div class="form-group">
-                        <label for="title_{{ component.id }}">Title (optional)</label>
-                        <input type="text" 
-                               id="title_{{ component.id }}" 
-                               name="component_titles" 
-                               value="{{ component.title|default(value='') }}"
-                               placeholder="Enter component title...">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="title_{{ component.id }}">Title (optional)</label>
+                            <input type="text" 
+                                   id="title_{{ component.id }}" 
+                                   name="component_titles" 
+                                   value="{{ component.title|default(value='') }}"
+                                   placeholder="Enter component title...">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="template_{{ component.id }}">Display Template</label>
+                            <select id="template_{{ component.id }}" name="component_templates">
+                                {% set templates = get_component_templates(type=component.component_type) %}
+                                {% for template in templates %}
+                                    <option value="{{ template }}" {% if component.template == template %}selected{% endif %}>
+                                        {{ template | replace(from="_", to=" ") | title }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                     
-                    <div class="form-group">
-                        <label for="template_{{ component.id }}">Display Template</label>
-                        <select id="template_{{ component.id }}" name="component_templates">
-                            {% set templates = get_component_templates(type=component.component_type) %}
-                            {% for template in templates %}
-                                <option value="{{ template }}" {% if component.template == template %}selected{% endif %}>
-                                    {{ template | replace(from="_", to=" ") | title }}
-                                </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    
-                    <div class="form-group">
+                    <div class="form-group full-width">
                         <label for="content_{{ component.id }}">Content</label>
                         {% if component.component_type == "text" or component.component_type == "markdown" %}
                             <textarea id="content_{{ component.id }}" 
@@ -663,43 +946,50 @@ function updateBlogSummaryContent(componentId) {
                                        name="component_contents" 
                                        value="{{ component.content|json_encode }}">
                                 <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
-                                    <div style="margin: 0 0 10px 0;">
-                                        <label for="slug_{{ component.id }}" style="font-weight: bold; display: inline-block; width: 100px;">Slug:</label>
-                                        <input type="text" 
-                                               id="slug_{{ component.id }}" 
-                                               value="{{ component.content.slug }}" 
-                                               onchange="updateImageSlug({{ component.id }}, this.value)"
-                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px;">
-                                        <span style="color: #6c757d; font-size: 12px;">.{{ component.content.format }}</span>
+                                    <div class="form-row" style="margin-bottom: 10px;">
+                                        <div class="form-group" style="margin: 0;">
+                                            <label for="slug_{{ component.id }}" style="font-size: 0.75rem; margin-bottom: 4px;">Slug</label>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <input type="text" 
+                                                       id="slug_{{ component.id }}" 
+                                                       value="{{ component.content.slug }}" 
+                                                       onchange="updateImageSlug({{ component.id }}, this.value)"
+                                                       style="flex: 1;">
+                                                <span style="color: #6c757d; font-size: 0.875rem;">.{{ component.content.format }}</span>
+                                            </div>
+                                        </div>
+                                        <div class="form-group" style="margin: 0;">
+                                            <label style="font-size: 0.75rem; margin-bottom: 4px;">Display Size</label>
+                                            <div style="display: flex; align-items: center; gap: 4px;">
+                                                <input type="text" 
+                                                       id="display_width_{{ component.id }}" 
+                                                       value="{{ component.content.display_width|default(value='') }}" 
+                                                       placeholder="auto"
+                                                       onchange="updateImageDisplaySize({{ component.id }})"
+                                                       style="width: 60px;">
+                                                <span style="color: #6c757d;">×</span>
+                                                <input type="text" 
+                                                       id="display_height_{{ component.id }}" 
+                                                       value="{{ component.content.display_height|default(value='') }}" 
+                                                       placeholder="auto"
+                                                       onchange="updateImageDisplaySize({{ component.id }})"
+                                                       style="width: 60px;">
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div style="margin: 0 0 10px 0;">
-                                        <label style="font-weight: bold; display: inline-block; width: 100px;">Display Size:</label>
-                                        <input type="text" 
-                                               id="display_width_{{ component.id }}" 
-                                               value="{{ component.content.display_width|default(value='') }}" 
-                                               placeholder="auto"
-                                               onchange="updateImageDisplaySize({{ component.id }})"
-                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
-                                        <span style="color: #6c757d; font-size: 14px;"> × </span>
-                                        <input type="text" 
-                                               id="display_height_{{ component.id }}" 
-                                               value="{{ component.content.display_height|default(value='') }}" 
-                                               placeholder="auto"
-                                               onchange="updateImageDisplaySize({{ component.id }})"
-                                               style="padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 60px;">
-                                        <span style="color: #6c757d; font-size: 12px; margin-left: 10px;">CSS values (px, %, rem, auto)</span>
+                                    <div style="display: flex; gap: 20px; font-size: 0.75rem; color: #6c757d;">
+                                        <span><strong>Format:</strong> {{ component.content.format }}</span>
+                                        <span><strong>Size:</strong> {{ (component.content.size / 1024)|round(precision=2) }} KB</span>
+                                        {% if component.content.width and component.content.height %}
+                                        <span><strong>Dimensions:</strong> {{ component.content.width }}×{{ component.content.height }}</span>
+                                        {% endif %}
                                     </div>
-                                    <p style="margin: 0 0 5px 0;"><strong>Format:</strong> {{ component.content.format }}</p>
-                                    <p style="margin: 0 0 5px 0;"><strong>Size:</strong> {{ (component.content.size / 1024)|round(precision=2) }} KB</p>
-                                    {% if component.content.width and component.content.height %}
-                                    <p style="margin: 0;"><strong>Original Dimensions:</strong> {{ component.content.width }} × {{ component.content.height }}</p>
-                                    {% endif %}
                                 </div>
                                 <button type="button" 
                                         class="button button-secondary button-small" 
                                         style="margin-top: 10px;"
                                         onclick="changeImage({{ component.id }})">
-                                    Change Image
+                                    🔄 Change Image
                                 </button>
                             {% else %}
                                 <!-- No image uploaded yet -->
@@ -712,7 +1002,7 @@ function updateBlogSummaryContent(componentId) {
                                     <button type="button" 
                                             class="button" 
                                             onclick="uploadImageForComponent({{ component.id }})">
-                                        Upload Image
+                                        📁 Upload Image
                                     </button>
                                     <div class="help-text" style="margin-top: 10px;">
                                         Click to upload an image file (JPG, PNG, GIF, WebP, SVG)
@@ -818,9 +1108,10 @@ function updateBlogSummaryContent(componentId) {
                 {% endfor %}
                 
             {% else %}
-                <p style="color: #6c757d; text-align: center; margin: 40px 0;">
-                    No components yet. Add your first component below!
-                </p>
+                <div class="empty-state">
+                    <p>📦 No components yet</p>
+                    <p style="font-size: 0.875rem;">Use the sidebar to add your first component!</p>
+                </div>
             {% endif %}
         </div>
     </form>
@@ -833,12 +1124,9 @@ function updateBlogSummaryContent(componentId) {
             
             <label for="new_component_type" style="margin: 0; font-weight: 600;">Add Component:</label>
             <select id="new_component_type" name="component_type" required style="flex: 1; max-width: 200px;">
-                <option value="text">Text</option>
-                <option value="markdown">Markdown</option>
-                <option value="html">HTML</option>
-                <option value="code">Code</option>
-                <option value="image">Image</option>
-                <option value="blog_summary">Blog Summary</option>
+                {% for comp_type in ordered_component_types %}
+                <option value="{{ comp_type.type }}">{{ comp_type.label }}</option>
+                {% endfor %}
             </select>
             
             <button type="button" class="button" onclick="addNewComponent()">Add</button>

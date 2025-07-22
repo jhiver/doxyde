@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                component_type,\n                COUNT(*) as count\n            FROM components\n            GROUP BY component_type\n            ORDER BY count DESC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "component_type",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "count",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "1147327c6ce1981176fc767e1aacb3b56bc94c50e9edf2f5616847269bcba393"
+}

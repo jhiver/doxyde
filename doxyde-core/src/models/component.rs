@@ -62,7 +62,13 @@ impl Component {
         }
 
         let valid_types = [
-            "text", "image", "code", "table", "html", "markdown", "custom", "blog_summary",
+            "text",
+            "image",
+            "code",
+            "html",
+            "markdown",
+            "custom",
+            "blog_summary",
         ];
         if !valid_types.contains(&self.component_type.as_str()) {
             return Err(format!(
@@ -257,7 +263,13 @@ mod tests {
     #[test]
     fn test_validate_component_type_valid() {
         let valid_types = [
-            "text", "image", "code", "table", "html", "markdown", "custom", "blog_summary",
+            "text",
+            "image",
+            "code",
+            "html",
+            "markdown",
+            "custom",
+            "blog_summary",
         ];
 
         for component_type in &valid_types {

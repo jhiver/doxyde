@@ -226,6 +226,65 @@ pub async fn edit_page_content_handler(
     // Add all action bar context variables
     add_action_bar_context(&mut context, &state, &page, &user, ".edit").await?;
 
+    // Get component type usage statistics
+    let component_type_stats = match component_repo.get_component_type_usage_stats().await {
+        Ok(stats) => stats,
+        Err(e) => {
+            tracing::warn!(
+                error = ?e,
+                "Failed to get component type usage stats, using default order"
+            );
+            // Default order if stats fetch fails
+            vec![]
+        }
+    };
+
+    // Create ordered component types with labels
+    let mut ordered_component_types = Vec::new();
+
+    // First add types by usage (if any)
+    for (comp_type, _count) in component_type_stats {
+        let label = match comp_type.as_str() {
+            "text" => "Text",
+            "markdown" => "Markdown",
+            "image" => "Image",
+            "code" => "Code",
+            "html" => "HTML",
+            "blog_summary" => "Blog Summary",
+            "custom" => "Custom",
+            _ => &comp_type,
+        };
+        ordered_component_types.push(serde_json::json!({
+            "type": comp_type,
+            "label": label
+        }));
+    }
+
+    // Add any missing types in a sensible default order
+    let all_types = vec![
+        ("markdown", "Markdown"),
+        ("text", "Text"),
+        ("image", "Image"),
+        ("blog_summary", "Blog Summary"),
+        ("code", "Code"),
+        ("html", "HTML"),
+        ("custom", "Custom"),
+    ];
+
+    for (comp_type, label) in all_types {
+        if !ordered_component_types
+            .iter()
+            .any(|t| t["type"] == comp_type)
+        {
+            ordered_component_types.push(serde_json::json!({
+                "type": comp_type,
+                "label": label
+            }));
+        }
+    }
+
+    context.insert("ordered_component_types", &ordered_component_types);
+
     // Get all pages for blog summary parent page dropdown
     let all_pages = match page_repo.list_by_site_id(site.id.unwrap()).await {
         Ok(pages) => pages,
@@ -340,7 +399,7 @@ pub async fn add_component_handler(
 
     tracing::info!("Creating component: {:?}", component);
 
-    component_repo.create(&component).await.map_err(|e| {
+    let component_id = component_repo.create(&component).await.map_err(|e| {
         tracing::error!("Failed to create component: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -354,12 +413,12 @@ pub async fn add_component_handler(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-    // Redirect back to edit page
+    // Redirect back to edit page with anchor to the new component
     let redirect_path = build_page_path(&state, &page).await?;
     let edit_path = if redirect_path == "/" {
-        "/.edit".to_string()
+        format!("/.edit#component-{}", component_id)
     } else {
-        format!("{}/.edit", redirect_path)
+        format!("{}/.edit#component-{}", redirect_path, component_id)
     };
     Ok(Redirect::to(&edit_path).into_response())
 }

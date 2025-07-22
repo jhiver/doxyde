@@ -5,34 +5,39 @@
 {% block head %}
 <style>
     .new-page-form {
-        max-width: 600px;
-        margin: 40px auto;
-        padding: 30px;
+        margin: 20px 0;
+        padding: 20px;
         background: #f5f5f5;
         border-radius: 5px;
     }
     .form-group {
-        margin-bottom: 20px;
+        margin-bottom: 15px;
     }
     .form-group label {
         display: block;
         margin-bottom: 5px;
         font-weight: bold;
     }
-    .form-group input[type="text"] {
+    .form-group input[type="text"],
+    .form-group textarea,
+    .form-group select {
         width: 100%;
-        padding: 10px;
+        padding: 8px;
         border: 1px solid #ddd;
         border-radius: 3px;
         font-size: 16px;
     }
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
     .form-group .help-text {
         font-size: 0.9em;
         color: #666;
-        margin-top: 5px;
+        margin-top: 4px;
     }
     .button {
-        padding: 10px 25px;
+        padding: 8px 20px;
         background: #0066cc;
         color: white;
         border: none;
@@ -40,31 +45,35 @@
         cursor: pointer;
         text-decoration: none;
         display: inline-block;
-        font-size: 16px;
+        margin-right: 10px;
     }
     .button:hover {
         background: #0052a3;
     }
     .button-secondary {
         background: #666;
-        margin-left: 10px;
     }
     .button-secondary:hover {
         background: #555;
     }
-    .error {
-        color: #d00;
-        margin-top: 5px;
+    .form-section {
+        border-top: 2px solid #ddd;
+        margin-top: 30px;
+        padding-top: 20px;
+    }
+    .form-section h3 {
+        margin-top: 0;
+        color: #333;
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="new-page-form">
+<div class="edit-mode">
     <h1>Create New Page</h1>
     
     {% if breadcrumbs %}
-    <nav aria-label="breadcrumb" style="margin-bottom: 20px;">
+    <nav aria-label="breadcrumb">
         <strong>Parent page:</strong>
         {% for crumb in breadcrumbs %}
             {% if not loop.last %}
@@ -76,7 +85,9 @@
     </nav>
     {% endif %}
     
-    <form method="post">
+    <!-- New Page Form -->
+    <div class="new-page-form">
+        <form method="post">
         <!-- Basic Properties -->
         <div class="form-group">
             <label for="title">Page Title</label>
@@ -174,11 +185,12 @@
             </fieldset>
         </details>
         
-        <div style="margin-top: 30px;">
-            <button type="submit" class="button">Create Page</button>
-            <a href="../" class="button button-secondary">Cancel</a>
-        </div>
+            <div style="margin-top: 30px;">
+                <button type="submit" class="button">Create Page</button>
+                <a href="../" class="button button-secondary">Cancel</a>
+            </div>
     </form>
+    </div>
 </div>
 
 <script>

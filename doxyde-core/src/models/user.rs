@@ -327,7 +327,10 @@ mod tests {
         // Should return error for starred password
         let result = user.verify_password("password");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Password disabled"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Password disabled"));
     }
 
     #[test]
@@ -345,7 +348,10 @@ mod tests {
         // Should return error for starred password
         let result = user.verify_password("password");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Password disabled"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Password disabled"));
     }
 
     #[test]
