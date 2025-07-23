@@ -16,7 +16,12 @@
 
 use anyhow::Result;
 use doxyde_web::{
-    config::Config, db::init_database, routes, state::AppState, templates::init_templates,
+    config::Config,
+    db::init_database,
+    rate_limit::{create_api_rate_limiter, create_login_rate_limiter},
+    routes,
+    state::AppState,
+    templates::init_templates,
 };
 use tokio::net::TcpListener;
 use tracing::info;
@@ -49,8 +54,18 @@ async fn main() -> Result<()> {
     std::fs::create_dir_all(&config.uploads_dir)?;
     info!("Uploads directory: {}", config.uploads_dir);
 
+    // Create rate limiters
+    let login_rate_limiter = create_login_rate_limiter();
+    let api_rate_limiter = create_api_rate_limiter();
+
     // Create application state
-    let state = AppState::new(db, templates, config.clone());
+    let state = AppState::new(
+        db,
+        templates,
+        config.clone(),
+        login_rate_limiter,
+        api_rate_limiter,
+    );
 
     // Create router
     let app = routes::create_router(state);

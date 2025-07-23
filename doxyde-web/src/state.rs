@@ -16,6 +16,7 @@
 
 use crate::autoreload_templates::TemplateEngine;
 use crate::config::Config;
+use crate::rate_limit::SharedRateLimiter;
 use axum::extract::FromRef;
 use sqlx::SqlitePool;
 
@@ -24,14 +25,24 @@ pub struct AppState {
     pub db: SqlitePool,
     pub templates: TemplateEngine,
     pub config: Config,
+    pub login_rate_limiter: SharedRateLimiter,
+    pub api_rate_limiter: SharedRateLimiter,
 }
 
 impl AppState {
-    pub fn new(db: SqlitePool, templates: TemplateEngine, config: Config) -> Self {
+    pub fn new(
+        db: SqlitePool,
+        templates: TemplateEngine,
+        config: Config,
+        login_rate_limiter: SharedRateLimiter,
+        api_rate_limiter: SharedRateLimiter,
+    ) -> Self {
         Self {
             db,
             templates,
             config,
+            login_rate_limiter,
+            api_rate_limiter,
         }
     }
 }

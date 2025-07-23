@@ -28,6 +28,8 @@ pub struct Config {
     pub development_mode: bool,
     pub uploads_dir: String,
     pub max_upload_size: usize,
+    pub secure_cookies: bool,
+    pub session_timeout_minutes: i64,
 }
 
 impl Config {
@@ -67,6 +69,14 @@ impl Config {
                 .unwrap_or_else(|_| "10485760".to_string()) // 10MB default
                 .parse()
                 .unwrap_or(10_485_760),
+            secure_cookies: env::var("SECURE_COOKIES")
+                .unwrap_or_else(|_| "true".to_string())
+                .parse()
+                .unwrap_or(true),
+            session_timeout_minutes: env::var("SESSION_TIMEOUT_MINUTES")
+                .unwrap_or_else(|_| "1440".to_string()) // 24 hours default
+                .parse()
+                .unwrap_or(1440),
         })
     }
 

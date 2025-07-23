@@ -29,6 +29,8 @@ use doxyde_core::models::{session::Session, user::User};
 use doxyde_db::repositories::{SessionRepository, UserRepository};
 use sqlx::SqlitePool;
 
+use crate::{session_activity::check_session_idle_timeout, AppState};
+
 /// Current authenticated user, extracted from request
 #[derive(Debug, Clone)]
 pub struct CurrentUser {
@@ -40,6 +42,7 @@ pub struct CurrentUser {
 impl<S> FromRequestParts<S> for CurrentUser
 where
     SqlitePool: FromRef<S>,
+    AppState: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, &'static str);
@@ -48,8 +51,9 @@ where
         // Extract session ID from cookie or Authorization header
         let session_id = extract_session_id(parts).await?;
 
-        // Get database pool
+        // Get database pool and app state
         let pool = SqlitePool::from_ref(state);
+        let app_state = AppState::from_ref(state);
 
         // Look up session
         let session_repo = SessionRepository::new(pool.clone());
@@ -62,6 +66,22 @@ where
         // Check if session is expired
         if session.is_expired() {
             return Err((StatusCode::UNAUTHORIZED, "Session expired"));
+        }
+
+        // Check idle timeout
+        let is_active = check_session_idle_timeout(
+            &pool,
+            &session_id,
+            app_state.config.session_timeout_minutes,
+        )
+        .await
+        .unwrap_or(true); // Default to active if check fails
+
+        if !is_active {
+            return Err((
+                StatusCode::UNAUTHORIZED,
+                "Session timed out due to inactivity",
+            ));
         }
 
         // Look up user
@@ -81,6 +101,25 @@ where
     }
 }
 
+/// Session user with just session ID for CSRF token lookup
+#[derive(Debug, Clone)]
+pub struct SessionUser {
+    pub session_id: String,
+}
+
+#[async_trait]
+impl<S> FromRequestParts<S> for SessionUser
+where
+    S: Send + Sync,
+{
+    type Rejection = (StatusCode, &'static str);
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let session_id = extract_session_id(parts).await?;
+        Ok(SessionUser { session_id })
+    }
+}
+
 /// Optional authenticated user
 #[derive(Debug, Clone)]
 pub struct OptionalUser(pub Option<CurrentUser>);
@@ -89,6 +128,7 @@ pub struct OptionalUser(pub Option<CurrentUser>);
 impl<S> FromRequestParts<S> for OptionalUser
 where
     SqlitePool: FromRef<S>,
+    AppState: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, &'static str);
@@ -130,6 +170,7 @@ pub struct RequireAdmin(pub User);
 impl<S> FromRequestParts<S> for RequireAdmin
 where
     SqlitePool: FromRef<S>,
+    AppState: FromRef<S>,
     S: Send + Sync,
 {
     type Rejection = (StatusCode, &'static str);

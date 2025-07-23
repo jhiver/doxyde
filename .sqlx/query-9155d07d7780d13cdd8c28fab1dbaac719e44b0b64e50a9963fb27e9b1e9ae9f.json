@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT csrf_token\n        FROM sessions\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "csrf_token",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9155d07d7780d13cdd8c28fab1dbaac719e44b0b64e50a9963fb27e9b1e9ae9f"
+}

@@ -233,13 +233,21 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         session_secret: "test-secret".to_string(),
         development_mode: false,
         uploads_dir: "/tmp/mkdoc-test-uploads".to_string(),
-        max_upload_size: 1048576, // 1MB for tests
+        max_upload_size: 1048576,      // 1MB for tests
+        secure_cookies: false,         // Disable for tests
+        session_timeout_minutes: 1440, // 24 hours
     };
+
+    // Create rate limiters for tests
+    let login_rate_limiter = crate::rate_limit::create_login_rate_limiter();
+    let api_rate_limiter = crate::rate_limit::create_api_rate_limiter();
 
     Ok(AppState {
         db: pool,
         templates: TemplateEngine::Static(Arc::new(tera)),
         config,
+        login_rate_limiter,
+        api_rate_limiter,
     })
 }
 

@@ -22,6 +22,7 @@ use axum::{
     Form,
 };
 use axum_extra::extract::{cookie::Cookie, CookieJar};
+use chrono::Duration;
 use doxyde_core::models::session::Session;
 use doxyde_db::repositories::{SessionRepository, SiteRepository, UserRepository};
 use serde::Deserialize;
@@ -167,22 +168,36 @@ pub async fn login(
         }
     }
 
-    // Create session
-    let session = Session::new(user.id.unwrap());
+    // Delete any existing sessions for this user (session rotation)
+    let session_repo = SessionRepository::new(state.db.clone());
+    if let Err(e) = session_repo.delete_user_sessions(user.id.unwrap()).await {
+        tracing::warn!("Failed to delete old sessions during rotation: {:?}", e);
+    }
+
+    // Create new session with configured timeout
+    let session = Session::new_with_expiry(
+        user.id.unwrap(),
+        Duration::minutes(state.config.session_timeout_minutes),
+    );
     let session_id = session.id.clone();
 
-    let session_repo = SessionRepository::new(state.db.clone());
     session_repo
         .create(&session)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Set session cookie
-    let cookie = Cookie::build(("session_id", session_id))
+    // Set session cookie with security settings
+    let mut cookie_builder = Cookie::build(("session_id", session_id))
         .path("/")
         .http_only(true)
-        .same_site(cookie::SameSite::Lax)
-        .build();
+        .same_site(cookie::SameSite::Lax);
+
+    // Add Secure flag if configured (for HTTPS)
+    if state.config.secure_cookies && !state.config.development_mode {
+        cookie_builder = cookie_builder.secure(true);
+    }
+
+    let cookie = cookie_builder.build();
 
     Ok((jar.add(cookie), Redirect::to("/")).into_response())
 }
@@ -259,8 +274,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool, templates, config);
+        let state = AppState::new(
+            pool,
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         let response = login_form(Host("localhost:3000".to_string()), State(state)).await;
         assert!(response.is_ok());
@@ -281,8 +304,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -330,8 +361,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -374,8 +413,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -423,8 +470,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         let form = LoginForm {
             username: "nonexistent".to_string(),
@@ -460,8 +515,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create inactive user
         let user_repo = UserRepository::new(pool.clone());
@@ -509,8 +572,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create user with starred password
         let user_repo = UserRepository::new(pool.clone());
@@ -523,13 +594,11 @@ mod tests {
 
         // Star the password in the database
         let starred_hash = format!("*{}", user.password_hash);
-        sqlx::query!(
-            "UPDATE users SET password_hash = ? WHERE id = ?",
-            starred_hash,
-            user_id
-        )
-        .execute(&pool)
-        .await?;
+        sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
+            .bind(&starred_hash)
+            .bind(user_id)
+            .execute(&pool)
+            .await?;
 
         let form = LoginForm {
             username: "testuser".to_string(),
@@ -567,8 +636,16 @@ mod tests {
             development_mode: false,
             uploads_dir: "/tmp/test-uploads".to_string(),
             max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
         };
-        let state = AppState::new(pool.clone(), templates, config);
+        let state = AppState::new(
+            pool.clone(),
+            templates,
+            config,
+            crate::rate_limit::create_login_rate_limiter(),
+            crate::rate_limit::create_api_rate_limiter(),
+        );
 
         // Create test session
         let user_repo = UserRepository::new(pool.clone());

@@ -16,9 +16,11 @@
 
 use crate::{
     content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
-    handlers, AppState,
+    handlers, rate_limit::login_rate_limit_middleware,
+    security_headers::security_headers_middleware, session_activity::update_session_activity,
+    AppState,
 };
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, State};
 use axum::{middleware, routing, routing::get, Router};
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -34,7 +36,15 @@ pub fn create_router(state: AppState) -> Router {
         // Static files
         .nest_service("/.static", ServeDir::new("static"))
         // System routes (dot-prefixed)
-        .route("/.login", get(handlers::login_form).post(handlers::login))
+        .route(
+            "/.login",
+            get(handlers::login_form)
+                .post(handlers::login)
+                .layer(middleware::from_fn_with_state(
+                    state.login_rate_limiter.clone(),
+                    login_rate_limit_middleware,
+                )),
+        )
         .route("/.logout", get(handlers::logout).post(handlers::logout))
         // MCP Token management
         .route(
@@ -50,7 +60,20 @@ pub fn create_router(state: AppState) -> Router {
             get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
         )
         // MCP Server endpoint (supports both regular JSON-RPC and SSE)
-        .route("/.mcp/:token_id", routing::post(handlers::mcp_http_handler))
+        .route(
+            "/.mcp/:token_id",
+            routing::post(handlers::mcp_http_handler).layer(middleware::from_fn_with_state(
+                state.api_rate_limiter.clone(),
+                |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
+                 request: axum::http::Request<axum::body::Body>,
+                 next: axum::middleware::Next| async move {
+                    match limiter.check() {
+                        Ok(_) => Ok(next.run(request).await),
+                        Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
+                    }
+                },
+            )),
+        )
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
@@ -59,6 +82,11 @@ pub fn create_router(state: AppState) -> Router {
             Arc::new(state.clone()),
             error_enhancer_middleware,
         ))
+        .layer(middleware::from_fn_with_state(
+            Arc::new(state.clone()),
+            update_session_activity,
+        ))
+        .layer(middleware::from_fn(security_headers_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(DefaultBodyLimit::max(max_upload_size))
@@ -77,45 +105,77 @@ mod tests {
     use super::*;
     use axum::http::StatusCode;
     use axum_test::TestServer;
-    
+
     #[tokio::test]
     async fn test_health_endpoint_uses_dot_prefix() {
         // Create test app state
         let state = crate::test_helpers::create_test_app_state()
             .await
             .expect("Failed to create test state");
-        
+
         // Create router and test server
         let app = create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
-        
+
         // Test that /.health works
         let response = server.get("/.health").await;
         response.assert_status(StatusCode::OK);
         response.assert_text("OK");
-        
+
         // Test that /health does NOT work (should be 404)
         let response = server.get("/health").await;
         response.assert_status(StatusCode::NOT_FOUND);
     }
-    
+
+    #[tokio::test]
+    async fn test_health_endpoint_has_security_headers() {
+        use axum::http::header;
+
+        // Create test app state
+        let state = crate::test_helpers::create_test_app_state()
+            .await
+            .expect("Failed to create test state");
+
+        // Create router and test server
+        let app = create_router(state);
+        let server = TestServer::new(app).expect("Failed to create test server");
+
+        // Test that security headers are present
+        let response = server.get("/.health").await;
+        response.assert_status(StatusCode::OK);
+
+        // Check all security headers
+        response.assert_header(header::CONTENT_SECURITY_POLICY, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+        response.assert_header(
+            header::STRICT_TRANSPORT_SECURITY,
+            "max-age=31536000; includeSubDomains",
+        );
+        response.assert_header(header::X_FRAME_OPTIONS, "DENY");
+        response.assert_header(header::X_CONTENT_TYPE_OPTIONS, "nosniff");
+        response.assert_header(header::REFERRER_POLICY, "strict-origin-when-cross-origin");
+        response.assert_header(
+            "Permissions-Policy",
+            "geolocation=(), camera=(), microphone=()",
+        );
+    }
+
     #[tokio::test]
     async fn test_static_endpoint_uses_dot_prefix() {
         // Create test app state
         let state = crate::test_helpers::create_test_app_state()
             .await
             .expect("Failed to create test state");
-        
+
         // Create router and test server
         let app = create_router(state);
         let server = TestServer::new(app).expect("Failed to create test server");
-        
+
         // Test that /.static/js/clipboard.js would work (if file exists)
         // We expect 404 since the file doesn't exist in test environment
         let response = server.get("/.static/js/clipboard.js").await;
         // Static file server returns 404 for missing files
         response.assert_status(StatusCode::NOT_FOUND);
-        
+
         // Test that /static does NOT work (should be handled by fallback)
         let response = server.get("/static/js/clipboard.js").await;
         // This should hit the fallback handler, not static file server
