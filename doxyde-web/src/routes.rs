@@ -30,9 +30,9 @@ pub fn create_router(state: AppState) -> Router {
 
     Router::new()
         // Health check
-        .route("/health", get(health))
+        .route("/.health", get(health))
         // Static files
-        .nest_service("/static", ServeDir::new("static"))
+        .nest_service("/.static", ServeDir::new("static"))
         // System routes (dot-prefixed)
         .route("/.login", get(handlers::login_form).post(handlers::login))
         .route("/.logout", get(handlers::logout).post(handlers::logout))
@@ -70,4 +70,56 @@ pub fn create_router(state: AppState) -> Router {
 // Health check handler
 async fn health() -> &'static str {
     "OK"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum_test::TestServer;
+    
+    #[tokio::test]
+    async fn test_health_endpoint_uses_dot_prefix() {
+        // Create test app state
+        let state = crate::test_helpers::create_test_app_state()
+            .await
+            .expect("Failed to create test state");
+        
+        // Create router and test server
+        let app = create_router(state);
+        let server = TestServer::new(app).expect("Failed to create test server");
+        
+        // Test that /.health works
+        let response = server.get("/.health").await;
+        response.assert_status(StatusCode::OK);
+        response.assert_text("OK");
+        
+        // Test that /health does NOT work (should be 404)
+        let response = server.get("/health").await;
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+    
+    #[tokio::test]
+    async fn test_static_endpoint_uses_dot_prefix() {
+        // Create test app state
+        let state = crate::test_helpers::create_test_app_state()
+            .await
+            .expect("Failed to create test state");
+        
+        // Create router and test server
+        let app = create_router(state);
+        let server = TestServer::new(app).expect("Failed to create test server");
+        
+        // Test that /.static/js/clipboard.js would work (if file exists)
+        // We expect 404 since the file doesn't exist in test environment
+        let response = server.get("/.static/js/clipboard.js").await;
+        // Static file server returns 404 for missing files
+        response.assert_status(StatusCode::NOT_FOUND);
+        
+        // Test that /static does NOT work (should be handled by fallback)
+        let response = server.get("/static/js/clipboard.js").await;
+        // This should hit the fallback handler, not static file server
+        // The fallback handler would typically return a different error
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
 }

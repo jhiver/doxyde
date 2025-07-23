@@ -332,13 +332,401 @@ git push origin feature/user-avatars
 - Consistent error handling patterns
 - Improved test coverage
 
-## Future Work
+## 0.1 Release Plan (4-6 weeks)
+
+### Essential for 0.1 Release
+
+#### Week 1-2: Security Fundamentals
+- Basic security audit (critical vulnerabilities only)
+- Fix session handling issues
+- Add security headers (CSP, HSTS, X-Frame-Options)
+- Implement basic rate limiting
+- Ensure path traversal protection
+- Add CSRF tokens where missing
+
+#### Week 2-3: Route Naming & Mobile Design
+- Move `/health` → `/.health`
+- Move `/static` → `/.static`
+- Update all template references
+- Implement hamburger menu for mobile
+- Create responsive layouts
+- Add viewport meta tag
+- Make touch-friendly (44px targets)
+
+#### Week 3-4: Basic File Upload Improvements
+- Add drag-and-drop for images
+- Implement upload progress bars
+- Add file type validation
+- Improve error messages
+- Basic preview functionality
+- Fix any upload security issues
+
+#### Week 4-6: Polish & Release
+- Testing and bug fixes
+- Update documentation
+- Create announcement materials
+- Final security review
+
+### 0.1 Release Messaging
+**Target**: Developers and early adopters
+**Positioning**: "A modern, AI-native CMS built with Rust - secure, fast, and designed for the future of content management."
+
+**Key Features to Highlight**:
+- First CMS with native MCP integration
+- Built with Rust for performance and safety
+- AI agents can manage content naturally
+- 420+ tests ensuring reliability
+- Mobile-responsive design
+- Secure by default
+
+### Post-0.1 Roadmap
+- Version history and restoration
+- Custom database templates
+- Auto-hyperlinking with doxyde-tagger
+- Generic file/attachment component
+- Advanced image editing
+- Comprehensive security testing
+- Component drag-and-drop reordering UI
+
+## Future Work (Full List)
+
+### Urgent Priority (Post-0.1)
+- Comprehensive security audit and hardening
+- Complete mobile responsive design
+
+#### Security Audit and Hardening
+**Goal**: Comprehensive security review and testing to prevent vulnerabilities.
+
+**Audit Areas**:
+1. **Authentication & Sessions**
+   - Session fixation attacks
+   - Session hijacking
+   - Brute force protection
+   - Password policy enforcement
+   - Secure cookie flags (HttpOnly, Secure, SameSite)
+
+2. **Authorization**
+   - Privilege escalation
+   - Broken access control
+   - Direct object references
+   - Missing authorization checks
+   - Cross-site access
+
+3. **Input Validation**
+   - SQL injection (despite SQLx protections)
+   - XSS in user content
+   - Path traversal in uploads
+   - Command injection
+   - LDAP/XML injection
+
+4. **CSRF Protection**
+   - Token validation on state-changing operations
+   - Double submit cookies
+   - Same-site cookie attributes
+
+5. **File Security**
+   - Upload restrictions (type, size, location)
+   - Path traversal prevention
+   - Executable file blocking
+   - Virus scanning integration
+
+6. **MCP/API Security**
+   - Token entropy and storage
+   - Rate limiting per token
+   - API abuse prevention
+   - Token revocation propagation
+
+**Security Tests to Add**:
+- Authentication bypass attempts (missing cookies, expired sessions)
+- Authorization escalation (user→admin, cross-site access)
+- SQL injection fuzzing (even with prepared statements)
+- XSS payload testing (stored, reflected, DOM-based)
+- Path traversal (../../../etc/passwd variations)
+- CSRF token manipulation
+- File upload exploits (.php, .exe, double extensions)
+- Rate limiting effectiveness
+- Input boundary testing (nulls, unicode, oversized)
+- Concurrent session handling
+- Token prediction/brute force
+
+**Security Headers**:
+```
+Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'
+X-Frame-Options: DENY
+X-Content-Type-Options: nosniff
+Strict-Transport-Security: max-age=31536000; includeSubDomains
+Referrer-Policy: strict-origin-when-cross-origin
+Permissions-Policy: geolocation=(), camera=(), microphone=()
+```
+
+**Additional Hardening**:
+- Implement rate limiting (per IP, per user, per endpoint)
+- Add request size limits
+- Timeout long-running operations
+- Log security events for monitoring
+- Implement account lockout after failed attempts
+- Add CAPTCHA for sensitive operations
+- Regular dependency vulnerability scanning
+- Security.txt file for responsible disclosure
+
+#### Route Naming Conflicts Fix
+**Goal**: Move all system routes to dot-prefix to avoid conflicts with content paths.
+
+**Routes to Update**:
+- `/health` → `/.health`
+- `/static` → `/.static`
+
+**Impact**:
+- Update route definitions in `routes.rs`
+- Update all template references from `/static/` to `/.static/`
+- Update JavaScript references (e.g., `/static/js/clipboard.js`)
+- Check for hardcoded paths in documentation
+- Ensure backward compatibility or migration path
+
+**Rationale**: 
+- Consistent with existing dot-prefix pattern (/.login, /.admin, etc.)
+- Prevents conflicts with user content at /health or /static paths
+- Maintains clear separation between system and content routes
+
+#### Mobile Responsive Design
+**Goal**: Make Doxyde fully responsive for mobile and tablet devices.
+
+**Navigation Changes**:
+- **Hamburger Menu**: Replace sidebar with collapsible menu
+- **Fixed Top Bar**: Sticky header with menu trigger
+- **Action Bar**: Collapse into dropdown in mobile menu
+- **Breadcrumbs**: Hide on mobile to save space
+- **Root Page**: Add to hamburger menu for easy access
+
+**Breakpoints**:
+- Mobile: < 768px
+- Tablet: 768px - 1024px  
+- Desktop: > 1024px
+
+**Mobile UI Elements**:
+- Hamburger icon (three lines) in top-left
+- Site title/logo centered in top bar
+- User menu/login in top-right
+- Slide-out navigation drawer from left
+- Overlay backdrop when menu open
+- Close button or swipe-to-close
+
+**Touch Optimizations**:
+- Minimum touch target size: 44x44px
+- Larger tap areas for links
+- Swipe gestures for navigation
+- Smooth scrolling with momentum
+- No hover-dependent UI elements
+
+**Content Adjustments**:
+- Single column layout on mobile
+- Responsive images with max-width: 100%
+- Horizontal scroll for wide tables
+- Collapsible sections for long content
+- Larger base font size (16px minimum)
+- Increased line height for readability
+
+**Performance**:
+- CSS media queries (no JS dependency)
+- Hardware-accelerated transitions
+- Lazy loading for off-screen images
+- Reduced motion for accessibility
+
+**Accessibility**:
+- ARIA labels for menu buttons
+- Focus trap in open menu
+- Keyboard navigation support
+- High contrast mode support
+- Respect prefers-reduced-motion
 
 ### High Priority
+- Improved file upload system (images and generic files)
 - Component reordering
 - Page deletion with cascade
-- Version history viewing
+- Version history viewing and restoration
 - Search functionality
+- Auto-hyperlinking adjacent pages (using doxyde-tagger)
+- Hyperlink component for external links
+- Database-stored custom templates with MCP management
+
+#### Improved File Upload System
+**Goal**: Create a modern, user-friendly file upload experience for images and all file types.
+
+**Image Upload Improvements**:
+- **Drag-and-Drop**: Drop zone with visual feedback
+- **Preview**: Show thumbnails before upload
+- **Progress Bar**: Real-time upload progress
+- **Bulk Upload**: Select/drop multiple images
+- **Gallery Browser**: Browse/select from existing uploads
+- **Image Editing**: Basic crop/resize capabilities
+- **Paste Support**: Paste images from clipboard
+
+**Generic File Upload Component**:
+- **New Component Type**: `file` or `attachment`
+- **Supported Files**: PDFs, docs, spreadsheets, zip, etc.
+- **File Browser**: Organized file management UI
+- **Metadata Storage**: Track size, type, upload date, uploader
+
+**Database Schema**:
+```sql
+CREATE TABLE uploads (
+    id INTEGER PRIMARY KEY,
+    site_id INTEGER NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_type TEXT NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type TEXT,
+    uploaded_by TEXT,
+    uploaded_at TEXT NOT NULL,
+    category TEXT,
+    is_public BOOLEAN DEFAULT false,
+    metadata JSON,
+    FOREIGN KEY (site_id) REFERENCES sites(id)
+);
+```
+
+**UI/UX Features**:
+- Modern upload widget with drop zone
+- File type icons and previews
+- Search and filter capabilities
+- Folder/category organization
+- Quick copy URL/embed code
+- Thumbnail generation for images
+- File size and type validation
+- Chunked uploads for large files
+
+**Component Schema**:
+```json
+{
+  "file_id": 123,
+  "display_name": "Download our brochure",
+  "show_preview": true,
+  "show_metadata": true,
+  "download_button": true
+}
+```
+
+**Security**:
+- Virus scanning integration
+- File type whitelist/blacklist
+- Size limits per file type
+- Secure file storage location
+- Access control per file
+- Sanitize filenames
+- Prevent path traversal
+
+**MCP Integration**:
+- `upload_file` - Upload via base64 or URL
+- `list_uploads` - Browse available files
+- `delete_upload` - Remove files
+- `update_file_metadata` - Edit file details
+
+#### Auto-Hyperlinking Feature
+**Goal**: Automatically create hyperlinks to adjacent pages (parent, children, siblings) when their titles appear in content.
+
+**Implementation Notes**:
+- Use the `doxyde-tagger` crate for HTML parsing and manipulation
+- Scan markdown content after rendering for page titles
+- Only link to pages that are visible/accessible to the current user
+- Consider performance impact for large sites
+- Add option to disable auto-linking on specific components
+
+#### Hyperlink Component
+**Goal**: Create a dedicated component type for managing external links.
+
+**Component Schema**:
+```json
+{
+  "url": "https://example.com",
+  "text": "Link text",
+  "title": "Optional hover text",
+  "target": "_blank|_self",
+  "rel": "nofollow|noopener|etc"
+}
+```
+
+**Templates**:
+- `default`: Simple inline link
+- `button`: Styled as a button
+- `card`: Card-style link preview
+- `icon`: Link with icon
+
+#### Version History & Restoration
+**Goal**: View page version history and restore previous versions.
+
+**Routes**:
+- `/page/.history` - List all versions with metadata
+- `/page/.history/<version>` - View specific version content
+- `/page/.history/<version>/.restore` - Restore a version (POST)
+
+**Implementation Notes**:
+- Show version number, created_by, created_at, is_published status
+- Display component count and types for each version
+- Compare/diff view between versions
+- Restore creates a new version (not overwrites)
+- Only editors/admins can view history and restore
+- Add "restored from version X" in version metadata
+
+**UI Elements**:
+- Timeline view of versions
+- Quick preview on hover
+- One-click restore with confirmation
+- Highlight differences between versions
+
+#### Database-Stored Custom Templates
+**Goal**: Allow per-site customization of all templates through database storage, manageable via AI/MCP.
+
+**Template Types**:
+- **Page Templates**: `default`, `landing`, `blog`, custom...
+- **Component Templates**: Per component type (text, image, code, etc.)
+- **Layout Templates**: `base.html`, `header.html`, `footer.html`
+- **Style Templates**: Custom CSS stored in DB
+
+**Database Schema**:
+```sql
+CREATE TABLE site_templates (
+    id INTEGER PRIMARY KEY,
+    site_id INTEGER NOT NULL,
+    template_type TEXT NOT NULL, -- 'page', 'component', 'layout', 'style'
+    template_name TEXT NOT NULL,
+    template_content TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    version INTEGER DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    created_by TEXT,
+    UNIQUE(site_id, template_type, template_name, version)
+);
+```
+
+**Override Hierarchy**:
+1. Check DB for site-specific template
+2. Fall back to file-based template
+3. Fall back to default template
+
+**MCP Tools**:
+- `list_templates` - Get all templates for a site
+- `get_template` - Retrieve specific template
+- `create_template` - Add new custom template
+- `update_template` - Modify existing template
+- `delete_template` - Remove custom template
+- `preview_template` - Test template with sample data
+- `restore_template_version` - Rollback to previous version
+
+**AI-Friendly Features**:
+- Template syntax validation before save
+- Live preview with test data
+- Template variable documentation
+- CSS/HTML linting
+- Automatic versioning for rollback
+- Template inheritance support
+
+**Security Considerations**:
+- Sanitize Tera template syntax
+- Prevent template injection attacks
+- Limit template complexity (no arbitrary code execution)
+- Admin-only access by default
 
 ### Medium Priority
 -  dynamic editing

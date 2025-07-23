@@ -45,3 +45,4 @@ html-escape = "0.2.13"
 [dev-dependencies]
 pretty_assertions.workspace = true
 tempfile.workspace = true
+axum-test = "16.4"
