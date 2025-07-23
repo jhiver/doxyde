@@ -1743,7 +1743,7 @@ mod tests {
 
         let response = server.handle_request(request).await?;
         let tools = response["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 18); // 7 Phase 1 tools (including get_or_create_draft) + 4 write tools + 5 component tools + 2 draft tools
+        assert_eq!(tools.len(), 20); // 7 Phase 1 tools (including get_or_create_draft) + 4 write tools + 5 component tools + 2 move component tools + 2 draft tools
 
         Ok(())
     }
