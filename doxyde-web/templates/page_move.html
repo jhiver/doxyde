@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Move Page - {{ super() }}{% endblock %}
+
+{% block content %}
+<h1>Move Page</h1>
+
+<h2>{{ page.title }}</h2>
+
+<p>Select a new parent page for "{{ page.title }}"</p>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="post">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
+    <div style="margin-bottom: 15px;">
+        <label for="target_parent_id">New Parent Page:</label><br>
+        <select id="target_parent_id" name="target_parent_id" required style="width: 100%; max-width: 500px; padding: 5px;">
+            {% for target in targets %}
+                <option value="{{ target.id }}" {% if target.id == page.parent_page_id %}selected{% endif %}>
+                    {{ target.path }} - {{ target.title }}
+                </option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div>
+        <button type="submit" style="padding: 5px 20px;">Move Page</button>
+        <a href="{{ page.path }}" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+
+<div style="margin-top: 30px;">
+    <h3>Notes:</h3>
+    <ul>
+        <li>The page and all its child pages will be moved to the new location</li>
+        <li>URLs will be automatically updated</li>
+        <li>You cannot move a page under itself or its children</li>
+    </ul>
+</div>
+{% endblock %}

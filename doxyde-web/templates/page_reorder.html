@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Reorder Pages - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .reorder-list {
+        list-style: none;
+        padding: 0;
+        margin: 20px 0;
+    }
+    .reorder-item {
+        background: #f5f5f5;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 10px 15px;
+        margin-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .reorder-item:hover {
+        background: #eeeeee;
+    }
+    .order-input {
+        width: 60px;
+        padding: 5px;
+        text-align: center;
+    }
+    .page-title {
+        flex: 1;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Reorder Pages</h1>
+
+<p>Change the display order of child pages under "{{ parent.title }}"</p>
+
+<form method="post">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
+    <ul class="reorder-list">
+    {% for page in pages %}
+        <li class="reorder-item">
+            <input type="number" 
+                   name="order_{{ page.id }}" 
+                   value="{{ page.display_order }}" 
+                   class="order-input"
+                   min="0">
+            <span class="page-title">{{ page.title }}</span>
+        </li>
+    {% endfor %}
+    </ul>
+    
+    <div>
+        <button type="submit" style="padding: 5px 20px;">Save Order</button>
+        <a href="{{ parent.path }}" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

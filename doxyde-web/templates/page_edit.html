@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Page - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .component-item {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    .component-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .component-type {
+        font-weight: bold;
+        color: #495057;
+    }
+    .component-actions {
+        display: flex;
+        gap: 10px;
+    }
+    .component-content {
+        background: white;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 10px;
+        margin-top: 10px;
+    }
+    .add-component-form {
+        background: #e9ecef;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        padding: 20px;
+        margin-top: 30px;
+    }
+    .action-bar {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 10px;
+        margin-bottom: 20px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<h1>Edit Page: {{ page.title }}</h1>
+
+<div class="action-bar">
+    <a href="{{ page.path }}" style="text-decoration: none;">← Back to Page</a>
+    <span style="color: #6c757d;">|</span>
+    <a href="{{ page.path }}/.properties" style="text-decoration: none;">Page Properties</a>
+    {% if has_draft %}
+    <span style="color: #6c757d;">|</span>
+    <form method="post" action="{{ page.path }}/.publish" style="display: inline;">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        <button type="submit" style="background: #28a745; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">
+            Publish Draft
+        </button>
+    </form>
+    <form method="post" action="{{ page.path }}/.discard-draft" style="display: inline;">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 5px 15px; border-radius: 4px; cursor: pointer;">
+            Discard Draft
+        </button>
+    </form>
+    {% endif %}
+</div>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+{% if success %}
+<p style="color: green;">{{ success }}</p>
+{% endif %}
+
+<h2>Components</h2>
+
+{% if components %}
+    {% for component in components %}
+    <div class="component-item">
+        <div class="component-header">
+            <span class="component-type">{{ component.component_type | upper }} Component</span>
+            <div class="component-actions">
+                <form method="post" action="{{ page.path }}/.edit/component/{{ component.id }}/delete" style="display: inline;">
+                    {% if csrf_token %}
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    {% endif %}
+                    <button type="submit" onclick="return confirm('Delete this component?');" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer;">
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+        <div class="component-content">
+            {% if component.component_type == "text" %}
+                {{ component.data.text | safe }}
+            {% elif component.component_type == "image" %}
+                <img src="{{ component.data.src }}" alt="{{ component.data.alt }}" style="max-width: 200px;">
+                <p>Alt text: {{ component.data.alt }}</p>
+            {% elif component.component_type == "code" %}
+                <pre><code>{{ component.data.code }}</code></pre>
+                {% if component.data.language %}
+                <p>Language: {{ component.data.language }}</p>
+                {% endif %}
+            {% elif component.component_type == "html" %}
+                {{ component.data.html | safe }}
+            {% else %}
+                <pre>{{ component.data | json_encode(pretty=true) }}</pre>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <p style="color: #6c757d; font-style: italic;">No components yet. Add one below!</p>
+{% endif %}
+
+<div class="add-component-form">
+    <h3>Add Component</h3>
+    <form method="post" action="{{ page.path }}/.edit/add-component">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        
+        <div style="margin-bottom: 15px;">
+            <label for="component_type">Component Type:</label><br>
+            <select id="component_type" name="component_type" required style="padding: 5px;">
+                <option value="text">Text (Markdown)</option>
+                <option value="image">Image</option>
+                <option value="code">Code</option>
+                <option value="html">HTML</option>
+            </select>
+        </div>
+        
+        <div style="margin-bottom: 15px;">
+            <label for="content">Content:</label><br>
+            <textarea id="content" name="content" rows="10" required style="width: 100%; max-width: 600px; padding: 5px;"></textarea>
+        </div>
+        
+        <button type="submit" style="background: #007bff; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer;">
+            Add Component
+        </button>
+    </form>
+</div>
+{% endblock %}
