@@ -22,6 +22,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::{middleware, routing, routing::get, Router};
 use std::sync::Arc;
 use tower::ServiceBuilder;
+use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
 pub fn create_router(state: AppState) -> Router {
@@ -30,6 +31,8 @@ pub fn create_router(state: AppState) -> Router {
     Router::new()
         // Health check
         .route("/health", get(health))
+        // Static files
+        .nest_service("/static", ServeDir::new("static"))
         // System routes (dot-prefixed)
         .route("/.login", get(handlers::login_form).post(handlers::login))
         .route("/.logout", get(handlers::logout).post(handlers::logout))
