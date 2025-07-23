@@ -737,6 +737,138 @@ impl McpService {
         Ok(())
     }
 
+    /// Move a component before another component
+    pub async fn move_component_before(
+        &self,
+        component_id: i64,
+        target_id: i64,
+    ) -> Result<ComponentInfo> {
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get both components to verify they exist
+        let component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        let target = component_repo
+            .find_by_id(target_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Target component not found"))?;
+
+        // Verify both components belong to the same page version
+        if component.page_version_id != target.page_version_id {
+            return Err(anyhow::anyhow!(
+                "Components must belong to the same page version"
+            ));
+        }
+
+        // Verify the component belongs to a page in this site
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        let _page = self.get_page(version.page_id).await?;
+
+        // Check if this component belongs to a published version
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot move component {} - it belongs to published version {}. Use get_or_create_draft first to create a draft version, then move components in the draft.",
+                component_id,
+                version.version_number
+            ));
+        }
+
+        // Move the component
+        component_repo.move_before(component_id, target_id).await?;
+
+        // Get the updated component
+        let updated_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found after move"))?;
+
+        // Return component info
+        Ok(ComponentInfo {
+            id: component_id,
+            component_type: updated_component.component_type,
+            position: updated_component.position,
+            template: updated_component.template,
+            title: updated_component.title,
+            content: updated_component.content,
+            created_at: updated_component.created_at.to_rfc3339(),
+            updated_at: updated_component.updated_at.to_rfc3339(),
+        })
+    }
+
+    /// Move a component after another component
+    pub async fn move_component_after(
+        &self,
+        component_id: i64,
+        target_id: i64,
+    ) -> Result<ComponentInfo> {
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get both components to verify they exist
+        let component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        let target = component_repo
+            .find_by_id(target_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Target component not found"))?;
+
+        // Verify both components belong to the same page version
+        if component.page_version_id != target.page_version_id {
+            return Err(anyhow::anyhow!(
+                "Components must belong to the same page version"
+            ));
+        }
+
+        // Verify the component belongs to a page in this site
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        let _page = self.get_page(version.page_id).await?;
+
+        // Check if this component belongs to a published version
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot move component {} - it belongs to published version {}. Use get_or_create_draft first to create a draft version, then move components in the draft.",
+                component_id,
+                version.version_number
+            ));
+        }
+
+        // Move the component
+        component_repo.move_after(component_id, target_id).await?;
+
+        // Get the updated component
+        let updated_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found after move"))?;
+
+        // Return component info
+        Ok(ComponentInfo {
+            id: component_id,
+            component_type: updated_component.component_type,
+            position: updated_component.position,
+            template: updated_component.template,
+            title: updated_component.title,
+            content: updated_component.content,
+            created_at: updated_component.created_at.to_rfc3339(),
+            updated_at: updated_component.updated_at.to_rfc3339(),
+        })
+    }
+
     // Helper methods
 
     async fn build_page_path(&self, all_pages: &[Page], page: &Page) -> Result<String> {
@@ -1578,6 +1710,290 @@ mod tests {
         let error = result.unwrap_err();
         assert!(error.to_string().contains("belongs to published version"));
         assert!(error.to_string().contains("Use get_or_create_draft first"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_component_before() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "test-move".to_string(),
+            "Test Move".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // Create draft and add components
+        let draft_info = service.get_or_create_draft(page_id).await?;
+        let draft_id = draft_info["draft"]["version_id"].as_i64().unwrap();
+
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create three components
+        let comp1 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "First"}),
+        );
+        let comp2 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            1,
+            json!({"text": "Second"}),
+        );
+        let comp3 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            2,
+            json!({"text": "Third"}),
+        );
+
+        let id1 = component_repo.create(&comp1).await?;
+        let id2 = component_repo.create(&comp2).await?;
+        let id3 = component_repo.create(&comp3).await?;
+
+        // Move the third component before the first
+        let moved = service.move_component_before(id3, id1).await?;
+        assert_eq!(moved.id, id3);
+        assert_eq!(moved.position, 0); // Should now be first
+
+        // Verify order
+        let components = service.list_components(page_id).await?;
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].id, id3); // Third is now first
+        assert_eq!(components[1].id, id1); // First is now second
+        assert_eq!(components[2].id, id2); // Second is now third
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_component_after() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "test-move-after".to_string(),
+            "Test Move After".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // Create draft and add components
+        let draft_info = service.get_or_create_draft(page_id).await?;
+        let draft_id = draft_info["draft"]["version_id"].as_i64().unwrap();
+
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create three components
+        let comp1 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "First"}),
+        );
+        let comp2 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            1,
+            json!({"text": "Second"}),
+        );
+        let comp3 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            2,
+            json!({"text": "Third"}),
+        );
+
+        let id1 = component_repo.create(&comp1).await?;
+        let id2 = component_repo.create(&comp2).await?;
+        let id3 = component_repo.create(&comp3).await?;
+
+        // Move the first component after the third
+        let moved = service.move_component_after(id1, id3).await?;
+        assert_eq!(moved.id, id1);
+        assert_eq!(moved.position, 2); // Should now be last
+
+        // Verify order
+        let components = service.list_components(page_id).await?;
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].id, id2); // Second is now first
+        assert_eq!(components[1].id, id3); // Third is still second
+        assert_eq!(components[2].id, id1); // First is now last
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_component_published_version_error() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+        let version_repo = PageVersionRepository::new(service.pool.clone());
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create a test page
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "test-published".to_string(),
+            "Test Published".to_string(),
+        );
+        let page_id = page_repo.create(&page).await?;
+
+        // Create a published version with components
+        let published_version = PageVersion::new(page_id, 1, Some("test".to_string()));
+        let version_id = version_repo.create(&published_version).await?;
+        version_repo.publish(version_id).await?;
+
+        let comp1 = Component::new(
+            version_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Component 1"}),
+        );
+        let comp2 = Component::new(
+            version_id,
+            "markdown".to_string(),
+            1,
+            json!({"text": "Component 2"}),
+        );
+        let id1 = component_repo.create(&comp1).await?;
+        let id2 = component_repo.create(&comp2).await?;
+
+        // Try to move components in published version
+        let result = service.move_component_before(id2, id1).await;
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("belongs to published version"));
+        assert!(error.to_string().contains("Use get_or_create_draft first"));
+
+        let result = service.move_component_after(id1, id2).await;
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert!(error.to_string().contains("belongs to published version"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_component_different_versions() -> Result<()> {
+        let (service, _) = create_test_service().await?;
+        let page_repo = PageRepository::new(service.pool.clone());
+        let version_repo = PageVersionRepository::new(service.pool.clone());
+        let component_repo = ComponentRepository::new(service.pool.clone());
+
+        // Create two test pages
+        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let page1 = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "page1".to_string(),
+            "Page 1".to_string(),
+        );
+        let page2 = Page::new_with_parent(
+            service.site_id,
+            root_page.id.unwrap(),
+            "page2".to_string(),
+            "Page 2".to_string(),
+        );
+        let page1_id = page_repo.create(&page1).await?;
+        let page2_id = page_repo.create(&page2).await?;
+
+        // Create draft versions
+        let draft1 = PageVersion::new(page1_id, 1, Some("test".to_string()));
+        let draft2 = PageVersion::new(page2_id, 1, Some("test".to_string()));
+        let version1_id = version_repo.create(&draft1).await?;
+        let version2_id = version_repo.create(&draft2).await?;
+
+        // Create components in different versions
+        let comp1 = Component::new(
+            version1_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Page 1 Component"}),
+        );
+        let comp2 = Component::new(
+            version2_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Page 2 Component"}),
+        );
+        let id1 = component_repo.create(&comp1).await?;
+        let id2 = component_repo.create(&comp2).await?;
+
+        // Try to move component from one page to another
+        let result = service.move_component_before(id1, id2).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Components must belong to the same page version"));
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_move_component_wrong_site() -> Result<()> {
+        let state = create_test_app_state().await?;
+        let other_site = create_test_site(&state.db, "other.com", "Other Site").await?;
+        let service = McpService::new(state.db.clone(), other_site.id.unwrap());
+
+        // Create a page in a different site
+        let main_site = create_test_site(&state.db, "main.com", "Main Site").await?;
+        let main_service = McpService::new(state.db.clone(), main_site.id.unwrap());
+
+        // Create page and components in main site
+        let pages = main_service.list_pages().await?;
+        let root_page_id = pages[0].page.id;
+
+        let page_info = main_service
+            .create_page(
+                Some(root_page_id),
+                Some("test-page".to_string()),
+                "Test Page".to_string(),
+                None,
+                None,
+                None,
+            )
+            .await?;
+
+        let draft_info = main_service.get_or_create_draft(page_info.id).await?;
+        let draft_id = draft_info["draft"]["version_id"].as_i64().unwrap();
+
+        let component_repo = ComponentRepository::new(state.db.clone());
+        let comp1 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            0,
+            json!({"text": "Comp 1"}),
+        );
+        let comp2 = Component::new(
+            draft_id,
+            "markdown".to_string(),
+            1,
+            json!({"text": "Comp 2"}),
+        );
+        let id1 = component_repo.create(&comp1).await?;
+        let id2 = component_repo.create(&comp2).await?;
+
+        // Try to move components from other site's service - should fail
+        let result = service.move_component_before(id1, id2).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("does not belong to this site"));
 
         Ok(())
     }

@@ -456,6 +456,8 @@ impl SimpleMcpServer {
             self.create_delete_component_tool(),
             self.create_list_components_tool(),
             self.create_get_component_tool(),
+            self.create_move_component_before_tool(),
+            self.create_move_component_after_tool(),
             self.create_publish_draft_tool(),
             self.create_discard_draft_tool(),
         ]
@@ -479,6 +481,8 @@ impl SimpleMcpServer {
             "delete_component" => self.handle_delete_component(arguments).await,
             "list_components" => self.handle_list_components(arguments).await,
             "get_component" => self.handle_get_component(arguments).await,
+            "move_component_before" => self.handle_move_component_before(arguments).await,
+            "move_component_after" => self.handle_move_component_after(arguments).await,
             "publish_draft" => self.handle_publish_draft(arguments).await,
             "discard_draft" => self.handle_discard_draft(arguments).await,
             _ => Err(anyhow::anyhow!("Unknown tool: {}", name)),
@@ -854,6 +858,48 @@ impl SimpleMcpServer {
         })
     }
 
+    fn create_move_component_before_tool(&self) -> Value {
+        json!({
+            "name": "move_component_before",
+            "description": "Move a component before another component on the same page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "component_id": {
+                        "type": "integer",
+                        "description": "ID of the component to move"
+                    },
+                    "target_id": {
+                        "type": "integer",
+                        "description": "ID of the component to move before"
+                    }
+                },
+                "required": ["component_id", "target_id"]
+            }
+        })
+    }
+
+    fn create_move_component_after_tool(&self) -> Value {
+        json!({
+            "name": "move_component_after",
+            "description": "Move a component after another component on the same page",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "component_id": {
+                        "type": "integer",
+                        "description": "ID of the component to move"
+                    },
+                    "target_id": {
+                        "type": "integer",
+                        "description": "ID of the component to move after"
+                    }
+                },
+                "required": ["component_id", "target_id"]
+            }
+        })
+    }
+
     // Tool handler methods
     async fn handle_list_pages(&self) -> Result<Vec<Value>> {
         let service = McpService::new(self.pool.clone(), self.site_id);
@@ -1100,6 +1146,36 @@ impl SimpleMcpServer {
         Ok(vec![json!({
             "type": "text",
             "text": format!("Successfully discarded draft for page {}", page_id)
+        })])
+    }
+
+    async fn handle_move_component_before(&self, arguments: Value) -> Result<Vec<Value>> {
+        let component_id = extract_component_id(&arguments)?;
+        let target_id = extract_target_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let component_info = service
+            .move_component_before(component_id, target_id)
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&component_info)?
+        })])
+    }
+
+    async fn handle_move_component_after(&self, arguments: Value) -> Result<Vec<Value>> {
+        let component_id = extract_component_id(&arguments)?;
+        let target_id = extract_target_id(&arguments)?;
+        let service = McpService::new(self.pool.clone(), self.site_id);
+
+        let component_info = service
+            .move_component_after(component_id, target_id)
+            .await?;
+
+        Ok(vec![json!({
+            "type": "text",
+            "text": serde_json::to_string_pretty(&component_info)?
         })])
     }
 
@@ -1389,6 +1465,13 @@ fn extract_component_id(arguments: &Value) -> Result<i64> {
         .get("component_id")
         .and_then(|v| v.as_i64())
         .ok_or_else(|| anyhow::anyhow!("component_id is required"))
+}
+
+fn extract_target_id(arguments: &Value) -> Result<i64> {
+    arguments
+        .get("target_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("target_id is required"))
 }
 
 fn extract_create_component_markdown_params(

@@ -543,6 +543,168 @@ impl ComponentRepository {
             .map(|row| (row.component_type, row.count))
             .collect())
     }
+
+    /// Move a component before another component
+    pub async fn move_before(&self, component_id: i64, target_id: i64) -> Result<()> {
+        // Validate that we're not trying to move a component before itself
+        if component_id == target_id {
+            return Err(anyhow::anyhow!("Cannot move component before itself"));
+        }
+
+        // Get both components
+        let component = self
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        let target = self
+            .find_by_id(target_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Target component not found"))?;
+
+        // Ensure both components belong to the same page version
+        if component.page_version_id != target.page_version_id {
+            return Err(anyhow::anyhow!(
+                "Components must belong to the same page version"
+            ));
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        // Get all components for this version ordered by position
+        let components = sqlx::query!(
+            r#"
+            SELECT id as "id!", position as "position: i32"
+            FROM components 
+            WHERE page_version_id = ?
+            ORDER BY position, id
+            "#,
+            component.page_version_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("Failed to fetch components for reordering")?;
+
+        // Build new position mapping
+        let mut new_positions = Vec::new();
+        let mut new_pos = 0;
+
+        for comp in components {
+            if comp.id == component_id {
+                // Skip the component being moved for now
+                continue;
+            }
+
+            if comp.id == target_id {
+                // Insert the moved component before the target
+                new_positions.push((component_id, new_pos));
+                new_pos += 1;
+            }
+
+            // Add the current component
+            new_positions.push((comp.id, new_pos));
+            new_pos += 1;
+        }
+
+        // Update all positions
+        for (id, position) in new_positions {
+            sqlx::query!(
+                "UPDATE components SET position = ? WHERE id = ?",
+                position,
+                id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to update component position")?;
+        }
+
+        tx.commit()
+            .await
+            .context("Failed to commit move_before transaction")?;
+
+        Ok(())
+    }
+
+    /// Move a component after another component
+    pub async fn move_after(&self, component_id: i64, target_id: i64) -> Result<()> {
+        // Validate that we're not trying to move a component after itself
+        if component_id == target_id {
+            return Err(anyhow::anyhow!("Cannot move component after itself"));
+        }
+
+        // Get both components
+        let component = self
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        let target = self
+            .find_by_id(target_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Target component not found"))?;
+
+        // Ensure both components belong to the same page version
+        if component.page_version_id != target.page_version_id {
+            return Err(anyhow::anyhow!(
+                "Components must belong to the same page version"
+            ));
+        }
+
+        let mut tx = self.pool.begin().await?;
+
+        // Get all components for this version ordered by position
+        let components = sqlx::query!(
+            r#"
+            SELECT id as "id!", position as "position: i32"
+            FROM components 
+            WHERE page_version_id = ?
+            ORDER BY position, id
+            "#,
+            component.page_version_id
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .context("Failed to fetch components for reordering")?;
+
+        // Build new position mapping
+        let mut new_positions = Vec::new();
+        let mut new_pos = 0;
+
+        for comp in components {
+            if comp.id == component_id {
+                // Skip the component being moved for now
+                continue;
+            }
+
+            // Add the current component
+            new_positions.push((comp.id, new_pos));
+            new_pos += 1;
+
+            if comp.id == target_id {
+                // Insert the moved component after the target
+                new_positions.push((component_id, new_pos));
+                new_pos += 1;
+            }
+        }
+
+        // Update all positions
+        for (id, position) in new_positions {
+            sqlx::query!(
+                "UPDATE components SET position = ? WHERE id = ?",
+                position,
+                id
+            )
+            .execute(&mut *tx)
+            .await
+            .context("Failed to update component position")?;
+        }
+
+        tx.commit()
+            .await
+            .context("Failed to commit move_after transaction")?;
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -1670,6 +1832,234 @@ mod tests {
         assert!(final_comp.title.is_none());
         assert_eq!(final_comp.template, "default");
         assert_eq!(final_comp.content["text"], "Final text");
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_before() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create three components
+        let comp1 = Component::new(version_id, "text".to_string(), 0, json!({"text": "First"}));
+        let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
+        let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+        let id3 = repo.create(&comp3).await?;
+
+        // Move the third component before the first
+        repo.move_before(id3, id1).await?;
+
+        // Verify new order: Third, First, Second
+        let components = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].id, Some(id3)); // Third is now first
+        assert_eq!(components[1].id, Some(id1)); // First is now second
+        assert_eq!(components[2].id, Some(id2)); // Second is now third
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_after() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create three components
+        let comp1 = Component::new(version_id, "text".to_string(), 0, json!({"text": "First"}));
+        let comp2 = Component::new(version_id, "text".to_string(), 1, json!({"text": "Second"}));
+        let comp3 = Component::new(version_id, "text".to_string(), 2, json!({"text": "Third"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+        let id3 = repo.create(&comp3).await?;
+
+        // Move the first component after the third
+        repo.move_after(id1, id3).await?;
+
+        // Verify new order: Second, Third, First
+        let components = repo.list_by_page_version(version_id).await?;
+        assert_eq!(components.len(), 3);
+        assert_eq!(components[0].id, Some(id2)); // Second is now first
+        assert_eq!(components[1].id, Some(id3)); // Third is still second
+        assert_eq!(components[2].id, Some(id1)); // First is now third
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_before_same_component() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        let comp = Component::new(version_id, "text".to_string(), 0, json!({"text": "Test"}));
+        let id = repo.create(&comp).await?;
+
+        // Try to move component before itself
+        let result = repo.move_before(id, id).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot move component before itself"));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_after_same_component() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        let comp = Component::new(version_id, "text".to_string(), 0, json!({"text": "Test"}));
+        let id = repo.create(&comp).await?;
+
+        // Try to move component after itself
+        let result = repo.move_after(id, id).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Cannot move component after itself"));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_between_different_versions() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Setup test data with two versions
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version1_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+        let version2_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 2)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create components in different versions
+        let comp1 = Component::new(version1_id, "text".to_string(), 0, json!({"text": "V1"}));
+        let comp2 = Component::new(version2_id, "text".to_string(), 0, json!({"text": "V2"}));
+
+        let id1 = repo.create(&comp1).await?;
+        let id2 = repo.create(&comp2).await?;
+
+        // Try to move component from v1 before component in v2
+        let result = repo.move_before(id1, id2).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Components must belong to the same page version"));
+
+        // Try to move component from v1 after component in v2
+        let result = repo.move_after(id1, id2).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Components must belong to the same page version"));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_move_nonexistent_component() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        let repo = ComponentRepository::new(pool);
+
+        // Try to move non-existent components
+        let result = repo.move_before(999, 1000).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Component not found"));
+
+        let result = repo.move_after(999, 1000).await;
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Component not found"));
 
         Ok(())
     }
