@@ -45,7 +45,6 @@ Doxyde is a modern, AI-native content management system built with Rust.
 - **Backend**: Rust, Axum web framework
 - **Database**: SQLite with SQLx
 - **Templates**: Tera
-- **Frontend**: HTMX, vanilla CSS
 - **AI Integration**: MCP (Model Context Protocol)
 
 ## Critical Development Guidelines
@@ -125,16 +124,16 @@ Every public function must have tests:
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_validate_domain() {
         // Happy path
         assert!(validate_domain("example.com").is_ok());
-        
+
         // Edge cases
         assert!(validate_domain("").is_err());
         assert!(validate_domain("no-dot").is_err());
-        
+
         // Error cases
         let long_domain = "a".repeat(256);
         assert!(validate_domain(&long_domain).is_err());
@@ -169,7 +168,7 @@ sqlx migrate run --source migrations
 sqlx::query_as!(
     Site,
     r#"
-    SELECT 
+    SELECT
         id as "id: i64",
         created_at as "created_at: chrono::DateTime<chrono::Utc>",
         updated_at as "updated_at: chrono::DateTime<chrono::Utc>"
@@ -213,15 +212,15 @@ impl SiteRepository {
 mod tests {
     use super::*;
     use sqlx::SqlitePool;
-    
+
     #[sqlx::test]
     async fn test_create_site(pool: SqlitePool) -> Result<()> {
         let repo = SiteRepository::new(pool);
         let site = Site::new("example.com", "Example");
-        
+
         let id = repo.create(&site).await?;
         assert!(id > 0);
-        
+
         Ok(())
     }
 }
@@ -342,7 +341,7 @@ git push origin feature/user-avatars
 - Search functionality
 
 ### Medium Priority
-- HTMX dynamic editing
+-  dynamic editing
 - Media library
 - Multi-language support
 - Import/export

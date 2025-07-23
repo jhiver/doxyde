@@ -17,3 +17,9 @@ tracing.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+criterion.workspace = true
+tokio = { workspace = true, features = ["rt", "macros"] }
+
+[[bench]]
+name = "repository_bench"
+harness = false
