@@ -86,7 +86,7 @@
     <h1>Edit Page</h1>
     
     {% if breadcrumbs %}
-    <nav aria-label="breadcrumb">
+    <nav aria-label="breadcrumb" class="breadcrumb">
         {% for crumb in breadcrumbs %}
             {% if not loop.last %}
                 <a href="{{ crumb.url }}">{{ crumb.title }}</a> /
