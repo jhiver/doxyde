@@ -172,6 +172,16 @@ impl SessionRepository {
 
         Ok(())
     }
+
+    pub async fn delete_user_sessions(&self, user_id: i64) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM sessions WHERE user_id = ?")
+            .bind(user_id)
+            .execute(&self.pool)
+            .await
+            .context("Failed to delete user sessions")?;
+
+        Ok(result.rows_affected())
+    }
 }
 
 #[cfg(test)]
@@ -718,6 +728,49 @@ mod tests {
         // Verify second still exists
         let found2 = repo.find_by_id(&session2.id).await?;
         assert!(found2.is_some());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_delete_user_sessions() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        let user1_id = create_test_user(&pool).await?;
+
+        // Create second user
+        let result =
+            sqlx::query("INSERT INTO users (email, username, password_hash) VALUES (?, ?, ?)")
+                .bind("test2@example.com")
+                .bind("testuser2")
+                .bind("hashed_password")
+                .execute(&pool)
+                .await?;
+        let user2_id = result.last_insert_rowid();
+
+        let repo = SessionRepository::new(pool.clone());
+
+        // Create sessions for both users
+        let session1_user1 = Session::new(user1_id);
+        let session2_user1 = Session::new(user1_id);
+        let session_user2 = Session::new(user2_id);
+
+        repo.create(&session1_user1).await?;
+        repo.create(&session2_user1).await?;
+        repo.create(&session_user2).await?;
+
+        // Delete all sessions for user1
+        let deleted_count = repo.delete_user_sessions(user1_id).await?;
+        assert_eq!(deleted_count, 2);
+
+        // Verify user1's sessions are gone
+        let user1_sessions = repo.find_by_user_id(user1_id).await?;
+        assert_eq!(user1_sessions.len(), 0);
+
+        // Verify user2's session still exists
+        let user2_sessions = repo.find_by_user_id(user2_id).await?;
+        assert_eq!(user2_sessions.len(), 1);
 
         Ok(())
     }

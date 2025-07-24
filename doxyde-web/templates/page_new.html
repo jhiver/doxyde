@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}New Page - {{ super() }}{% endblock %}
+
+{% block content %}
+<h1>Create New Page</h1>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+<form method="post">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
+    <div style="margin-bottom: 15px;">
+        <label for="title">Title:</label><br>
+        <input type="text" id="title" name="title" required style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="slug">URL Slug (optional):</label><br>
+        <input type="text" id="slug" name="slug" style="width: 100%; max-width: 500px; padding: 5px;">
+        <small>Leave empty to auto-generate from title</small>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="description">Description (for SEO):</label><br>
+        <textarea id="description" name="description" rows="3" style="width: 100%; max-width: 500px; padding: 5px;"></textarea>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="keywords">Keywords (comma-separated):</label><br>
+        <input type="text" id="keywords" name="keywords" style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="template">Template:</label><br>
+        <select id="template" name="template" style="padding: 5px;">
+            <option value="default">Default</option>
+            <option value="full_width">Full Width</option>
+            <option value="landing">Landing</option>
+            <option value="blog">Blog</option>
+        </select>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="meta_robots">Search Engine Visibility:</label><br>
+        <select id="meta_robots" name="meta_robots" style="padding: 5px;">
+            <option value="index,follow">Index and Follow (Default)</option>
+            <option value="noindex,follow">Don't Index, Follow Links</option>
+            <option value="index,nofollow">Index, Don't Follow Links</option>
+            <option value="noindex,nofollow">Don't Index or Follow</option>
+        </select>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="canonical_url">Canonical URL (optional):</label><br>
+        <input type="url" id="canonical_url" name="canonical_url" style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div>
+        <button type="submit" style="padding: 5px 20px;">Create Page</button>
+        <a href="{{ parent_path }}" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

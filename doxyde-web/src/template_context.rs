@@ -19,7 +19,7 @@ use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::PageRepository;
 use tera::Context;
 
-use crate::{logo::get_logo_data, AppState};
+use crate::{csrf::CsrfToken, logo::get_logo_data, AppState};
 
 /// Add common base template context variables
 /// This includes site_title, root_page_title, logo information, and navigation
@@ -93,12 +93,31 @@ pub async fn add_base_context(
     Ok(())
 }
 
+/// Add CSRF token to template context
+pub fn add_csrf_token(context: &mut Context, csrf_token: &CsrfToken) {
+    context.insert("csrf_token", &csrf_token.token);
+}
+
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
     fn test_add_base_context_with_site() {
         // Just test that the function exists and compiles
         assert_eq!(1 + 1, 2);
+    }
+
+    #[test]
+    fn test_add_csrf_token() {
+        let mut context = Context::new();
+        let csrf_token = CsrfToken::new();
+
+        add_csrf_token(&mut context, &csrf_token);
+
+        assert_eq!(
+            context.get("csrf_token").unwrap().as_str().unwrap(),
+            &csrf_token.token
+        );
     }
 }

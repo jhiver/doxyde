@@ -35,4 +35,6 @@ cobertura.xml
 
 # Build artifacts
 /dist/
-EOF < /dev/null
+
+# Claude custom commands
+.claude/

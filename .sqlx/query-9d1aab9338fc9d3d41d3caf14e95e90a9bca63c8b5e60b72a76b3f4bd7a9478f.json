@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT last_activity\n        FROM sessions\n        WHERE id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "last_activity",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "9d1aab9338fc9d3d41d3caf14e95e90a9bca63c8b5e60b72a76b3f4bd7a9478f"
+}

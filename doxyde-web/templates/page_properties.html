@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+
+{% block title %}Page Properties - {{ super() }}{% endblock %}
+
+{% block content %}
+<h1>Edit Page Properties</h1>
+
+<h2>{{ page.title }}</h2>
+
+{% if error %}
+<p style="color: red;">{{ error }}</p>
+{% endif %}
+
+{% if success %}
+<p style="color: green;">{{ success }}</p>
+{% endif %}
+
+<form method="post">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
+    <div style="margin-bottom: 15px;">
+        <label for="title">Title:</label><br>
+        <input type="text" id="title" name="title" value="{{ page.title }}" required style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="slug">URL Slug:</label><br>
+        <input type="text" id="slug" name="slug" value="{{ page.slug }}" required style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="description">Description (for SEO):</label><br>
+        <textarea id="description" name="description" rows="3" style="width: 100%; max-width: 500px; padding: 5px;">{{ page.description | default(value="") }}</textarea>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="keywords">Keywords (comma-separated):</label><br>
+        <input type="text" id="keywords" name="keywords" value="{{ page.keywords | default(value="") }}" style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="template">Template:</label><br>
+        <select id="template" name="template" style="padding: 5px;">
+            {% for template in available_templates %}
+            <option value="{{ template }}" {% if template == page.template %}selected{% endif %}>{{ template | title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="meta_robots">Search Engine Visibility:</label><br>
+        <select id="meta_robots" name="meta_robots" style="padding: 5px;">
+            <option value="index,follow" {% if page.meta_robots == "index,follow" %}selected{% endif %}>Index and Follow (Default)</option>
+            <option value="noindex,follow" {% if page.meta_robots == "noindex,follow" %}selected{% endif %}>Don't Index, Follow Links</option>
+            <option value="index,nofollow" {% if page.meta_robots == "index,nofollow" %}selected{% endif %}>Index, Don't Follow Links</option>
+            <option value="noindex,nofollow" {% if page.meta_robots == "noindex,nofollow" %}selected{% endif %}>Don't Index or Follow</option>
+        </select>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <label for="canonical_url">Canonical URL (optional):</label><br>
+        <input type="url" id="canonical_url" name="canonical_url" value="{{ page.canonical_url | default(value="") }}" style="width: 100%; max-width: 500px; padding: 5px;">
+    </div>
+    
+    <div>
+        <button type="submit" style="padding: 5px 20px;">Save Properties</button>
+        <a href="{{ page.path }}" style="margin-left: 10px;">Back to Page</a>
+    </div>
+</form>
+{% endblock %}

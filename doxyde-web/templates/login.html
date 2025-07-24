@@ -10,6 +10,10 @@
 {% endif %}
 
 <form method="post" action="/.login">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
     <div style="margin-bottom: 15px;">
         <label for="username">Username or Email:</label><br>
         <input type="text" id="username" name="username" required style="width: 300px; padding: 5px;">

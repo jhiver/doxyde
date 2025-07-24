@@ -1,0 +1,116 @@
+diff --git a/doxyde-web/src/handlers/image_serve.rs b/doxyde-web/src/handlers/image_serve.rs
+index 1234567..abcdefg 100644
+--- a/doxyde-web/src/handlers/image_serve.rs
++++ b/doxyde-web/src/handlers/image_serve.rs
+@@ -22,6 +22,7 @@ use axum::{
+ use doxyde_core::models::site::Site;
+ use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
+ use std::fs;
++use std::path::Component;
+ use std::path::PathBuf;
+ 
+ use crate::state::AppState;
+@@ -76,7 +77,7 @@ pub async fn serve_image_handler(
+                         if let Some(file_path) =
+                             component.content.get("file_path").and_then(|p| p.as_str())
+                         {
+-                            return serve_image_file(file_path, &format).await;
++                            return serve_image_file(file_path, &format, &state.config.uploads_dir).await;
+                         } else {
+                             // Log missing file_path for debugging
+                             tracing::warn!(
+@@ -96,13 +97,37 @@ pub async fn serve_image_handler(
+ 
+ /// Serve an image file from disk
+-async fn serve_image_file(file_path: &str, format: &str) -> Result<Response, StatusCode> {
+-    let path = PathBuf::from(file_path);
++async fn serve_image_file(file_path: &str, format: &str, uploads_dir: &str) -> Result<Response, StatusCode> {
++    // Get the canonical uploads directory
++    let uploads_base = PathBuf::from(uploads_dir).canonicalize()
++        .map_err(|e| {
++            tracing::error!("Failed to canonicalize uploads directory: {}", e);
++            StatusCode::INTERNAL_SERVER_ERROR
++        })?;
++    
++    let requested_path = PathBuf::from(file_path);
++    
++    // Security check: Reject paths with parent directory components
++    if requested_path.components().any(|c| matches!(c, Component::ParentDir)) {
++        tracing::error!("Path traversal attempt detected: {}", file_path);
++        return Err(StatusCode::FORBIDDEN);
++    }
++    
++    // Canonicalize the requested path
++    let canonical_path = requested_path.canonicalize()
++        .map_err(|_| {
++            tracing::warn!("Image file not found or cannot be canonicalized: {}", file_path);
++            StatusCode::NOT_FOUND
++        })?;
++    
++    // Security check: Ensure the path is within the uploads directory
++    if !canonical_path.starts_with(&uploads_base) {
++        tracing::error!("Access attempt outside uploads directory: {}", file_path);
++        return Err(StatusCode::FORBIDDEN);
++    }
+ 
+-    // Ensure the file exists
+-    if !path.exists() {
+-        tracing::warn!("Image file not found: {}", file_path);
+-        return Err(StatusCode::NOT_FOUND);
++    // Additional check: file should exist (canonicalize would fail if not, but double-check)
++    if !canonical_path.exists() || !canonical_path.is_file() {
++        return Err(StatusCode::NOT_FOUND);  
+     }
+ 
+     // Read the file
+-    let data = fs::read(&path).map_err(|e| {
++    let data = fs::read(&canonical_path).map_err(|e| {
+         tracing::error!("Failed to read image file: {}", e);
+
+diff --git a/doxyde-web/src/component_render.rs b/doxyde-web/src/component_render.rs
+index 2345678..bcdefgh 100644
+--- a/doxyde-web/src/component_render.rs
++++ b/doxyde-web/src/component_render.rs
+@@ -38,6 +38,15 @@ impl ComponentRenderer {
+         component: &Component,
+         context: &mut Context,
+     ) -> Result<String> {
++        // Validate component template name
++        if let Err(e) = validate_template_name(&component.template) {
++            tracing::error!(
++                "Invalid template name '{}' for component {}: {}",
++                component.template, component.id.unwrap_or(0), e
++            );
++            return Err(anyhow!("Invalid template name"));
++        }
++        
+         let template_path = format!(
+             "{}/components/{}/{}.html",
+             self.templates_dir, component.component_type, component.template
+@@ -218,3 +227,25 @@ impl TemplateInfo {
+         }
+     }
+ }
++
++/// Validate template names to prevent path traversal
++fn validate_template_name(template: &str) -> Result<(), &'static str> {
++    // Check for empty or too long
++    if template.is_empty() {
++        return Err("Template name cannot be empty");
++    }
++    if template.len() > 50 {
++        return Err("Template name too long");
++    }
++    
++    // Only allow alphanumeric, dash, and underscore
++    if !template.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
++        return Err("Template name contains invalid characters");
++    }
++    
++    // Explicitly reject path traversal attempts
++    if template.contains("..") || template.contains('/') || template.contains('\\') {
++        return Err("Template name cannot contain path separators");
++    }
++    
++    Ok(())
++}

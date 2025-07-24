@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Page - {{ super() }}{% endblock %}
+
+{% block content %}
+<h1>Delete Page</h1>
+
+<div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 4px; padding: 15px; margin: 20px 0;">
+    <h2 style="margin-top: 0; color: #856404;">⚠️ Warning</h2>
+    <p>You are about to permanently delete the page "<strong>{{ page.title }}</strong>"</p>
+    
+    {% if children_count > 0 %}
+    <p style="color: #d73502; font-weight: bold;">
+        This page has {{ children_count }} child page{% if children_count > 1 %}s{% endif %} that will also be deleted:
+    </p>
+    <ul>
+        {% for child in children %}
+        <li>{{ child.title }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+    
+    <p>This action cannot be undone. All content and versions will be permanently removed.</p>
+</div>
+
+<form method="post" style="margin-top: 30px;">
+    {% if csrf_token %}
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    {% endif %}
+    
+    <div style="margin-bottom: 15px;">
+        <label for="confirm">Type <strong>DELETE</strong> to confirm:</label><br>
+        <input type="text" 
+               id="confirm" 
+               name="confirm" 
+               required 
+               pattern="DELETE" 
+               style="width: 200px; padding: 5px;"
+               placeholder="DELETE">
+    </div>
+    
+    <div>
+        <button type="submit" style="background: #dc3545; color: white; border: none; padding: 8px 20px; border-radius: 4px; cursor: pointer;">
+            Delete Page
+        </button>
+        <a href="{{ page.path }}" style="margin-left: 10px;">Cancel</a>
+    </div>
+</form>
+{% endblock %}

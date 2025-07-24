@@ -824,6 +824,9 @@ document.addEventListener('DOMContentLoaded', function() {
             🚀 Save &amp; Publish
         </button>
         <form method="post" style="margin: 0;">
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
             <input type="hidden" name="action" value="discard_draft">
             <button type="submit" class="button button-danger button-block" 
                     onclick="return confirm('Are you sure you want to discard all draft changes?')">
@@ -856,6 +859,9 @@ document.addEventListener('DOMContentLoaded', function() {
 <div class="edit-mode">
     <!-- Components Form -->
     <form method="post" id="components-form" class="edit-form">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% endif %}
         <input type="hidden" name="action" value="save_draft">
         
         <!-- Components -->
@@ -1119,6 +1125,9 @@ document.addEventListener('DOMContentLoaded', function() {
     <!-- Add Component Section -->
     <div class="add-component-section">
         <form method="post" id="add-component-form" style="display: flex; align-items: center; gap: 15px;">
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
             <input type="hidden" name="action" value="add_component">
             <input type="hidden" name="content" value="">
             

@@ -46,6 +46,9 @@
     
     <div class="actions">
         <form method="post" action="/.settings/mcp/{{ token.id }}/revoke" style="display: inline;">
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
             <button type="submit" class="btn-danger" onclick="return confirm('Are you sure you want to revoke this token? This action cannot be undone.')">Revoke Token</button>
         </form>
     </div>
