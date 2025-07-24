@@ -51,10 +51,7 @@ pub fn create_router(state: AppState) -> Router {
             "/.mcp",
             get(handlers::list_tokens_handler).post(handlers::create_token_handler),
         )
-        .route(
-            "/.mcp/:token_id",
-            get(handlers::show_token_handler),
-        )
+        .route("/.mcp/:token_id", get(handlers::show_token_handler))
         .route(
             "/.mcp/:token_id/revoke",
             get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
