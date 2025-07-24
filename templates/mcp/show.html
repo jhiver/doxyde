@@ -5,30 +5,25 @@
 {% block content %}
 <div class="container">
     <nav class="breadcrumb">
-        <a href="/.settings/mcp">MCP Tokens</a>
+        <a href="/.mcp">MCP Tokens</a>
         <span class="separator">/</span>
         <span>{{ token.name }}</span>
     </nav>
 
     <h1>MCP Token Created</h1>
-    
-    <div class="warning-box">
-        <h3>⚠️ Important: Save this URL now!</h3>
-        <p>This is the only time you'll see the complete MCP URL. Copy it now and save it securely.</p>
-    </div>
 
     <div class="token-info">
         <h2>Token Details</h2>
         <dl>
             <dt>Name:</dt>
             <dd>{{ token.name }}</dd>
-            
+
             <dt>Site:</dt>
             <dd>{{ site.title }} ({{ site.domain }})</dd>
-            
+
             <dt>Created:</dt>
             <dd>{{ token.created_at | date(format="%Y-%m-%d %H:%M") }}</dd>
-            
+
             <dt>Status:</dt>
             <dd>
                 {% if token.revoked_at %}
@@ -44,12 +39,12 @@
     <div class="url-section">
         <h2>MCP Server URL</h2>
         <p>Use this URL to add Doxyde as a custom connector in Claude Code:</p>
-        
+
         <div class="url-container">
-            <input type="text" id="mcp-url" value="https://{{ mcp_url }}" readonly>
+            <input type="text" id="mcp-url" value="{{ mcp_url }}" readonly>
             <button type="button" class="btn btn-primary" onclick="copyToClipboard()">Copy URL</button>
         </div>
-        
+
         <div class="instructions">
             <h3>How to use in Claude Code</h3>
             <ol>
@@ -59,15 +54,15 @@
                 <li>Paste the URL above</li>
                 <li>Click "Add" to connect</li>
             </ol>
-            
+
             <p>Once connected, you can ask Claude to create pages, add content, and manage your {{ site.title }} site.</p>
         </div>
     </div>
 
     <div class="actions">
-        <a href="/.settings/mcp" class="btn">Back to Tokens</a>
+        <a href="/.mcp" class="btn">Back to Tokens</a>
         {% if not token.revoked_at %}
-            <form method="post" action="/.settings/mcp/{{ token.id }}/revoke" style="display: inline;">
+            <form method="post" action="/.mcp/{{ token.id }}/revoke" style="display: inline;">
                 <button type="submit" class="btn btn-danger" onclick="return confirm('Are you sure you want to revoke this token? This cannot be undone.')">Revoke Token</button>
             </form>
         {% endif %}
@@ -76,28 +71,38 @@
     <div class="info-box">
         <p>This token has been revoked and can no longer be used.</p>
     </div>
-    
+
     <div class="actions">
-        <a href="/.settings/mcp" class="btn">Back to Tokens</a>
+        <a href="/.mcp" class="btn">Back to Tokens</a>
     </div>
     {% endif %}
 </div>
 
 <script>
+// Set the correct protocol based on current page
+window.addEventListener('DOMContentLoaded', function() {
+    const urlInput = document.getElementById('mcp-url');
+    const currentProtocol = window.location.protocol;
+    const mcpPath = urlInput.value;
+    
+    // Update the URL with the correct protocol
+    urlInput.value = currentProtocol + '//' + mcpPath;
+});
+
 function copyToClipboard() {
     const urlInput = document.getElementById('mcp-url');
     urlInput.select();
     urlInput.setSelectionRange(0, 99999); // For mobile devices
-    
+
     try {
         document.execCommand('copy');
-        
+
         // Show feedback
         const button = event.target;
         const originalText = button.textContent;
         button.textContent = 'Copied!';
         button.classList.add('btn-success');
-        
+
         setTimeout(() => {
             button.textContent = originalText;
             button.classList.remove('btn-success');

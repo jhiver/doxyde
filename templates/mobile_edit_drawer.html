@@ -1,0 +1,70 @@
+<nav class="mobile-edit-drawer">
+  <div class="mobile-edit-content">
+    <!-- Close button -->
+    <button class="mobile-drawer-close" aria-label="Close edit menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+
+    <div class="mobile-edit-list">
+      {% set current_action = action | default(value="view") %}
+
+      {% if current_action == "view" %}
+        <span class="mobile-edit-item mobile-edit-current">View</span>
+      {% else %}
+        <a href="../" class="mobile-edit-item">View</a>
+      {% endif %}
+
+      {% if current_action == ".properties" %}
+        <span class="mobile-edit-item mobile-edit-current">Properties</span>
+      {% else %}
+        <a href="./.properties" class="mobile-edit-item">Properties</a>
+      {% endif %}
+
+      {% if current_action == ".edit" %}
+        <span class="mobile-edit-item mobile-edit-current">Edit</span>
+      {% else %}
+        <a href="./.edit" class="mobile-edit-item">Edit</a>
+      {% endif %}
+
+      {% if current_action == ".new" %}
+        <span class="mobile-edit-item mobile-edit-current">Create New</span>
+      {% else %}
+        <a href="./.new" class="mobile-edit-item">Create New</a>
+      {% endif %}
+
+      {% if has_children is defined and has_children %}
+        {% if current_action == ".reorder" %}
+          <span class="mobile-edit-item mobile-edit-current">Reorder</span>
+        {% else %}
+          <a href="./.reorder" class="mobile-edit-item">Reorder</a>
+        {% endif %}
+      {% endif %}
+
+      {% if is_movable is defined and is_movable %}
+        {% if current_action == ".move" %}
+          <span class="mobile-edit-item mobile-edit-current">Move</span>
+        {% else %}
+          <a href="./.move" class="mobile-edit-item">Move</a>
+        {% endif %}
+      {% endif %}
+
+      {% if can_delete is defined and can_delete %}
+        {% if current_action == ".delete" %}
+          <span class="mobile-edit-item mobile-edit-current mobile-edit-danger">Delete</span>
+        {% else %}
+          <a href="./.delete" class="mobile-edit-item mobile-edit-danger">Delete</a>
+        {% endif %}
+      {% endif %}
+
+      {% if current_action == ".mcp" %}
+        <span class="mobile-edit-item mobile-edit-current">MCP</span>
+      {% else %}
+        <a href="/.mcp" class="mobile-edit-item">MCP</a>
+      {% endif %}
+
+    </div>
+  </div>
+</nav>

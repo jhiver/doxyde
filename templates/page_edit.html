@@ -3,7 +3,8 @@
 {% block title %}Edit: {{ page.title }} - {{ super() }}{% endblock %}
 
 {% block head %}
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="/.static/css/sweetalert2.min.css">
+<script src="/.static/js/sweetalert2.min.js"></script>
 <style>
     /* Component editor - more compact */
     .component-editor {
@@ -424,14 +425,14 @@ function submitComponentsForm(action) {
 
 function deleteComponent(componentId) {
     Swal.fire({
-        title: 'Êtes-vous sûr ?',
-        text: "Cette action supprimera définitivement ce composant",
+        title: 'Are you sure?',
+        text: "This will permanently delete this component",
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#d33',
         cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Oui, supprimer',
-        cancelButtonText: 'Annuler'
+        confirmButtonText: 'Yes, delete it',
+        cancelButtonText: 'Cancel'
     }).then((result) => {
         if (result.isConfirmed) {
             // First save all current component data

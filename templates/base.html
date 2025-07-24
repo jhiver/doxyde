@@ -36,12 +36,12 @@
     }
     </script>
     {% endif %}
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+
     <!-- Modern CSS -->
     <style>
 {% include "styles.css" %}
@@ -49,6 +49,25 @@
     {% block head %}{% endblock %}
 </head>
 <body>
+    <!-- Mobile header -->
+    {% include "mobile_header.html" %}
+
+    <!-- Mobile navigation drawer -->
+    {% include "mobile_nav_drawer.html" %}
+
+    <!-- Mobile edit drawer -->
+    {% if user is defined and can_edit is defined and can_edit %}
+        {% include "mobile_edit_drawer.html" %}
+    {% endif %}
+
+    <!-- Mobile edit controls drawer (only on edit pages) -->
+    {% if user is defined and action is defined and action == ".edit" %}
+        {% include "mobile_edit_controls_drawer.html" %}
+    {% endif %}
+
+    <!-- Mobile menu overlay -->
+    <div class="mobile-menu-overlay"></div>
+
     {% include "action_bar.html" %}
 
     <nav class="header-nav">
@@ -56,8 +75,8 @@
             <div class="nav-left">
                 <a href="/" class="site-logo">
                     {% if logo_url %}
-                        <img src="{{ logo_url }}" 
-                             alt="{% if root_page_title %}{{ root_page_title }}{% else %}Doxyde{% endif %}" 
+                        <img src="{{ logo_url }}"
+                             alt="{% if root_page_title %}{{ root_page_title }}{% else %}Doxyde{% endif %}"
                              class="logo-image"
                              {% if logo_width %}style="width: {{ logo_width }};{% if logo_height %} height: {{ logo_height }};{% else %} height: auto;{% endif %}"{% elif logo_height %}style="height: {{ logo_height }}; width: auto;"{% endif %}>
                     {% else %}
@@ -77,10 +96,9 @@
                         {% endfor %}
                     </nav>
                 {% endif %}
-                
+
                 {% if user %}
                     <div class="auth-controls">
-                        <a href="/.settings/mcp" class="btn btn-sm btn-secondary">MCP Tokens</a>
                         <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
                     </div>
                 {% else %}
@@ -104,8 +122,11 @@
     <footer>
         <p>Powered by <a href="https://github.com/jhiver/doxyde">{% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default(value="Doxyde") }}{% endif %}</a></p>
     </footer>
-    
+
     <!-- Clipboard functionality for code blocks -->
     <script src="/.static/js/clipboard.js"></script>
+
+    <!-- Mobile navigation functionality -->
+    <script src="/.static/js/mobile-nav.js"></script>
 </body>
 </html>

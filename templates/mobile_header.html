@@ -1,0 +1,57 @@
+<div class="mobile-header">
+  <div class="mobile-logo">
+    <a href="/">
+      {% if logo_url %}
+        <img src="{{ logo_url }}" 
+             alt="{% if root_page_title %}{{ root_page_title }}{% else %}Doxyde{% endif %}" 
+             class="mobile-logo-image"
+             {% if logo_width %}style="width: {{ logo_width }}; height: auto;"{% elif logo_height %}style="height: {{ logo_height }}; width: auto;"{% endif %}>
+      {% else %}
+        {% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default(value="Doxyde") }}{% endif %}
+      {% endif %}
+    </a>
+  </div>
+  <div class="mobile-icons">
+    {% if user %}
+      {% if can_edit is defined and can_edit %}
+        <button class="mobile-edit-toggle" aria-label="Edit menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+      {% endif %}
+      {% if action is defined and action == ".edit" %}
+        <button class="mobile-controls-toggle" aria-label="Save controls">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+        </button>
+      {% endif %}
+      <a href="/.logout" class="mobile-icon-link" aria-label="Logout">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+          <polyline points="16 17 21 12 16 7"/>
+          <line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </a>
+    {% else %}
+      <a href="/.login" class="mobile-icon-link" aria-label="Login">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/>
+          <line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
+      </a>
+    {% endif %}
+    <button class="mobile-nav-toggle" aria-label="Navigation menu">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+  </div>
+</div>

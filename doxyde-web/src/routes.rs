@@ -48,15 +48,12 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.logout", get(handlers::logout).post(handlers::logout))
         // MCP Token management
         .route(
-            "/.settings/mcp",
+            "/.mcp",
             get(handlers::list_tokens_handler).post(handlers::create_token_handler),
         )
+        .route("/.mcp/:token_id", get(handlers::show_token_handler))
         .route(
-            "/.settings/mcp/:token_id",
-            get(handlers::show_token_handler),
-        )
-        .route(
-            "/.settings/mcp/:token_id/revoke",
+            "/.mcp/:token_id/revoke",
             get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
         )
         // MCP Server endpoint (supports both regular JSON-RPC and SSE)
@@ -145,7 +142,7 @@ mod tests {
         response.assert_status(StatusCode::OK);
 
         // Check all security headers
-        response.assert_header(header::CONTENT_SECURITY_POLICY, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+        response.assert_header(header::CONTENT_SECURITY_POLICY, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
         response.assert_header(
             header::STRICT_TRANSPORT_SECURITY,
             "max-age=31536000; includeSubDomains",

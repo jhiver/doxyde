@@ -2,66 +2,75 @@
 <div class="action-bar">
     <div class="action-bar-content">
         {% set current_action = action | default(value="view") %}
-        
+
         {% if current_action == "view" %}
             <strong>View</strong>
         {% else %}
             <a href="../">View</a>
         {% endif %}
-        
+
         <span class="separator">|</span>
-        
+
         {% if current_action == ".properties" %}
             <strong>Properties</strong>
         {% else %}
             <a href="./.properties">Properties</a>
         {% endif %}
-        
+
         <span class="separator">|</span>
-        
+
         {% if current_action == ".edit" %}
             <strong>Edit</strong>
         {% else %}
             <a href="./.edit">Edit</a>
         {% endif %}
-        
+
         <span class="separator">|</span>
-        
+
         {% if current_action == ".new" %}
             <strong>Create New</strong>
         {% else %}
             <a href="./.new">Create New</a>
         {% endif %}
-        
+
         {% if has_children is defined and has_children %}
             <span class="separator">|</span>
-            
+
             {% if current_action == ".reorder" %}
                 <strong>Reorder</strong>
             {% else %}
                 <a href="./.reorder">Reorder</a>
             {% endif %}
         {% endif %}
-        
+
         {% if is_movable is defined and is_movable %}
             <span class="separator">|</span>
-            
+
             {% if current_action == ".move" %}
                 <strong>Move</strong>
             {% else %}
                 <a href="./.move">Move</a>
             {% endif %}
         {% endif %}
-        
+
         {% if can_delete is defined and can_delete %}
             <span class="separator">|</span>
-            
+
             {% if current_action == ".delete" %}
                 <strong>Delete</strong>
             {% else %}
                 <a href="./.delete" class="danger">Delete</a>
             {% endif %}
         {% endif %}
+
+        <span class="separator">|</span>
+
+        {% if current_action == ".mcp" %}
+            <strong>MCP</strong>
+        {% else %}
+            <a href="/.mcp">MCP</a>
+        {% endif %}
+
     </div>
 </div>
 {% endif %}

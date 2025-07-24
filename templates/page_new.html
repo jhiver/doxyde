@@ -73,7 +73,7 @@
     <h1>Create New Page</h1>
     
     {% if breadcrumbs %}
-    <nav aria-label="breadcrumb">
+    <nav aria-label="breadcrumb" class="breadcrumb">
         <strong>Parent page:</strong>
         {% for crumb in breadcrumbs %}
             {% if not loop.last %}

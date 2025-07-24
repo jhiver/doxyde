@@ -1,0 +1,69 @@
+<nav class="mobile-nav-drawer">
+  <div class="mobile-nav-content">
+    <!-- Close button -->
+    <button class="mobile-drawer-close" aria-label="Close navigation">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    
+    <!-- Ancestor pages (breadcrumb) first -->
+    {% if breadcrumbs and breadcrumbs|length > 1 %}
+    <div class="mobile-nav-section">
+      <div class="mobile-nav-list">
+        {% for crumb in breadcrumbs %}
+          {% if not loop.last %}
+            <a href="{{ crumb.url }}" class="mobile-nav-item mobile-nav-ancestor">{{ crumb.title }}</a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- Current page (non-clickable) -->
+    {% if page and page.title %}
+    <div class="mobile-nav-section">
+      <div class="mobile-nav-list">
+        <span class="mobile-nav-item mobile-nav-current">{{ page.title }}</span>
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- Child pages of current page -->
+    {% if children and children|length > 0 %}
+    <div class="mobile-nav-section">
+      <div class="mobile-nav-list">
+        {% for child in children %}
+          <a href="{{ child.url }}" class="mobile-nav-item mobile-nav-child">{{ child.title }}</a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    
+    <!-- Separator if we have both page hierarchy and sidebar items -->
+    {% if (breadcrumbs or children) and sidebar_items %}
+    <hr class="mobile-nav-separator">
+    {% endif %}
+    
+    <!-- All pages tree -->
+    {% if sidebar_items %}
+    <div class="mobile-nav-section">
+      <div class="mobile-nav-list">
+        {% for item in sidebar_items %}
+          {% if item.current %}
+            <span class="mobile-nav-item mobile-nav-current" style="padding-left: {{ (item.level * 1.5) + 1.5 }}rem">
+              {{ item.title }}
+            </span>
+          {% else %}
+            <a href="{{ item.url }}" class="mobile-nav-item {% if item.active_path %}mobile-nav-active-path{% endif %}" 
+               style="padding-left: {{ (item.level * 1.5) + 1.5 }}rem">
+              {{ item.title }}
+            </a>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</nav>
