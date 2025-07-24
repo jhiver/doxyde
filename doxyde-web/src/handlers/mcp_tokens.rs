@@ -39,10 +39,7 @@ pub async fn list_tokens_handler(
     context.insert("user", &user.user);
     context.insert("tokens", &token_sites);
     context.insert("can_edit", &true);
-    context.insert("action", ".settings/mcp");
-    context.insert("has_children", &false);
-    context.insert("is_movable", &false);
-    context.insert("can_delete", &false);
+    context.insert("action", ".mcp");
 
     // Get sites the user has access to for the creation form
     let site_user_repo = doxyde_db::repositories::SiteUserRepository::new(state.db.clone());
@@ -101,7 +98,7 @@ pub async fn create_token_handler(
     token_repo.create(&token).await?;
 
     // Redirect to show the newly created token
-    Ok(Redirect::to(&format!("/.settings/mcp/{}", token_id)))
+    Ok(Redirect::to(&format!("/.mcp/{}", token_id)))
 }
 
 pub async fn show_token_handler(
@@ -132,10 +129,7 @@ pub async fn show_token_handler(
     context.insert("token", &token);
     context.insert("site", &site);
     context.insert("can_edit", &true);
-    context.insert("action", ".settings/mcp");
-    context.insert("has_children", &false);
-    context.insert("is_movable", &false);
-    context.insert("can_delete", &false);
+    context.insert("action", ".mcp");
 
     // Generate the MCP URL
     let mcp_url = format!("{}/.mcp/{}", site.domain, token.id);
@@ -172,7 +166,7 @@ pub async fn revoke_token_handler(
     // Revoke the token
     token_repo.revoke(&token_id).await?;
 
-    Ok(Redirect::to("/.settings/mcp"))
+    Ok(Redirect::to("/.mcp"))
 }
 
 #[cfg(test)]
@@ -198,7 +192,7 @@ mod tests {
         let app = crate::routes::create_router(state);
 
         let request = Request::builder()
-            .uri("/.settings/mcp")
+            .uri("/.mcp")
             .header("cookie", format!("session_id={}", session.id))
             .header("host", "example.com")
             .body(Body::empty())?;
@@ -236,7 +230,7 @@ mod tests {
         // Create token
         let request = Request::builder()
             .method("POST")
-            .uri("/.settings/mcp")
+            .uri("/.mcp")
             .header("cookie", format!("session_id={}", session.id))
             .header("content-type", "application/x-www-form-urlencoded")
             .header("host", "example.com")
@@ -250,11 +244,11 @@ mod tests {
 
         // Extract token ID from redirect
         let location = response.headers().get("location").unwrap().to_str()?;
-        let token_id = location.trim_start_matches("/.settings/mcp/");
+        let token_id = location.trim_start_matches("/.mcp/");
 
         // Show token
         let request = Request::builder()
-            .uri(&format!("/.settings/mcp/{}", token_id))
+            .uri(&format!("/.mcp/{}", token_id))
             .header("cookie", format!("session_id={}", session.id))
             .header("host", "example.com")
             .body(Body::empty())?;

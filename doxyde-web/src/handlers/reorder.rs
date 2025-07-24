@@ -32,6 +32,7 @@ struct ChildPage {
     title: String,
     position: i32,
     created_at: String,
+    url: String,
 }
 
 #[derive(Serialize)]
@@ -60,35 +61,6 @@ pub async fn reorder_page_handler(
             tracing::error!(error = ?e, "Failed to list children");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-
-    // Convert to template-friendly format
-    let child_pages: Vec<ChildPage> = children
-        .iter()
-        .map(|child| ChildPage {
-            id: child.id.unwrap(),
-            title: child.title.clone(),
-            position: child.position,
-            created_at: child.created_at.format("%Y-%m-%d").to_string(),
-        })
-        .collect();
-
-    let context = ReorderContext {
-        site: site.clone(),
-        page: page.clone(),
-        children: child_pages,
-        sort_mode: page.sort_mode.clone(),
-        can_edit: true,
-        action: ".reorder".to_string(),
-        has_children: !children.is_empty(),
-    };
-
-    // Convert to Tera context
-    let mut tera_context = tera::Context::new();
-
-    // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut tera_context, &state, &site, Some(&page))
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Build current path by traversing parent pages
     let mut path_parts = Vec::new();
@@ -120,6 +92,45 @@ pub async fn reorder_page_handler(
     } else {
         format!("/{}", path_parts.join("/"))
     };
+
+    // Convert to template-friendly format
+    let child_pages: Vec<ChildPage> = children
+        .iter()
+        .map(|child| {
+            // Build child URL
+            let child_url = if current_path == "/" {
+                format!("/{}", child.slug)
+            } else {
+                format!("{}/{}", current_path, child.slug)
+            };
+
+            ChildPage {
+                id: child.id.unwrap(),
+                title: child.title.clone(),
+                position: child.position,
+                created_at: child.created_at.format("%Y-%m-%d").to_string(),
+                url: child_url,
+            }
+        })
+        .collect();
+
+    let context = ReorderContext {
+        site: site.clone(),
+        page: page.clone(),
+        children: child_pages,
+        sort_mode: page.sort_mode.clone(),
+        can_edit: true,
+        action: ".reorder".to_string(),
+        has_children: !children.is_empty(),
+    };
+
+    // Convert to Tera context
+    let mut tera_context = tera::Context::new();
+
+    // Add base context (site_title, root_page_title, logo data, navigation)
+    add_base_context(&mut tera_context, &state, &site, Some(&page))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tera_context.insert("page", &context.page);
     tera_context.insert("children", &context.children);
