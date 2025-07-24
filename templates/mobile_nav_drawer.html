@@ -1,0 +1,53 @@
+<nav class="mobile-nav-drawer">
+  <div class="mobile-nav-content">
+    <!-- Close button -->
+    <button class="mobile-drawer-close" aria-label="Close navigation">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    
+    <!-- Page navigation -->
+    <div class="mobile-nav-section">
+      {% if nav_items %}
+        <h3>Navigation</h3>
+        <div class="mobile-nav-list">
+          {% for item in nav_items %}
+            {% if item.is_current %}
+              <span class="mobile-nav-item mobile-nav-current">{{ item.title }}</span>
+            {% else %}
+              <a href="{{ item.url }}" class="mobile-nav-item">{{ item.title }}</a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+      
+      {% if sidebar_items %}
+        <h3>Pages</h3>
+        <div class="mobile-nav-list">
+          {% for item in sidebar_items %}
+            {% if item.current %}
+              <span class="mobile-nav-item mobile-nav-current" style="padding-left: {{ (item.level * 1.5) + 1.5 }}rem">
+                {{ item.title }}
+              </span>
+            {% else %}
+              <a href="{{ item.url }}" class="mobile-nav-item {% if item.active_path %}mobile-nav-active-path{% endif %}" 
+                 style="padding-left: {{ (item.level * 1.5) + 1.5 }}rem">
+                {{ item.title }}
+              </a>
+            {% endif %}
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+    
+    <!-- User section -->
+    {% if user %}
+      <div class="mobile-nav-section mobile-nav-user">
+        <h3>Account</h3>
+        <a href="/.settings/mcp" class="mobile-nav-item">MCP Tokens</a>
+      </div>
+    {% endif %}
+  </div>
+</nav>
