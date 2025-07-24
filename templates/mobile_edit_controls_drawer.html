@@ -44,7 +44,7 @@
       <h3>Add Component</h3>
       <div class="mobile-component-grid">
         {% for comp_type in ordered_component_types %}
-        <button type="button" class="mobile-component-button" onclick="addNewComponentType('{{ comp_type.type }}')" title="{{ comp_type.name }}">
+        <button type="button" class="mobile-component-button" onclick="addNewComponentType('{{ comp_type.type }}')" title="{{ comp_type.label }}">
           <span class="component-icon">
             {% if comp_type.type == "text" %}📝
             {% elif comp_type.type == "markdown" %}📄
@@ -54,7 +54,7 @@
             {% elif comp_type.type == "blog_summary" %}📰
             {% else %}📦{% endif %}
           </span>
-          <span class="component-label">{{ comp_type.name }}</span>
+          <span class="component-label">{{ comp_type.label }}</span>
         </button>
         {% endfor %}
       </div>
