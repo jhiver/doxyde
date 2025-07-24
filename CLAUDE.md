@@ -770,3 +770,9 @@ cargo build --release
 **Migration errors**: Check `_sqlx_migrations` table, migrations are idempotent
 
 **Can't see edit links**: Verify user permissions with `doxyde user list`
+
+**Static files not found (404)**: 
+- Static files go in the `static/` directory (NOT `.static/`)
+- The route `/.static` serves files from `static/` directory
+- Example: `/.static/js/script.js` serves `static/js/script.js`
+- Always create static assets in `static/` not `.static/`

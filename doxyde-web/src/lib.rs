@@ -45,6 +45,8 @@ pub mod uploads;
 
 #[cfg(test)]
 pub mod test_helpers;
+#[cfg(test)]
+mod template_tests;
 
 pub use config::Config;
 pub use state::AppState;

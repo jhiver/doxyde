@@ -7,7 +7,7 @@
              class="mobile-logo-image"
              {% if logo_width %}style="width: {{ logo_width }}; height: auto;"{% elif logo_height %}style="height: {{ logo_height }}; width: auto;"{% endif %}>
       {% else %}
-        {% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default("Doxyde") }}{% endif %}
+        {% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default(value="Doxyde") }}{% endif %}
       {% endif %}
     </a>
   </div>

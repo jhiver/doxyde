@@ -8,6 +8,23 @@
       </svg>
     </button>
     
+    <!-- Breadcrumb navigation -->
+    {% if breadcrumbs and breadcrumbs|length > 0 %}
+    <div class="mobile-nav-section mobile-breadcrumbs">
+      <h3>Current Location</h3>
+      <div class="mobile-breadcrumb-trail">
+        {% for crumb in breadcrumbs %}
+          {% if not loop.last %}
+            <a href="{{ crumb.url }}" class="mobile-breadcrumb-item">{{ crumb.title }}</a>
+            <span class="mobile-breadcrumb-separator">›</span>
+          {% else %}
+            <span class="mobile-breadcrumb-current">{{ crumb.title }}</span>
+          {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    
     <!-- Page navigation -->
     <div class="mobile-nav-section">
       {% if nav_items %}
