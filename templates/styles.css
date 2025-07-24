@@ -1474,6 +1474,11 @@ body.mobile-menu-open {
     .breadcrumb {
         display: none;
     }
+    
+    /* Also hide breadcrumbs without class (on action pages) */
+    nav[aria-label="breadcrumb"] {
+        display: none;
+    }
 }
 
 /* Mobile responsive breakpoint */
