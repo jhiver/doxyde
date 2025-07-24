@@ -1,0 +1,63 @@
+<nav class="mobile-controls-drawer">
+  <div class="mobile-controls-content">
+    <!-- Close button -->
+    <button class="mobile-drawer-close" aria-label="Close save controls">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="18" y1="6" x2="6" y2="18"/>
+        <line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+    
+    <!-- Draft Status -->
+    <div class="mobile-draft-status">
+      <h3>Editing Draft</h3>
+    </div>
+    
+    <!-- Save Actions -->
+    <div class="mobile-controls-list">
+      <button type="button" class="mobile-control-item mobile-control-save" onclick="submitComponentsForm('save_draft')">
+        💾 Save Draft
+      </button>
+      
+      <button type="button" class="mobile-control-item mobile-control-publish" onclick="submitComponentsForm('publish_draft')">
+        🚀 Save &amp; Publish
+      </button>
+      
+      <form method="post" style="margin: 0;">
+        {% if csrf_token %}
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {% endif %}
+        <input type="hidden" name="action" value="discard_draft">
+        <button type="submit" class="mobile-control-item mobile-control-danger" 
+                onclick="return confirm('Are you sure you want to discard all draft changes?')">
+          ❌ Discard Draft
+        </button>
+      </form>
+      
+      <a href="{{ current_path }}" class="mobile-control-item mobile-control-back">
+        ← Back to Page
+      </a>
+    </div>
+    
+    <!-- Component Shortcuts -->
+    <div class="mobile-controls-section">
+      <h3>Add Component</h3>
+      <div class="mobile-component-grid">
+        {% for comp_type in ordered_component_types %}
+        <button type="button" class="mobile-component-button" onclick="addNewComponentType('{{ comp_type.type }}')" title="{{ comp_type.name }}">
+          <span class="component-icon">
+            {% if comp_type.type == "text" %}📝
+            {% elif comp_type.type == "markdown" %}📄
+            {% elif comp_type.type == "html" %}🌐
+            {% elif comp_type.type == "code" %}💻
+            {% elif comp_type.type == "image" %}🖼️
+            {% elif comp_type.type == "blog_summary" %}📰
+            {% else %}📦{% endif %}
+          </span>
+          <span class="component-label">{{ comp_type.name }}</span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</nav>

@@ -41,9 +41,14 @@
         currentOpenMenu = null;
         
         // Return focus to the toggle button
-        const toggleButton = menuType === 'nav' ? 
-            document.querySelector('.mobile-nav-toggle') : 
-            document.querySelector('.mobile-edit-toggle');
+        let toggleButton;
+        if (menuType === 'nav') {
+            toggleButton = document.querySelector('.mobile-nav-toggle');
+        } else if (menuType === 'edit') {
+            toggleButton = document.querySelector('.mobile-edit-toggle');
+        } else if (menuType === 'controls') {
+            toggleButton = document.querySelector('.mobile-controls-toggle');
+        }
         if (toggleButton) toggleButton.focus();
     }
     
@@ -67,6 +72,12 @@
         const editToggle = document.querySelector('.mobile-edit-toggle');
         if (editToggle) {
             editToggle.addEventListener('click', () => toggleMenu('edit'));
+        }
+        
+        // Controls toggle (save/draft controls)
+        const controlsToggle = document.querySelector('.mobile-controls-toggle');
+        if (controlsToggle) {
+            controlsToggle.addEventListener('click', () => toggleMenu('controls'));
         }
         
         // Close buttons

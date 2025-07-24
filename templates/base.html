@@ -60,6 +60,11 @@
         {% include "mobile_edit_drawer.html" %}
     {% endif %}
     
+    <!-- Mobile edit controls drawer (only on edit pages) -->
+    {% if user is defined and action is defined and action == ".edit" %}
+        {% include "mobile_edit_controls_drawer.html" %}
+    {% endif %}
+    
     <!-- Mobile menu overlay -->
     <div class="mobile-menu-overlay"></div>
     
