@@ -24,7 +24,7 @@ use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
 use std::fs;
 use std::path::PathBuf;
 
-use crate::state::AppState;
+use crate::{path_security::validate_safe_path, state::AppState};
 
 /// Serve an image by slug and format
 pub async fn serve_image_handler(
@@ -75,7 +75,8 @@ pub async fn serve_image_handler(
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
-                            return serve_image_file(file_path, &format).await;
+                            return serve_image_file(file_path, &format, &state.config.uploads_dir)
+                                .await;
                         } else {
                             // Log missing file_path for debugging
                             tracing::warn!(
@@ -94,18 +95,27 @@ pub async fn serve_image_handler(
     Err(StatusCode::NOT_FOUND)
 }
 
-/// Serve an image file from disk
-async fn serve_image_file(file_path: &str, format: &str) -> Result<Response, StatusCode> {
-    let path = PathBuf::from(file_path);
+/// Serve an image file from disk with path validation
+async fn serve_image_file(
+    file_path: &str,
+    format: &str,
+    uploads_dir: &str,
+) -> Result<Response, StatusCode> {
+    // Validate the path is safe and within uploads directory
+    let uploads_base = PathBuf::from(uploads_dir);
+    let safe_path = validate_safe_path(file_path, &uploads_base).map_err(|e| {
+        tracing::warn!("Path validation failed for image {}: {}", file_path, e);
+        StatusCode::FORBIDDEN
+    })?;
 
     // Ensure the file exists
-    if !path.exists() {
+    if !safe_path.exists() {
         tracing::warn!("Image file not found: {}", file_path);
         return Err(StatusCode::NOT_FOUND);
     }
 
     // Read the file
-    let data = fs::read(&path).map_err(|e| {
+    let data = fs::read(&safe_path).map_err(|e| {
         tracing::error!("Failed to read image file: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;

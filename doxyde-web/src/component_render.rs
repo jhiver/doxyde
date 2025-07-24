@@ -20,7 +20,7 @@ use std::fs;
 use std::path::Path;
 use tera::{from_value, to_value, Context, Function as TeraFunction, Result as TeraResult, Value};
 
-use crate::markdown::markdown_to_html;
+use crate::{markdown::markdown_to_html, path_security::validate_template_name};
 
 /// Tera function to render a component with its template
 pub struct RenderComponentFunction {
@@ -36,6 +36,12 @@ impl TeraFunction for RenderComponentFunction {
 
         // Deserialize the component
         let component: Component = from_value(component_value.clone())?;
+
+        // Validate component type and template names
+        validate_template_name(&component.component_type)
+            .map_err(|e| tera::Error::msg(format!("Invalid component type: {}", e)))?;
+        validate_template_name(&component.template)
+            .map_err(|e| tera::Error::msg(format!("Invalid template name: {}", e)))?;
 
         // Build the template path
         let template_path = format!(
