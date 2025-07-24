@@ -1340,7 +1340,11 @@ body.mobile-menu-open {
 }
 
 .mobile-nav-section {
-    margin-bottom: 2rem;
+    margin-bottom: 0;
+}
+
+.mobile-nav-section + .mobile-nav-section {
+    margin-top: 0;
 }
 
 .mobile-nav-section h3,
@@ -1440,6 +1444,29 @@ body.mobile-menu-open {
 .mobile-nav-user {
     border-top: 1px solid var(--gray-200);
     padding-top: 2rem;
+}
+
+/* Mobile navigation hierarchy styles */
+.mobile-nav-separator {
+    border: none;
+    border-top: 1px solid var(--gray-200);
+    margin: 1.5rem 0;
+}
+
+.mobile-nav-ancestor {
+    opacity: 0.8;
+}
+
+.mobile-nav-child {
+    padding-left: 2.5rem !important;
+    position: relative;
+}
+
+.mobile-nav-child::before {
+    content: "└";
+    position: absolute;
+    left: 1rem;
+    color: var(--gray-400);
 }
 
 /* Hide breadcrumb on tablet and below */
