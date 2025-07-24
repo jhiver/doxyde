@@ -38,6 +38,11 @@ pub async fn list_tokens_handler(
     let mut context = Context::new();
     context.insert("user", &user.user);
     context.insert("tokens", &token_sites);
+    context.insert("can_edit", &true);
+    context.insert("action", ".settings/mcp");
+    context.insert("has_children", &false);
+    context.insert("is_movable", &false);
+    context.insert("can_delete", &false);
 
     // Get sites the user has access to for the creation form
     let site_user_repo = doxyde_db::repositories::SiteUserRepository::new(state.db.clone());
@@ -126,6 +131,11 @@ pub async fn show_token_handler(
     context.insert("user", &user.user);
     context.insert("token", &token);
     context.insert("site", &site);
+    context.insert("can_edit", &true);
+    context.insert("action", ".settings/mcp");
+    context.insert("has_children", &false);
+    context.insert("is_movable", &false);
+    context.insert("can_delete", &false);
 
     // Generate the MCP URL
     let mcp_url = format!("{}/.mcp/{}", site.domain, token.id);
