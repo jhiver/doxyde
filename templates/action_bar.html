@@ -19,6 +19,14 @@
         
         <span class="separator">|</span>
         
+        {% if current_action == ".settings/mcp" %}
+            <strong>MCP Tokens</strong>
+        {% else %}
+            <a href="/.settings/mcp">MCP Tokens</a>
+        {% endif %}
+        
+        <span class="separator">|</span>
+        
         {% if current_action == ".edit" %}
             <strong>Edit</strong>
         {% else %}

@@ -24,6 +24,12 @@
         <a href="./.properties" class="mobile-edit-item">Properties</a>
       {% endif %}
       
+      {% if current_action == ".settings/mcp" %}
+        <span class="mobile-edit-item mobile-edit-current">MCP Tokens</span>
+      {% else %}
+        <a href="/.settings/mcp" class="mobile-edit-item">MCP Tokens</a>
+      {% endif %}
+      
       {% if current_action == ".edit" %}
         <span class="mobile-edit-item mobile-edit-current">Edit</span>
       {% else %}
