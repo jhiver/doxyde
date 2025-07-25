@@ -36,7 +36,7 @@ pub async fn mcp_oauth_handler(
         "OAuth MCP request received: {}",
         serde_json::to_string_pretty(&request).unwrap_or_default()
     );
-    
+
     // Extract and validate Bearer token
     let bearer_token = match auth_header {
         Some(TypedHeader(auth)) => auth.token().to_string(),
@@ -47,7 +47,7 @@ pub async fn mcp_oauth_handler(
 
     // Hash the token to look it up
     let token_hash = hash_token(&bearer_token);
-    
+
     // Look up access token
     let access_token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
     let access_token = match access_token_repo.find_by_hash(&token_hash).await? {
@@ -145,6 +145,95 @@ pub async fn mcp_oauth_handler(
 
         Ok(Json(response).into_response())
     }
+}
+
+/// OAuth2 SSE endpoint for Claude Code
+pub async fn mcp_oauth_sse_handler(
+    State(state): State<AppState>,
+    auth_header: Option<TypedHeader<Authorization<Bearer>>>,
+    Json(request): Json<Value>,
+) -> Result<Response, AppError> {
+    // Debug log the incoming request
+    tracing::debug!(
+        "OAuth MCP SSE request received: {}",
+        serde_json::to_string_pretty(&request).unwrap_or_default()
+    );
+
+    // Extract and validate Bearer token
+    let bearer_token = match auth_header {
+        Some(TypedHeader(auth)) => auth.token().to_string(),
+        None => {
+            return Ok(BearerError::invalid_token().into_response());
+        }
+    };
+
+    // Hash the token to look it up
+    let token_hash = hash_token(&bearer_token);
+
+    // Look up access token
+    let access_token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
+    let access_token = match access_token_repo.find_by_hash(&token_hash).await? {
+        Some(token) => token,
+        None => {
+            return Ok(BearerError::invalid_token().into_response());
+        }
+    };
+
+    // Check if access token is valid
+    if !access_token.is_valid() {
+        return Ok(BearerError::invalid_token().into_response());
+    }
+
+    // Get the MCP token associated with this access token
+    let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(state.db.clone());
+    let mcp_token = mcp_token_repo
+        .find_by_id(&access_token.mcp_token_id)
+        .await?
+        .ok_or(AppError::internal_server_error("MCP token not found"))?;
+
+    // Check if MCP token is valid
+    if !mcp_token.is_valid() {
+        return Ok(BearerError::invalid_token().into_response());
+    }
+
+    // Update last used on MCP token
+    let _ = mcp_token_repo.update_last_used(&mcp_token.id).await;
+
+    // Get site_id from MCP token
+    let site_id = mcp_token.site_id;
+
+    // Always return SSE response for this endpoint
+    let server = SimpleMcpServer::new(state.db.clone(), site_id);
+
+    // Process the request
+    let response_result = server.handle_request(request).await;
+
+    // Create a stream that sends the response
+    let stream = stream::once(match response_result {
+        Ok(response) => {
+            let event = Event::default()
+                .json_data(response)
+                .unwrap_or_else(|_| Event::default());
+            Ok::<_, Infallible>(event)
+        }
+        Err(e) => {
+            let error_response = serde_json::json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32603,
+                    "message": format!("Internal error: {}", e)
+                }
+            });
+            let event = Event::default()
+                .json_data(error_response)
+                .unwrap_or_else(|_| Event::default());
+            Ok(event)
+        }
+    });
+
+    let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
+
+    Ok(sse.into_response())
 }
 
 /// Legacy MCP endpoint that expects MCP token in path (backward compatibility)

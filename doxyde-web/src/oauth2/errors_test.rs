@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
-    use axum::response::IntoResponse;
     use axum::http::StatusCode;
+    use axum::response::IntoResponse;
 
     #[test]
     fn test_oauth_error_response_serialization() {
-        let error = OAuthErrorResponse(OAuthError::invalid_request(
-            "Missing required parameter",
-        ));
+        let error = OAuthErrorResponse(OAuthError::invalid_request("Missing required parameter"));
 
         let response = error.into_response();
         assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -30,10 +28,14 @@ mod tests {
 
     #[test]
     fn test_authorization_error_access_denied() {
-        let error = AuthorizationError::access_denied("User denied access", Some("xyz".to_string()));
-        
+        let error =
+            AuthorizationError::access_denied("User denied access", Some("xyz".to_string()));
+
         assert_eq!(error.error, "access_denied");
-        assert_eq!(error.error_description, Some("User denied access".to_string()));
+        assert_eq!(
+            error.error_description,
+            Some("User denied access".to_string())
+        );
         assert_eq!(error.state, Some("xyz".to_string()));
     }
 
@@ -43,9 +45,12 @@ mod tests {
             "Missing required parameter",
             Some("abc".to_string()),
         );
-        
+
         assert_eq!(error.error, "invalid_request");
-        assert_eq!(error.error_description, Some("Missing required parameter".to_string()));
+        assert_eq!(
+            error.error_description,
+            Some("Missing required parameter".to_string())
+        );
         assert_eq!(error.state, Some("abc".to_string()));
     }
 }

@@ -28,13 +28,13 @@ pub async fn request_logging_middleware(
     next: Next,
 ) -> Result<Response<Body>, axum::http::StatusCode> {
     let start = Instant::now();
-    
+
     // Extract request information
     let method = request.method().clone();
     let uri = request.uri().clone();
     let path = uri.path();
     let query = uri.query().unwrap_or("");
-    
+
     // Log request details - especially for .well-known paths
     if path.starts_with("/.well-known") || path.starts_with(".well-known") {
         // Comprehensive logging for .well-known requests
@@ -42,17 +42,14 @@ pub async fn request_logging_middleware(
             "REQUEST_DEBUG: .well-known request - method={} path={} query={} uri={}",
             method, path, query, uri
         );
-        
+
         // Log all headers
         for (name, value) in request.headers() {
             if let Ok(value_str) = value.to_str() {
-                info!(
-                    "REQUEST_DEBUG: .well-known header - {}={}",
-                    name, value_str
-                );
+                info!("REQUEST_DEBUG: .well-known header - {}={}", name, value_str);
             }
         }
-        
+
         // Log the full URI components
         info!(
             "REQUEST_DEBUG: .well-known URI components - scheme={:?} authority={:?} path_and_query={:?}",
@@ -69,14 +66,14 @@ pub async fn request_logging_middleware(
             if query.is_empty() { "" } else { "?" }
         );
     }
-    
+
     // Process the request
     let response = next.run(request).await;
-    
+
     // Log response status and timing
     let duration = start.elapsed();
     let status = response.status();
-    
+
     if path.starts_with("/.well-known") || path.starts_with(".well-known") {
         info!(
             "RESPONSE_DEBUG: .well-known response - path={} status={} duration={:?}",
@@ -88,6 +85,6 @@ pub async fn request_logging_middleware(
             method, path, status, duration
         );
     }
-    
+
     Ok(response)
 }

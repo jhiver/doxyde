@@ -8,12 +8,13 @@ use axum::{
 use serde::Deserialize;
 use tera::Context;
 
-use crate::{auth::{CurrentUser, OptionalUser}, error::AppError, state::AppState};
-
-use super::{
-    errors::AuthorizationError,
-    models::AuthorizationCode,
+use crate::{
+    auth::{CurrentUser, OptionalUser},
+    error::AppError,
+    state::AppState,
 };
+
+use super::{errors::AuthorizationError, models::AuthorizationCode};
 
 /// Authorization request parameters
 #[derive(Debug, Deserialize)]
@@ -54,7 +55,7 @@ pub async fn authorization_handler(
         let login_url = format!("/.login?return_to={}", urlencoding::encode(&current_url));
         return Ok(Redirect::to(&login_url).into_response());
     }
-    
+
     let user = user.0.unwrap();
     // Validate response_type
     if params.response_type != "code" {
@@ -70,10 +71,7 @@ pub async fn authorization_handler(
     let db_client = match oauth_repo.find_by_id(&params.client_id).await? {
         Some(client) => client,
         None => {
-            let error = AuthorizationError::unauthorized_client(
-                "Unknown client_id",
-                params.state,
-            );
+            let error = AuthorizationError::unauthorized_client("Unknown client_id", params.state);
             return Ok(Redirect::to(&error.to_redirect_url(&params.redirect_uri)).into_response());
         }
     };
@@ -127,7 +125,7 @@ pub async fn authorization_handler(
     // Filter tokens that are valid and have sites
     let site_repo = doxyde_db::repositories::SiteRepository::new(state.db.clone());
     let mut token_sites = Vec::new();
-    
+
     for token in tokens {
         if token.is_valid() {
             if let Ok(Some(site)) = site_repo.find_by_id(token.site_id).await {
@@ -166,10 +164,7 @@ pub async fn consent_handler(
 ) -> Result<impl IntoResponse, AppError> {
     // Check if user denied access
     if form.action == "deny" {
-        let error = AuthorizationError::access_denied(
-            "User denied access",
-            form.state,
-        );
+        let error = AuthorizationError::access_denied("User denied access", form.state);
         return Ok(Redirect::to(&error.to_redirect_url(&form.redirect_uri)));
     }
 
@@ -248,15 +243,24 @@ fn build_authorize_url(host: &str, headers: &HeaderMap, params: &AuthorizationRe
         .get("x-forwarded-proto")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("https");
-    
+
     // Build the full URL
     let mut url = format!("{}://{}/.oauth/authorize?", scheme, host);
     let mut params_vec = vec![];
-    
-    params_vec.push(format!("response_type={}", urlencoding::encode(&params.response_type)));
-    params_vec.push(format!("client_id={}", urlencoding::encode(&params.client_id)));
-    params_vec.push(format!("redirect_uri={}", urlencoding::encode(&params.redirect_uri)));
-    
+
+    params_vec.push(format!(
+        "response_type={}",
+        urlencoding::encode(&params.response_type)
+    ));
+    params_vec.push(format!(
+        "client_id={}",
+        urlencoding::encode(&params.client_id)
+    ));
+    params_vec.push(format!(
+        "redirect_uri={}",
+        urlencoding::encode(&params.redirect_uri)
+    ));
+
     if let Some(ref scope) = params.scope {
         params_vec.push(format!("scope={}", urlencoding::encode(scope)));
     }
@@ -264,12 +268,18 @@ fn build_authorize_url(host: &str, headers: &HeaderMap, params: &AuthorizationRe
         params_vec.push(format!("state={}", urlencoding::encode(state)));
     }
     if let Some(ref code_challenge) = params.code_challenge {
-        params_vec.push(format!("code_challenge={}", urlencoding::encode(code_challenge)));
+        params_vec.push(format!(
+            "code_challenge={}",
+            urlencoding::encode(code_challenge)
+        ));
     }
     if let Some(ref code_challenge_method) = params.code_challenge_method {
-        params_vec.push(format!("code_challenge_method={}", urlencoding::encode(code_challenge_method)));
+        params_vec.push(format!(
+            "code_challenge_method={}",
+            urlencoding::encode(code_challenge_method)
+        ));
     }
-    
+
     url.push_str(&params_vec.join("&"));
     url
 }
@@ -282,7 +292,7 @@ mod tests {
     fn test_authorization_error_redirect() {
         let error = AuthorizationError::access_denied("Test error", Some("state123".to_string()));
         let redirect = error.to_redirect_url("http://localhost:3000/callback");
-        
+
         assert!(redirect.contains("error=access_denied"));
         assert!(redirect.contains("error_description=Test+error"));
         assert!(redirect.contains("state=state123"));

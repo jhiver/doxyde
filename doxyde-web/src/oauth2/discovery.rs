@@ -15,9 +15,9 @@ pub async fn oauth_authorization_server_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: oauth_authorization_server_handler called");
-    
+
     let base_url = get_base_url_from_host(&host, &state);
-    
+
     let metadata = json!({
         "issuer": base_url,
         "authorization_endpoint": format!("{}/.oauth/authorize", base_url),
@@ -38,10 +38,7 @@ pub async fn oauth_authorization_server_handler(
 }
 
 /// OpenID Connect Discovery (alias for OAuth2 metadata)
-pub async fn openid_configuration_handler(
-    host: Host,
-    state: State<AppState>,
-) -> impl IntoResponse {
+pub async fn openid_configuration_handler(host: Host, state: State<AppState>) -> impl IntoResponse {
     tracing::info!("DEBUGGING: openid_configuration_handler called");
     oauth_authorization_server_handler(host, state).await
 }
@@ -53,9 +50,9 @@ pub async fn oauth_protected_resource_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: oauth_protected_resource_handler called");
-    
+
     let base_url = get_base_url_from_host(&host, &state);
-    
+
     // According to RFC 9728, we need to indicate the authorization servers
     // The resource field should be the base URL, not the MCP endpoint
     // But Claude Desktop requires the mcp_endpoint field
@@ -77,9 +74,9 @@ pub async fn well_known_directory_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: well_known_directory_handler called");
-    
+
     let base_url = get_base_url_from_host(&host, &state);
-    
+
     let directory = json!({
         "links": [
             {

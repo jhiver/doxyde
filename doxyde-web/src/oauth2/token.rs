@@ -16,7 +16,7 @@ use crate::{error::AppError, state::AppState};
 use super::{
     client_registration::verify_client_secret,
     errors::OAuthErrorResponse,
-    models::{AccessToken, OAuthError, RefreshToken, verify_pkce, hash_token},
+    models::{hash_token, verify_pkce, AccessToken, OAuthError, RefreshToken},
 };
 
 /// Token request
@@ -61,10 +61,13 @@ pub async fn token_handler(
                 Err(oauth_err) => Ok(oauth_err.into_response()),
             }
         }
-        _ => Ok(OAuthErrorResponse(OAuthError::unsupported_grant_type(
-            &format!("Grant type '{}' is not supported", request.grant_type),
-        ))
-        .into_response()),
+        _ => Ok(
+            OAuthErrorResponse(OAuthError::unsupported_grant_type(&format!(
+                "Grant type '{}' is not supported",
+                request.grant_type
+            )))
+            .into_response(),
+        ),
     }
 }
 
@@ -75,11 +78,11 @@ async fn handle_authorization_code_grant_inner(
 ) -> Result<TokenResponse, OAuthErrorResponse> {
     // Extract client credentials first (before moving from request)
     let (client_id, client_secret) = extract_client_credentials(auth_header, &request)?;
-    
+
     // Extract authorization code
-    let code = request.code.ok_or_else(|| {
-        OAuthErrorResponse(OAuthError::invalid_request("code is required"))
-    })?;
+    let code = request
+        .code
+        .ok_or_else(|| OAuthErrorResponse(OAuthError::invalid_request("code is required")))?;
 
     // Extract redirect_uri
     let redirect_uri = request.redirect_uri.ok_or_else(|| {
@@ -95,7 +98,9 @@ async fn handle_authorization_code_grant_inner(
         .find_by_code(&code)
         .await
         .map_err(|_| OAuthErrorResponse(OAuthError::invalid_grant("Invalid authorization code")))?
-        .ok_or_else(|| OAuthErrorResponse(OAuthError::invalid_grant("Invalid authorization code")))?;
+        .ok_or_else(|| {
+            OAuthErrorResponse(OAuthError::invalid_grant("Invalid authorization code"))
+        })?;
 
     // Convert to web model
     let mut auth_code = super::models::AuthorizationCode {
@@ -157,7 +162,9 @@ async fn handle_authorization_code_grant_inner(
     // Verify PKCE if present
     if let Some(code_challenge) = &auth_code.code_challenge {
         let verifier = code_verifier.ok_or_else(|| {
-            OAuthErrorResponse(OAuthError::invalid_request("code_verifier is required for PKCE"))
+            OAuthErrorResponse(OAuthError::invalid_request(
+                "code_verifier is required for PKCE",
+            ))
         })?;
 
         let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
@@ -170,7 +177,9 @@ async fn handle_authorization_code_grant_inner(
 
     // Mark code as used
     auth_code.mark_used();
-    auth_repo.mark_used(&auth_code.code).await
+    auth_repo
+        .mark_used(&auth_code.code)
+        .await
         .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to mark code as used")))?;
 
     // Create access token
@@ -215,12 +224,14 @@ async fn handle_authorization_code_grant_inner(
 
     // Save tokens
     let token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
-    token_repo.create(&db_access_token).await
-        .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to create access token")))?;
+    token_repo.create(&db_access_token).await.map_err(|_| {
+        OAuthErrorResponse(OAuthError::server_error("Failed to create access token"))
+    })?;
 
     let refresh_repo = doxyde_db::repositories::RefreshTokenRepository::new(state.db.clone());
-    refresh_repo.create(&db_refresh_token).await
-        .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to create refresh token")))?;
+    refresh_repo.create(&db_refresh_token).await.map_err(|_| {
+        OAuthErrorResponse(OAuthError::server_error("Failed to create refresh token"))
+    })?;
 
     // Build response
     Ok(TokenResponse {
@@ -239,7 +250,7 @@ async fn handle_refresh_token_grant_inner(
 ) -> Result<TokenResponse, OAuthErrorResponse> {
     // Extract client credentials first (before moving from request)
     let (client_id, client_secret) = extract_client_credentials(auth_header, &request)?;
-    
+
     // Extract refresh token
     let refresh_token = request.refresh_token.ok_or_else(|| {
         OAuthErrorResponse(OAuthError::invalid_request("refresh_token is required"))
@@ -322,8 +333,9 @@ async fn handle_refresh_token_grant_inner(
 
     // Mark old refresh token as used (rotation)
     stored_token.mark_used();
-    refresh_repo.mark_used(&token_hash).await
-        .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to mark token as used")))?;
+    refresh_repo.mark_used(&token_hash).await.map_err(|_| {
+        OAuthErrorResponse(OAuthError::server_error("Failed to mark token as used"))
+    })?;
 
     // Create new access token
     let access_token = AccessToken::new(
@@ -367,10 +379,15 @@ async fn handle_refresh_token_grant_inner(
 
     // Save tokens
     let token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
-    token_repo.create(&db_access_token).await
-        .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to create access token")))?;
-    refresh_repo.create(&db_new_refresh_token).await
-        .map_err(|_| OAuthErrorResponse(OAuthError::server_error("Failed to create refresh token")))?;
+    token_repo.create(&db_access_token).await.map_err(|_| {
+        OAuthErrorResponse(OAuthError::server_error("Failed to create access token"))
+    })?;
+    refresh_repo
+        .create(&db_new_refresh_token)
+        .await
+        .map_err(|_| {
+            OAuthErrorResponse(OAuthError::server_error("Failed to create refresh token"))
+        })?;
 
     // Build response
     Ok(TokenResponse {
@@ -407,7 +424,7 @@ fn extract_client_credentials(
 fn is_scope_subset(requested: &str, granted: &str) -> bool {
     let requested_scopes: std::collections::HashSet<&str> = requested.split_whitespace().collect();
     let granted_scopes: std::collections::HashSet<&str> = granted.split_whitespace().collect();
-    
+
     requested_scopes.is_subset(&granted_scopes)
 }
 
@@ -454,7 +471,7 @@ async fn revoke_handler_inner(
 
     // Revoke token based on type hint
     let token_hash = hash_token(&request.token);
-    
+
     match request.token_type_hint.as_deref() {
         Some("access_token") | None => {
             // Try to revoke as access token first
@@ -462,15 +479,17 @@ async fn revoke_handler_inner(
             if token_repo.delete_by_hash(&token_hash).await.is_ok() {
                 return Ok(());
             }
-            
+
             // If not found as access token and no hint, try refresh token
             if request.token_type_hint.is_none() {
-                let refresh_repo = doxyde_db::repositories::RefreshTokenRepository::new(state.db.clone());
+                let refresh_repo =
+                    doxyde_db::repositories::RefreshTokenRepository::new(state.db.clone());
                 let _ = refresh_repo.mark_used(&token_hash).await;
             }
         }
         Some("refresh_token") => {
-            let refresh_repo = doxyde_db::repositories::RefreshTokenRepository::new(state.db.clone());
+            let refresh_repo =
+                doxyde_db::repositories::RefreshTokenRepository::new(state.db.clone());
             let _ = refresh_repo.mark_used(&token_hash).await;
         }
         _ => {

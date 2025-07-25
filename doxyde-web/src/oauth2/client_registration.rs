@@ -1,10 +1,5 @@
 use anyhow::Result;
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
 
 use crate::{error::AppError, state::AppState};
@@ -58,10 +53,10 @@ pub async fn client_registration_handler(
 ) -> Result<impl IntoResponse, AppError> {
     // Validate request
     if request.client_name.trim().is_empty() {
-        return Ok(OAuthErrorResponse(OAuthError::invalid_request(
-            "client_name is required",
-        ))
-        .into_response());
+        return Ok(
+            OAuthErrorResponse(OAuthError::invalid_request("client_name is required"))
+                .into_response(),
+        );
     }
 
     if request.redirect_uris.is_empty() {
@@ -241,17 +236,19 @@ mod tests {
         assert!(is_valid_redirect_uri("http://localhost:8080"));
         assert!(is_valid_redirect_uri("https://example.com/callback"));
         assert!(is_valid_redirect_uri("claude://callback"));
-        
+
         assert!(!is_valid_redirect_uri(""));
         assert!(!is_valid_redirect_uri("not-a-url"));
-        assert!(!is_valid_redirect_uri("https://example.com/callback#fragment"));
+        assert!(!is_valid_redirect_uri(
+            "https://example.com/callback#fragment"
+        ));
     }
 
     #[test]
     fn test_client_secret_hashing() {
         let secret = "test_secret_123";
         let hash = hash_client_secret(secret);
-        
+
         assert!(verify_client_secret(secret, &hash));
         assert!(!verify_client_secret("wrong_secret", &hash));
     }

@@ -20,7 +20,7 @@ pub async fn mcp_oauth_head_handler(
         )
             .into_response();
     }
-    
+
     // If Bearer token is present, return OK
     StatusCode::OK.into_response()
 }

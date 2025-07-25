@@ -1,16 +1,16 @@
 use serde_json::json;
 
 use crate::{
-    AppState,
     routes::create_router,
     test_helpers::{create_test_app_state, create_test_user},
+    AppState,
 };
-use doxyde_core::models::mcp_token::McpToken;
 use axum::{
-    body::{Body, to_bytes},
-    http::{Request, StatusCode, header},
+    body::{to_bytes, Body},
+    http::{header, Request, StatusCode},
     Router,
 };
+use doxyde_core::models::mcp_token::McpToken;
 use tower::ServiceExt;
 
 async fn create_test_app(pool: sqlx::SqlitePool) -> anyhow::Result<Router> {
@@ -20,11 +20,9 @@ async fn create_test_app(pool: sqlx::SqlitePool) -> anyhow::Result<Router> {
 }
 
 async fn login_as_user(app: &Router, username: &str, password: &str) -> anyhow::Result<String> {
-    let login_data = urlencoding::Encoded::new(format!(
-        "username={}&password={}",
-        username, password
-    ));
-    
+    let login_data =
+        urlencoding::Encoded::new(format!("username={}&password={}", username, password));
+
     let response = app
         .clone()
         .oneshot(
@@ -35,14 +33,14 @@ async fn login_as_user(app: &Router, username: &str, password: &str) -> anyhow::
                 .body(Body::from(login_data.to_string()))?,
         )
         .await?;
-    
+
     // Extract session cookie from response
     let cookie_header = response
         .headers()
         .get(header::SET_COOKIE)
         .ok_or_else(|| anyhow::anyhow!("No cookie in response"))?
         .to_str()?;
-    
+
     Ok(cookie_header.to_string())
 }
 
@@ -63,18 +61,27 @@ async fn test_oauth_discovery_endpoints(pool: sqlx::SqlitePool) -> anyhow::Resul
 
     let status = response.status();
     let body = to_bytes(response.into_body(), usize::MAX).await?;
-    
+
     if status != StatusCode::OK {
         let error_text = String::from_utf8_lossy(&body);
         panic!("Expected 200 OK but got {}: {}", status, error_text);
     }
     let metadata: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert_eq!(metadata["issuer"], "https://localhost:3000");
-    assert_eq!(metadata["authorization_endpoint"], "https://localhost:3000/.oauth/authorize");
-    assert_eq!(metadata["token_endpoint"], "https://localhost:3000/.oauth/token");
-    assert_eq!(metadata["registration_endpoint"], "https://localhost:3000/.oauth/register");
-    
+    assert_eq!(
+        metadata["authorization_endpoint"],
+        "https://localhost:3000/.oauth/authorize"
+    );
+    assert_eq!(
+        metadata["token_endpoint"],
+        "https://localhost:3000/.oauth/token"
+    );
+    assert_eq!(
+        metadata["registration_endpoint"],
+        "https://localhost:3000/.oauth/register"
+    );
+
     Ok(())
 }
 
@@ -89,18 +96,11 @@ async fn test_dynamic_client_registration(pool: sqlx::SqlitePool) -> anyhow::Res
     // Create MCP token
     let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(pool.clone());
     let site_repo = doxyde_db::repositories::SiteRepository::new(pool.clone());
-    
-    let site = site_repo
-        .find_by_domain("localhost:3000")
-        .await?
-        .unwrap();
-    
-    let mcp_token = McpToken::new(
-        user.id.unwrap(),
-        site.id.unwrap(),
-        "Test Token".to_string(),
-    );
-    
+
+    let site = site_repo.find_by_domain("localhost:3000").await?.unwrap();
+
+    let mcp_token = McpToken::new(user.id.unwrap(), site.id.unwrap(), "Test Token".to_string());
+
     mcp_token_repo.create(&mcp_token).await?;
 
     // Register OAuth client
@@ -126,14 +126,14 @@ async fn test_dynamic_client_registration(pool: sqlx::SqlitePool) -> anyhow::Res
         .await?;
 
     assert_eq!(response.status(), StatusCode::CREATED);
-    
+
     let body = to_bytes(response.into_body(), usize::MAX).await?;
     let registration_response: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert!(registration_response["client_id"].is_string());
     assert!(registration_response["client_secret"].is_string());
     assert_eq!(registration_response["client_name"], "Test OAuth Client");
-    
+
     Ok(())
 }
 
@@ -147,18 +147,11 @@ async fn test_authorization_flow_with_pkce(pool: sqlx::SqlitePool) -> anyhow::Re
 
     let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(pool.clone());
     let site_repo = doxyde_db::repositories::SiteRepository::new(pool.clone());
-    
-    let site = site_repo
-        .find_by_domain("localhost:3000")
-        .await?
-        .unwrap();
-    
-    let mcp_token = McpToken::new(
-        user.id.unwrap(),
-        site.id.unwrap(),
-        "Test Token".to_string(),
-    );
-    
+
+    let site = site_repo.find_by_domain("localhost:3000").await?.unwrap();
+
+    let mcp_token = McpToken::new(user.id.unwrap(), site.id.unwrap(), "Test Token".to_string());
+
     mcp_token_repo.create(&mcp_token).await?;
 
     // Register OAuth client
@@ -175,7 +168,7 @@ async fn test_authorization_flow_with_pkce(pool: sqlx::SqlitePool) -> anyhow::Re
         created_at: chrono::Utc::now(),
         created_by_token_id: Some(mcp_token.id.clone()),
     };
-    
+
     oauth_repo.create(&oauth_client).await?;
 
     // Generate PKCE challenge
@@ -202,18 +195,18 @@ async fn test_authorization_flow_with_pkce(pool: sqlx::SqlitePool) -> anyhow::Re
 
     // Should show consent page
     assert_eq!(response.status(), StatusCode::OK);
-    
+
     Ok(())
 }
 
 #[sqlx::test]
 async fn test_token_exchange(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
     let app = create_test_app(pool.clone()).await?;
-    
+
     // Setup: Create authorization code
     let auth_repo = doxyde_db::repositories::AuthorizationCodeRepository::new(pool.clone());
     let oauth_repo = doxyde_db::repositories::OAuthClientRepository::new(pool.clone());
-    
+
     // Create client
     let oauth_client = doxyde_db::repositories::OAuthClient {
         client_id: "test-client".to_string(),
@@ -227,9 +220,9 @@ async fn test_token_exchange(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         created_at: chrono::Utc::now(),
         created_by_token_id: None,
     };
-    
+
     oauth_repo.create(&oauth_client).await?;
-    
+
     // Create authorization code
     let code = "test-auth-code";
     let auth_code = doxyde_db::repositories::AuthorizationCode {
@@ -245,9 +238,9 @@ async fn test_token_exchange(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         used_at: None,
         created_at: chrono::Utc::now(),
     };
-    
+
     auth_repo.create(&auth_code).await?;
-    
+
     // Exchange code for token
     let token_request = urlencoding::Encoded::new(format!(
         "grant_type=authorization_code&code={}&redirect_uri={}&client_id={}",
@@ -255,7 +248,7 @@ async fn test_token_exchange(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         urlencoding::encode("http://localhost:8080/callback"),
         oauth_client.client_id
     ));
-    
+
     let response = app
         .clone()
         .oneshot(
@@ -266,47 +259,44 @@ async fn test_token_exchange(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
                 .body(Body::from(token_request.to_string()))?,
         )
         .await?;
-    
+
     assert_eq!(response.status(), StatusCode::OK);
-    
+
     let body = to_bytes(response.into_body(), usize::MAX).await?;
     let token_response: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert!(token_response["access_token"].is_string());
     assert_eq!(token_response["token_type"], "Bearer");
     assert!(token_response["expires_in"].is_i64());
     assert!(token_response["refresh_token"].is_string());
-    
+
     Ok(())
 }
 
 #[sqlx::test]
 async fn test_oauth_protected_mcp_endpoint(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
     let app = create_test_app(pool.clone()).await?;
-    
+
     // Setup: Create access token
     let token_repo = doxyde_db::repositories::AccessTokenRepository::new(pool.clone());
     let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(pool.clone());
     let site_repo = doxyde_db::repositories::SiteRepository::new(pool.clone());
-    
-    let site = site_repo
-        .find_by_domain("localhost:3000")
-        .await?
-        .unwrap();
-    
+
+    let site = site_repo.find_by_domain("localhost:3000").await?.unwrap();
+
     // Create MCP token
     let mcp_token = McpToken::new(
         1, // user_id - just using a default for the test
         site.id.unwrap(),
         "Test Token".to_string(),
     );
-    
+
     mcp_token_repo.create(&mcp_token).await?;
-    
+
     // Create access token
     let access_token = "test-access-token";
     let token_hash = super::models::hash_token(access_token);
-    
+
     let oauth_token = doxyde_db::repositories::AccessToken {
         token: access_token.to_string(),
         token_hash,
@@ -317,9 +307,9 @@ async fn test_oauth_protected_mcp_endpoint(pool: sqlx::SqlitePool) -> anyhow::Re
         expires_at: chrono::Utc::now() + chrono::Duration::hours(1),
         created_at: chrono::Utc::now(),
     };
-    
+
     token_repo.create(&oauth_token).await?;
-    
+
     // Test MCP request with Bearer token
     let mcp_request = json!({
         "jsonrpc": "2.0",
@@ -327,7 +317,7 @@ async fn test_oauth_protected_mcp_endpoint(pool: sqlx::SqlitePool) -> anyhow::Re
         "method": "resources/list",
         "params": {}
     });
-    
+
     let response = app
         .clone()
         .oneshot(
@@ -339,30 +329,30 @@ async fn test_oauth_protected_mcp_endpoint(pool: sqlx::SqlitePool) -> anyhow::Re
                 .body(Body::from(serde_json::to_string(&mcp_request)?))?,
         )
         .await?;
-    
+
     assert_eq!(response.status(), StatusCode::OK);
-    
+
     let body = to_bytes(response.into_body(), usize::MAX).await?;
     let mcp_response: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert_eq!(mcp_response["jsonrpc"], "2.0");
     assert_eq!(mcp_response["id"], 1);
     assert!(mcp_response["result"].is_object());
-    
+
     Ok(())
 }
 
 #[sqlx::test]
 async fn test_invalid_bearer_token(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
     let app = create_test_app(pool.clone()).await?;
-    
+
     let mcp_request = json!({
         "jsonrpc": "2.0",
         "id": 1,
         "method": "resources/list",
         "params": {}
     });
-    
+
     // Test with invalid token
     let response = app
         .clone()
@@ -376,25 +366,25 @@ async fn test_invalid_bearer_token(pool: sqlx::SqlitePool) -> anyhow::Result<()>
                 .body(Body::from(serde_json::to_string(&mcp_request)?))?,
         )
         .await?;
-    
+
     assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    
+
     let body = to_bytes(response.into_body(), usize::MAX).await?;
     let error_response: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert_eq!(error_response["error"], "invalid_token");
-    
+
     Ok(())
 }
 
 #[sqlx::test]
 async fn test_refresh_token_flow(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
     let app = create_test_app(pool.clone()).await?;
-    
+
     // Setup: Create refresh token
     let refresh_repo = doxyde_db::repositories::RefreshTokenRepository::new(pool.clone());
     let oauth_repo = doxyde_db::repositories::OAuthClientRepository::new(pool.clone());
-    
+
     // Create client
     let oauth_client = doxyde_db::repositories::OAuthClient {
         client_id: "test-client".to_string(),
@@ -408,13 +398,13 @@ async fn test_refresh_token_flow(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         created_at: chrono::Utc::now(),
         created_by_token_id: None,
     };
-    
+
     oauth_repo.create(&oauth_client).await?;
-    
+
     // Create refresh token
     let refresh_token = "test-refresh-token";
     let token_hash = super::models::hash_token(refresh_token);
-    
+
     let oauth_refresh = doxyde_db::repositories::RefreshToken {
         token: refresh_token.to_string(),
         token_hash,
@@ -426,16 +416,15 @@ async fn test_refresh_token_flow(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         used_at: None,
         created_at: chrono::Utc::now(),
     };
-    
+
     refresh_repo.create(&oauth_refresh).await?;
-    
+
     // Use refresh token
     let token_request = urlencoding::Encoded::new(format!(
         "grant_type=refresh_token&refresh_token={}&client_id={}&scope=mcp:read",
-        refresh_token,
-        oauth_client.client_id
+        refresh_token, oauth_client.client_id
     ));
-    
+
     let response = app
         .clone()
         .oneshot(
@@ -446,15 +435,15 @@ async fn test_refresh_token_flow(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
                 .body(Body::from(token_request.to_string()))?,
         )
         .await?;
-    
+
     assert_eq!(response.status(), StatusCode::OK);
-    
+
     let body = to_bytes(response.into_body(), usize::MAX).await?;
     let token_response: serde_json::Value = serde_json::from_slice(&body)?;
-    
+
     assert!(token_response["access_token"].is_string());
     assert!(token_response["refresh_token"].is_string());
     assert_eq!(token_response["scope"], "mcp:read"); // Should be reduced scope
-    
+
     Ok(())
 }

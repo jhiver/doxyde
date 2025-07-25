@@ -180,7 +180,7 @@ mod tests {
 
         // Delete by hash
         repo.delete_by_hash(&token.token_hash).await?;
-        
+
         let found = repo.find_by_hash(&token.token_hash).await?;
         assert!(found.is_none());
 

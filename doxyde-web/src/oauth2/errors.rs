@@ -23,7 +23,7 @@ impl IntoResponse for OAuthErrorResponse {
         };
 
         let mut response = (status, Json(self.0)).into_response();
-        
+
         // Add WWW-Authenticate header for 401 responses
         if status == StatusCode::UNAUTHORIZED {
             response.headers_mut().insert(
@@ -95,21 +95,17 @@ impl AuthorizationError {
 
     /// Build redirect URL with error parameters
     pub fn to_redirect_url(&self, redirect_uri: &str) -> String {
-        let mut url = url::Url::parse(redirect_uri).unwrap_or_else(|_| {
-            url::Url::parse("http://localhost:3000/error").unwrap()
-        });
+        let mut url = url::Url::parse(redirect_uri)
+            .unwrap_or_else(|_| url::Url::parse("http://localhost:3000/error").unwrap());
 
-        url.query_pairs_mut()
-            .append_pair("error", &self.error);
+        url.query_pairs_mut().append_pair("error", &self.error);
 
         if let Some(desc) = &self.error_description {
-            url.query_pairs_mut()
-                .append_pair("error_description", desc);
+            url.query_pairs_mut().append_pair("error_description", desc);
         }
 
         if let Some(state) = &self.state {
-            url.query_pairs_mut()
-                .append_pair("state", state);
+            url.query_pairs_mut().append_pair("state", state);
         }
 
         url.to_string()
@@ -126,14 +122,16 @@ impl BearerError {
     pub fn invalid_token() -> Self {
         Self {
             error: "invalid_token",
-            error_description: "The access token provided is expired, revoked, malformed, or invalid",
+            error_description:
+                "The access token provided is expired, revoked, malformed, or invalid",
         }
     }
 
     pub fn insufficient_scope() -> Self {
         Self {
             error: "insufficient_scope",
-            error_description: "The request requires higher privileges than provided by the access token",
+            error_description:
+                "The request requires higher privileges than provided by the access token",
         }
     }
 }

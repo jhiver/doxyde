@@ -27,7 +27,10 @@ impl OAuthClient {
             client_secret_hash: None,
             client_name,
             redirect_uris,
-            grant_types: vec!["authorization_code".to_string(), "refresh_token".to_string()],
+            grant_types: vec![
+                "authorization_code".to_string(),
+                "refresh_token".to_string(),
+            ],
             response_types: vec!["code".to_string()],
             scope: Some("mcp:read mcp:write".to_string()),
             token_endpoint_auth_method: "client_secret_basic".to_string(),
@@ -264,7 +267,7 @@ pub fn generate_secure_token(length: usize) -> String {
     use rand::Rng;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rand::thread_rng();
-    
+
     (0..length)
         .map(|_| {
             let idx = rng.gen_range(0..CHARSET.len());
@@ -287,13 +290,13 @@ pub fn verify_pkce(code_verifier: &str, code_challenge: &str, method: &str) -> b
         return false;
     }
 
-    use sha2::{Digest, Sha256};
     use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
-    
+    use sha2::{Digest, Sha256};
+
     let mut hasher = Sha256::new();
     hasher.update(code_verifier.as_bytes());
     let computed = URL_SAFE_NO_PAD.encode(hasher.finalize());
-    
+
     computed == code_challenge
 }
 
@@ -310,7 +313,10 @@ mod tests {
         );
 
         assert_eq!(client.client_name, "Test Client");
-        assert_eq!(client.grant_types, vec!["authorization_code", "refresh_token"]);
+        assert_eq!(
+            client.grant_types,
+            vec!["authorization_code", "refresh_token"]
+        );
         assert_eq!(client.response_types, vec!["code"]);
     }
 
@@ -345,7 +351,7 @@ mod tests {
         );
 
         assert!(code.is_valid());
-        
+
         code.mark_used();
         assert!(!code.is_valid());
     }
@@ -354,7 +360,7 @@ mod tests {
     fn test_pkce_verification() {
         let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
         let challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM";
-        
+
         assert!(verify_pkce(verifier, challenge, "S256"));
         assert!(!verify_pkce(verifier, "wrong_challenge", "S256"));
     }
@@ -363,7 +369,7 @@ mod tests {
     fn test_token_generation() {
         let token1 = generate_secure_token(32);
         let token2 = generate_secure_token(32);
-        
+
         assert_eq!(token1.len(), 32);
         assert_eq!(token2.len(), 32);
         assert_ne!(token1, token2);

@@ -19,8 +19,7 @@ use axum::{
     http::{
         header::{
             ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS,
-            ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN,
-            ACCESS_CONTROL_MAX_AGE,
+            ACCESS_CONTROL_ALLOW_METHODS, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_MAX_AGE,
         },
         Method, Request, Response, StatusCode,
     },
@@ -38,27 +37,27 @@ pub async fn cors_middleware(
         .and_then(|h| h.to_str().ok())
         .unwrap_or("")
         .to_string();
-    
+
     let path = request.uri().path().to_string();
-    
+
     // Only apply CORS to OAuth2 and MCP endpoints
     let should_apply_cors = path.starts_with("/.well-known")
         || path.starts_with("/.oauth")
         || path.starts_with("/.mcp");
-    
+
     if !should_apply_cors {
         return Ok(next.run(request).await);
     }
-    
+
     // Handle OPTIONS preflight requests
     if request.method() == Method::OPTIONS {
         let mut response = Response::builder()
             .status(StatusCode::NO_CONTENT)
             .body(Body::empty())
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-        
+
         let headers = response.headers_mut();
-        
+
         // Allow specific origins for MCP development and Claude Desktop
         if origin == "http://localhost:6274" || origin.starts_with("http://localhost:") {
             headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.parse().unwrap());
@@ -66,24 +65,29 @@ pub async fn cors_middleware(
             // Allow HTTPS origins (for production Claude Desktop)
             headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.parse().unwrap());
         }
-        
-        headers.insert(ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS, HEAD".parse().unwrap());
+
+        headers.insert(
+            ACCESS_CONTROL_ALLOW_METHODS,
+            "GET, POST, OPTIONS, HEAD".parse().unwrap(),
+        );
         headers.insert(
             ACCESS_CONTROL_ALLOW_HEADERS,
-            "Content-Type, Authorization, Accept, Accept-Encoding, User-Agent".parse().unwrap(),
+            "Content-Type, Authorization, Accept, Accept-Encoding, User-Agent"
+                .parse()
+                .unwrap(),
         );
         headers.insert(ACCESS_CONTROL_ALLOW_CREDENTIALS, "true".parse().unwrap());
         headers.insert(ACCESS_CONTROL_MAX_AGE, "86400".parse().unwrap()); // 24 hours
-        
+
         return Ok(response);
     }
-    
+
     // Process the actual request
     let mut response = next.run(request).await;
-    
+
     // Add CORS headers to the response
     let headers = response.headers_mut();
-    
+
     // Allow specific origins for MCP development and Claude Desktop
     if &origin == "http://localhost:6274" || origin.starts_with("http://localhost:") {
         headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.parse().unwrap());
@@ -91,33 +95,33 @@ pub async fn cors_middleware(
         // Allow HTTPS origins (for production Claude Desktop)
         headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin.parse().unwrap());
     }
-    
+
     headers.insert(ACCESS_CONTROL_ALLOW_CREDENTIALS, "true".parse().unwrap());
-    
+
     Ok(response)
 }
 
 #[cfg(test)]
 mod tests {
-    
+
     #[test]
     fn test_cors_origin_matching() {
         // Test localhost:6274
         assert!("http://localhost:6274" == "http://localhost:6274");
         assert!("http://localhost:3000".starts_with("http://localhost:"));
-        
+
         // Test HTTPS origins
         assert!("https://claude.ai".starts_with("https://"));
         assert!("https://doxyde.com".starts_with("https://"));
     }
-    
+
     #[test]
     fn test_cors_path_matching() {
         // Test OAuth2 and MCP paths
         assert!("/.well-known/oauth-authorization-server".starts_with("/.well-known"));
         assert!("/.oauth/authorize".starts_with("/.oauth"));
         assert!("/.mcp".starts_with("/.mcp"));
-        
+
         // Test paths that should NOT match
         assert!(!"/about".starts_with("/.well-known"));
         assert!(!"/static/css/style.css".starts_with("/.oauth"));

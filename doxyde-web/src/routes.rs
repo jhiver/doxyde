@@ -15,9 +15,9 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-    content, cors::cors_middleware, debug_middleware::debug_form_middleware, 
-    error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware, 
-    request_logging::request_logging_middleware, security_headers::security_headers_middleware, 
+    content, cors::cors_middleware, debug_middleware::debug_form_middleware,
+    error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware,
+    request_logging::request_logging_middleware, security_headers::security_headers_middleware,
     session_activity::update_session_activity, AppState,
 };
 use axum::extract::{DefaultBodyLimit, State};
@@ -119,6 +119,23 @@ pub fn create_router(state: AppState) -> Router {
             "/.mcp",
             routing::post(handlers::mcp_oauth_handler)
                 .head(handlers::mcp_oauth_head_handler)
+                .options(|| async { StatusCode::NO_CONTENT })
+                .layer(middleware::from_fn_with_state(
+                    state.api_rate_limiter.clone(),
+                    |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
+                     request: axum::http::Request<axum::body::Body>,
+                     next: axum::middleware::Next| async move {
+                        match limiter.check() {
+                            Ok(_) => Ok(next.run(request).await),
+                            Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
+                        }
+                    },
+                )),
+        )
+        // OAuth2 MCP SSE endpoint for Claude Code
+        .route(
+            "/.mcp/sse",
+            routing::post(handlers::mcp_oauth_sse_handler)
                 .options(|| async { StatusCode::NO_CONTENT })
                 .layer(middleware::from_fn_with_state(
                     state.api_rate_limiter.clone(),
