@@ -15,13 +15,13 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-    content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
-    handlers, rate_limit::login_rate_limit_middleware, request_logging::request_logging_middleware,
-    security_headers::security_headers_middleware, session_activity::update_session_activity,
-    AppState,
+    content, cors::cors_middleware, debug_middleware::debug_form_middleware, 
+    error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware, 
+    request_logging::request_logging_middleware, security_headers::security_headers_middleware, 
+    session_activity::update_session_activity, AppState,
 };
 use axum::extract::{DefaultBodyLimit, State};
-use axum::{middleware, routing, routing::get, Router};
+use axum::{http::StatusCode, middleware, routing, routing::get, Router};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
@@ -59,46 +59,56 @@ pub fn create_router(state: AppState) -> Router {
         // OAuth2 endpoints
         .route(
             "/.well-known",
-            get(crate::oauth2::discovery::well_known_directory_handler),
+            get(crate::oauth2::discovery::well_known_directory_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.well-known/",
-            get(crate::oauth2::discovery::well_known_directory_handler),
+            get(crate::oauth2::discovery::well_known_directory_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.well-known/oauth-authorization-server",
-            get(crate::oauth2::discovery::oauth_authorization_server_handler),
+            get(crate::oauth2::discovery::oauth_authorization_server_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.well-known/openid-configuration",
-            get(crate::oauth2::discovery::openid_configuration_handler),
+            get(crate::oauth2::discovery::openid_configuration_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.well-known/oauth-protected-resource",
-            get(crate::oauth2::discovery::oauth_protected_resource_handler),
+            get(crate::oauth2::discovery::oauth_protected_resource_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.oauth/register",
-            routing::post(crate::oauth2::client_registration::client_registration_handler),
+            routing::post(crate::oauth2::client_registration::client_registration_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.oauth/authorize",
             get(crate::oauth2::authorization::authorization_handler)
-                .post(crate::oauth2::authorization::consent_handler),
+                .post(crate::oauth2::authorization::consent_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.oauth/token",
-            routing::post(crate::oauth2::token::token_handler),
+            routing::post(crate::oauth2::token::token_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         .route(
             "/.oauth/revoke",
-            routing::post(crate::oauth2::token::revoke_handler),
+            routing::post(crate::oauth2::token::revoke_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
         )
         // OAuth2-protected MCP endpoint
         .route(
             "/.mcp",
             routing::post(handlers::mcp_oauth_handler)
                 .head(handlers::mcp_oauth_head_handler)
+                .options(|| async { StatusCode::NO_CONTENT })
                 .layer(middleware::from_fn_with_state(
                     state.api_rate_limiter.clone(),
                     |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
@@ -129,6 +139,7 @@ pub fn create_router(state: AppState) -> Router {
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
+        .layer(middleware::from_fn(cors_middleware))
         .layer(middleware::from_fn(request_logging_middleware))
         .layer(middleware::from_fn(debug_form_middleware))
         .layer(middleware::from_fn_with_state(

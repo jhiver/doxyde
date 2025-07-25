@@ -21,6 +21,7 @@ pub mod component_registry;
 pub mod component_render;
 pub mod config;
 pub mod content;
+pub mod cors;
 pub mod csrf;
 pub mod db;
 pub mod debug_middleware;

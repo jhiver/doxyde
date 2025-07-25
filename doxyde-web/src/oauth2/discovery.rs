@@ -56,12 +56,15 @@ pub async fn oauth_protected_resource_handler(
     let base_url = get_base_url(&state);
     
     // According to RFC 9728, we need to indicate the authorization servers
+    // The resource field should be the base URL, not the MCP endpoint
     let metadata = json!({
-        "resource": format!("{}/.mcp", base_url),
-        "authorization_servers": [base_url],
-        "bearer_token_supported": true,
-        "resource_documentation": "https://github.com/jhiver/doxyde",
+        "resource": base_url.clone(),
+        "authorization_servers": [base_url.clone()],
+        "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp:read", "mcp:write"],
+        "resource_documentation": "https://github.com/jhiver/doxyde",
+        // Additional metadata for MCP
+        "mcp_endpoint": format!("{}/.mcp", base_url),
     });
 
     (StatusCode::OK, Json(metadata))
