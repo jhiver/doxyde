@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM oauth_refresh_tokens\n            WHERE mcp_token_id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3c9d2d76f09ce69ca796fe07fb0cc5ba422696700b3de427459f24c4a94a26d3"
+}

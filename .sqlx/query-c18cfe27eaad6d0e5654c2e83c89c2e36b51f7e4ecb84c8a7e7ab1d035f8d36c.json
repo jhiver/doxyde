@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            SELECT \n                client_id as \"client_id!\",\n                client_secret_hash,\n                client_name as \"client_name!\",\n                redirect_uris as \"redirect_uris!\",\n                grant_types as \"grant_types!\",\n                response_types as \"response_types!\",\n                scope,\n                token_endpoint_auth_method as \"token_endpoint_auth_method!\",\n                created_at as \"created_at!: DateTime<Utc>\",\n                created_by_token_id\n            FROM oauth_clients\n            WHERE client_id = ?\n            ",
+  "describe": {
+    "columns": [
+      {
+        "name": "client_id!",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_secret_hash",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "client_name!",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "redirect_uris!",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "grant_types!",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "response_types!",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "scope",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "token_endpoint_auth_method!",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_at!: DateTime<Utc>",
+        "ordinal": 8,
+        "type_info": "Text"
+      },
+      {
+        "name": "created_by_token_id",
+        "ordinal": 9,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "c18cfe27eaad6d0e5654c2e83c89c2e36b51f7e4ecb84c8a7e7ab1d035f8d36c"
+}

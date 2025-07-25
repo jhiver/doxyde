@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n            DELETE FROM oauth_clients\n            WHERE client_id = ?\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "d56cefb75dafc27747da4ec23b0687fa46ff2dd515da38e03b6fb4222728dcec"
+}
