@@ -113,7 +113,8 @@ pub async fn mcp_oauth_sse_handler(
     headers: HeaderMap,
 ) -> Result<Response, AppError> {
     // Debug log
-    tracing::debug!("OAuth MCP SSE connection request");
+    tracing::info!("OAuth MCP SSE connection request");
+    tracing::info!("SSE Request headers: {:?}", headers);
 
     // Extract and validate Bearer token
     let bearer_token = match auth_header {
@@ -172,16 +173,25 @@ pub async fn mcp_oauth_sse_handler(
     // Create SSE stream
     // The endpoint event should send the URI as a plain string, not JSON
     let endpoint_uri = format!("{}://{}/.mcp", protocol, host);
+    
+    tracing::info!("Creating SSE endpoint event with URI: {}", endpoint_uri);
 
     let event = Event::default()
         .event("endpoint")
-        .data(endpoint_uri);
+        .data(endpoint_uri.clone());
 
     let stream = stream::once(async move { Ok::<_, Infallible>(event) });
 
     let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
+    
+    let response = sse.into_response();
+    
+    // Log response details
+    tracing::info!("SSE response status: {:?}", response.status());
+    tracing::info!("SSE response headers: {:?}", response.headers());
+    tracing::info!("Sending SSE response with endpoint: {}", endpoint_uri);
 
-    Ok(sse.into_response())
+    Ok(response)
 }
 
 /// Legacy MCP endpoint that expects MCP token in path (backward compatibility)
