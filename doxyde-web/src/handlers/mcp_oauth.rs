@@ -37,8 +37,8 @@ pub async fn mcp_oauth_handler(
         }
     }
     
-    // Debug log the incoming request
-    tracing::debug!(
+    // Log the incoming request at info level to see what Claude Code is sending
+    tracing::info!(
         "OAuth MCP request received: {}",
         serde_json::to_string_pretty(&request).unwrap_or_default()
     );
@@ -108,6 +108,12 @@ pub async fn mcp_oauth_handler(
             })
         }
     };
+    
+    // Log the response at info level
+    tracing::info!(
+        "OAuth MCP response: {}",
+        serde_json::to_string_pretty(&response).unwrap_or_default()
+    );
 
     Ok(Json(response).into_response())
 }
