@@ -302,7 +302,11 @@ mod tests {
             crate::rate_limit::create_api_rate_limiter(),
         );
 
-        let response = login_form(Host("localhost:3000".to_string()), State(state)).await;
+        let response = login_form(
+            Host("localhost:3000".to_string()), 
+            State(state),
+            Query(LoginQuery { return_to: None })
+        ).await;
         assert!(response.is_ok());
 
         Ok(())
@@ -345,6 +349,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -402,6 +407,7 @@ mod tests {
         let form = LoginForm {
             username: "test@example.com".to_string(),
             password: "password123".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -454,6 +460,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "wrongpassword".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -501,6 +508,7 @@ mod tests {
         let form = LoginForm {
             username: "nonexistent".to_string(),
             password: "password123".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -556,6 +564,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -620,6 +629,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+        return_to: None,
         };
 
         let jar = CookieJar::new();
