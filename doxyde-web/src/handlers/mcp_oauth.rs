@@ -2,10 +2,7 @@ use anyhow::Result;
 use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, StatusCode},
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
-    },
+    response::{IntoResponse, Response},
     Json,
 };
 use axum_extra::{
@@ -13,9 +10,6 @@ use axum_extra::{
     TypedHeader,
 };
 use serde_json::Value;
-use std::convert::Infallible;
-use std::time::Duration;
-use tokio_stream::{self as stream};
 
 use crate::{
     error::AppError,
@@ -28,7 +22,7 @@ use crate::{
 pub async fn mcp_oauth_handler(
     State(state): State<AppState>,
     auth_header: Option<TypedHeader<Authorization<Bearer>>>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> Result<Response, AppError> {
     // Debug log the incoming request
@@ -80,160 +74,30 @@ pub async fn mcp_oauth_handler(
     // Get site_id from MCP token
     let site_id = mcp_token.site_id;
 
-    // Check Accept header to determine response type
-    let accept_header = headers
-        .get(header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
-
-    if accept_header.contains("text/event-stream") {
-        // Return SSE response
-        let server = SimpleMcpServer::new(state.db.clone(), site_id);
-
-        // Process the request
-        let response_result = server.handle_request(request).await;
-
-        // Create a stream that sends the response
-        let stream = stream::once(match response_result {
-            Ok(response) => {
-                let event = Event::default()
-                    .json_data(response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok::<_, Infallible>(event)
-            }
-            Err(e) => {
-                let error_response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                });
-                let event = Event::default()
-                    .json_data(error_response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok(event)
-            }
-        });
-
-        let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
-
-        Ok(sse.into_response())
-    } else {
-        // Return regular JSON response
-        let server = SimpleMcpServer::new(state.db.clone(), site_id);
-
-        let response = match server.handle_request(request.clone()).await {
-            Ok(response) => response,
-            Err(e) => {
-                // Extract the request ID if possible
-                let id = request
-                    .get("id")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null);
-
-                serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                })
-            }
-        };
-
-        Ok(Json(response).into_response())
-    }
-}
-
-/// OAuth2 SSE endpoint for Claude Code
-pub async fn mcp_oauth_sse_handler(
-    State(state): State<AppState>,
-    auth_header: Option<TypedHeader<Authorization<Bearer>>>,
-    Json(request): Json<Value>,
-) -> Result<Response, AppError> {
-    // Debug log the incoming request
-    tracing::debug!(
-        "OAuth MCP SSE request received: {}",
-        serde_json::to_string_pretty(&request).unwrap_or_default()
-    );
-
-    // Extract and validate Bearer token
-    let bearer_token = match auth_header {
-        Some(TypedHeader(auth)) => auth.token().to_string(),
-        None => {
-            return Ok(BearerError::invalid_token().into_response());
-        }
-    };
-
-    // Hash the token to look it up
-    let token_hash = hash_token(&bearer_token);
-
-    // Look up access token
-    let access_token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
-    let access_token = match access_token_repo.find_by_hash(&token_hash).await? {
-        Some(token) => token,
-        None => {
-            return Ok(BearerError::invalid_token().into_response());
-        }
-    };
-
-    // Check if access token is valid
-    if !access_token.is_valid() {
-        return Ok(BearerError::invalid_token().into_response());
-    }
-
-    // Get the MCP token associated with this access token
-    let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(state.db.clone());
-    let mcp_token = mcp_token_repo
-        .find_by_id(&access_token.mcp_token_id)
-        .await?
-        .ok_or(AppError::internal_server_error("MCP token not found"))?;
-
-    // Check if MCP token is valid
-    if !mcp_token.is_valid() {
-        return Ok(BearerError::invalid_token().into_response());
-    }
-
-    // Update last used on MCP token
-    let _ = mcp_token_repo.update_last_used(&mcp_token.id).await;
-
-    // Get site_id from MCP token
-    let site_id = mcp_token.site_id;
-
-    // Always return SSE response for this endpoint
+    // Return regular JSON response
     let server = SimpleMcpServer::new(state.db.clone(), site_id);
 
-    // Process the request
-    let response_result = server.handle_request(request).await;
-
-    // Create a stream that sends the response
-    let stream = stream::once(match response_result {
-        Ok(response) => {
-            let event = Event::default()
-                .json_data(response)
-                .unwrap_or_else(|_| Event::default());
-            Ok::<_, Infallible>(event)
-        }
+    let response = match server.handle_request(request.clone()).await {
+        Ok(response) => response,
         Err(e) => {
-            let error_response = serde_json::json!({
+            // Extract the request ID if possible
+            let id = request
+                .get("id")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+
+            serde_json::json!({
                 "jsonrpc": "2.0",
+                "id": id,
                 "error": {
                     "code": -32603,
                     "message": format!("Internal error: {}", e)
                 }
-            });
-            let event = Event::default()
-                .json_data(error_response)
-                .unwrap_or_else(|_| Event::default());
-            Ok(event)
+            })
         }
-    });
+    };
 
-    let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
-
-    Ok(sse.into_response())
+    Ok(Json(response).into_response())
 }
 
 /// Legacy MCP endpoint that expects MCP token in path (backward compatibility)
@@ -279,69 +143,28 @@ pub async fn mcp_legacy_handler(
     // Update last used
     let _ = token_repo.update_last_used(&token_id).await;
 
-    // Check Accept header to determine response type
-    let accept_header = headers
-        .get(header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
+    // Return regular JSON response
+    let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
 
-    if accept_header.contains("text/event-stream") {
-        // Return SSE response
-        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
+    let response = match server.handle_request(request.clone()).await {
+        Ok(response) => response,
+        Err(e) => {
+            // Extract the request ID if possible
+            let id = request
+                .get("id")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
 
-        // Process the request
-        let response_result = server.handle_request(request).await;
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {
+                    "code": -32603,
+                    "message": format!("Internal error: {}", e)
+                }
+            })
+        }
+    };
 
-        // Create a stream that sends the response
-        let stream = stream::once(match response_result {
-            Ok(response) => {
-                let event = Event::default()
-                    .json_data(response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok::<_, Infallible>(event)
-            }
-            Err(e) => {
-                let error_response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                });
-                let event = Event::default()
-                    .json_data(error_response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok(event)
-            }
-        });
-
-        let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
-
-        Ok(sse.into_response())
-    } else {
-        // Return regular JSON response
-        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
-
-        let response = match server.handle_request(request.clone()).await {
-            Ok(response) => response,
-            Err(e) => {
-                // Extract the request ID if possible
-                let id = request
-                    .get("id")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null);
-
-                serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                })
-            }
-        };
-
-        Ok(Json(response).into_response())
-    }
+    Ok(Json(response).into_response())
 }

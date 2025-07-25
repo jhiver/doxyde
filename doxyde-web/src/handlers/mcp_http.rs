@@ -1,26 +1,20 @@
 use anyhow::Result;
 use axum::{
     extract::{Path, State},
-    http::{header, HeaderMap},
-    response::{
-        sse::{Event, KeepAlive, Sse},
-        IntoResponse, Response,
-    },
+    http::HeaderMap,
+    response::{IntoResponse, Response},
     Json,
 };
 use doxyde_db::repositories::McpTokenRepository;
 use serde_json::Value;
-use std::convert::Infallible;
-use std::time::Duration;
-use tokio_stream::{self as stream};
 
 use crate::{error::AppError, mcp_simple::SimpleMcpServer, state::AppState};
 
-/// MCP HTTP endpoint handler that supports both regular JSON-RPC and SSE
+/// MCP HTTP endpoint handler for JSON-RPC
 pub async fn mcp_http_handler(
     State(state): State<AppState>,
     Path(token_id): Path<String>,
-    headers: HeaderMap,
+    _headers: HeaderMap,
     Json(request): Json<Value>,
 ) -> Result<Response, AppError> {
     // Debug log the incoming request
@@ -28,7 +22,7 @@ pub async fn mcp_http_handler(
         "MCP request received: {}",
         serde_json::to_string_pretty(&request).unwrap_or_default()
     );
-    tracing::debug!("Request headers: {:?}", headers);
+    tracing::debug!("Request headers: {:?}", _headers);
 
     // Validate token
     let token_repo = McpTokenRepository::new(state.db.clone());
@@ -45,71 +39,30 @@ pub async fn mcp_http_handler(
     // Update last used
     let _ = token_repo.update_last_used(&token_id).await;
 
-    // Check Accept header to determine response type
-    let accept_header = headers
-        .get(header::ACCEPT)
-        .and_then(|h| h.to_str().ok())
-        .unwrap_or("");
+    // Return regular JSON response
+    let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
 
-    if accept_header.contains("text/event-stream") {
-        // Return SSE response
-        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
+    let response = match server.handle_request(request.clone()).await {
+        Ok(response) => response,
+        Err(e) => {
+            // Extract the request ID if possible
+            let id = request
+                .get("id")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
 
-        // Process the request
-        let response_result = server.handle_request(request).await;
+            serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": {
+                    "code": -32603,
+                    "message": format!("Internal error: {}", e)
+                }
+            })
+        }
+    };
 
-        // Create a stream that sends the response
-        let stream = stream::once(match response_result {
-            Ok(response) => {
-                let event = Event::default()
-                    .json_data(response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok::<_, Infallible>(event)
-            }
-            Err(e) => {
-                let error_response = serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                });
-                let event = Event::default()
-                    .json_data(error_response)
-                    .unwrap_or_else(|_| Event::default());
-                Ok(event)
-            }
-        });
-
-        let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
-
-        Ok(sse.into_response())
-    } else {
-        // Return regular JSON response
-        let server = SimpleMcpServer::new(state.db.clone(), token.site_id);
-
-        let response = match server.handle_request(request.clone()).await {
-            Ok(response) => response,
-            Err(e) => {
-                // Extract the request ID if possible
-                let id = request
-                    .get("id")
-                    .cloned()
-                    .unwrap_or(serde_json::Value::Null);
-
-                serde_json::json!({
-                    "jsonrpc": "2.0",
-                    "id": id,
-                    "error": {
-                        "code": -32603,
-                        "message": format!("Internal error: {}", e)
-                    }
-                })
-            }
-        };
-
-        Ok(Json(response).into_response())
-    }
+    Ok(Json(response).into_response())
 }
 
 #[cfg(test)]
