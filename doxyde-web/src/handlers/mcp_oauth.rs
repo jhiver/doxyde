@@ -2,14 +2,20 @@ use anyhow::Result;
 use axum::{
     extract::{Path, State},
     http::{header, HeaderMap, StatusCode},
-    response::{IntoResponse, Response},
+    response::{
+        sse::{Event, KeepAlive, Sse},
+        IntoResponse, Response,
+    },
     Json,
 };
 use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
+use futures::stream;
 use serde_json::Value;
+use std::convert::Infallible;
+use std::time::Duration;
 
 use crate::{
     error::AppError,
@@ -98,6 +104,86 @@ pub async fn mcp_oauth_handler(
     };
 
     Ok(Json(response).into_response())
+}
+
+/// OAuth2 MCP SSE endpoint handler
+pub async fn mcp_oauth_sse_handler(
+    State(state): State<AppState>,
+    auth_header: Option<TypedHeader<Authorization<Bearer>>>,
+    headers: HeaderMap,
+) -> Result<Response, AppError> {
+    // Debug log
+    tracing::debug!("OAuth MCP SSE connection request");
+
+    // Extract and validate Bearer token
+    let bearer_token = match auth_header {
+        Some(TypedHeader(auth)) => auth.token().to_string(),
+        None => {
+            return Ok(BearerError::invalid_token().into_response());
+        }
+    };
+
+    // Hash the token to look it up
+    let token_hash = hash_token(&bearer_token);
+
+    // Look up access token
+    let access_token_repo = doxyde_db::repositories::AccessTokenRepository::new(state.db.clone());
+    let access_token = match access_token_repo.find_by_hash(&token_hash).await? {
+        Some(token) => token,
+        None => {
+            return Ok(BearerError::invalid_token().into_response());
+        }
+    };
+
+    // Check if access token is valid
+    if !access_token.is_valid() {
+        return Ok(BearerError::invalid_token().into_response());
+    }
+
+    // Get the MCP token associated with this access token
+    let mcp_token_repo = doxyde_db::repositories::McpTokenRepository::new(state.db.clone());
+    let mcp_token = mcp_token_repo
+        .find_by_id(&access_token.mcp_token_id)
+        .await?
+        .ok_or(AppError::internal_server_error("MCP token not found"))?;
+
+    // Check if MCP token is valid
+    if !mcp_token.is_valid() {
+        return Ok(BearerError::invalid_token().into_response());
+    }
+
+    // Update last used on MCP token
+    let _ = mcp_token_repo.update_last_used(&mcp_token.id).await;
+
+    // Get the host header to construct the endpoint URL
+    let host = headers
+        .get(header::HOST)
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("localhost");
+
+    // Determine protocol based on host
+    let protocol =
+        if host.starts_with("localhost") || host.contains(":3000") || host.contains(":8000") {
+            "http"
+        } else {
+            "https"
+        };
+
+    // Create SSE stream
+    let endpoint_data = serde_json::json!({
+        "uri": format!("{}://{}/.mcp", protocol, host)
+    });
+
+    let event = Event::default()
+        .event("endpoint")
+        .json_data(endpoint_data)
+        .unwrap_or_else(|_| Event::default());
+
+    let stream = stream::once(async move { Ok::<_, Infallible>(event) });
+
+    let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
+
+    Ok(sse.into_response())
 }
 
 /// Legacy MCP endpoint that expects MCP token in path (backward compatibility)

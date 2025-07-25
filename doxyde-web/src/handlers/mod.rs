@@ -44,7 +44,7 @@ pub use image_upload::{
     upload_component_image_handler, upload_image_ajax_handler, upload_image_handler,
 };
 pub use mcp_http::mcp_http_handler;
-pub use mcp_oauth::{mcp_legacy_handler, mcp_oauth_handler};
+pub use mcp_oauth::{mcp_legacy_handler, mcp_oauth_handler, mcp_oauth_sse_handler};
 pub use mcp_oauth_head::mcp_oauth_head_handler;
 pub use mcp_tokens::{
     create_token_handler, list_tokens_handler, revoke_token_handler, show_token_handler,
