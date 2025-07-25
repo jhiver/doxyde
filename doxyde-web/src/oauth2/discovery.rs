@@ -31,6 +31,8 @@ pub async fn oauth_authorization_server_handler(
         "token_endpoint_auth_methods_supported": ["client_secret_basic", "client_secret_post"],
         "service_documentation": "https://github.com/jhiver/doxyde",
         "ui_locales_supported": ["en"],
+        // Add MCP endpoint URL for Claude Desktop
+        "mcp_endpoint": format!("{}/.mcp", base_url),
     });
 
     (StatusCode::OK, Json(metadata))
@@ -58,6 +60,8 @@ pub async fn oauth_protected_resource_handler(
         "bearer_token_supported": true,
         "resource_documentation": "https://github.com/jhiver/doxyde",
         "scopes_supported": ["mcp:read", "mcp:write"],
+        // Add MCP endpoint URL for Claude Desktop
+        "mcp_endpoint": format!("{}/.mcp", base_url),
     });
 
     (StatusCode::OK, Json(metadata))
