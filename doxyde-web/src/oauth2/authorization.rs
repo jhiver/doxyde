@@ -1,14 +1,14 @@
 use anyhow::Result;
 use axum::{
-    extract::{Query, State},
-    http::StatusCode,
+    extract::{Host, Query, State},
+    http::{HeaderMap, StatusCode},
     response::{Html, IntoResponse, Redirect},
     Form,
 };
 use serde::Deserialize;
 use tera::Context;
 
-use crate::{auth::CurrentUser, error::AppError, state::AppState};
+use crate::{auth::{CurrentUser, OptionalUser}, error::AppError, state::AppState};
 
 use super::{
     errors::AuthorizationError,
@@ -43,9 +43,19 @@ pub struct ConsentForm {
 /// OAuth2 authorization endpoint
 pub async fn authorization_handler(
     State(state): State<AppState>,
-    user: CurrentUser,
+    Host(host): Host,
+    headers: HeaderMap,
+    user: OptionalUser,
     Query(params): Query<AuthorizationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    // If user is not authenticated, redirect to login
+    if user.0.is_none() {
+        let current_url = build_authorize_url(&host, &headers, &params);
+        let login_url = format!("/.login?return_to={}", urlencoding::encode(&current_url));
+        return Ok(Redirect::to(&login_url).into_response());
+    }
+    
+    let user = user.0.unwrap();
     // Validate response_type
     if params.response_type != "code" {
         let error = AuthorizationError::unsupported_response_type(
@@ -229,6 +239,39 @@ pub async fn consent_handler(
     }
 
     Ok(Redirect::to(redirect_url.as_str()))
+}
+
+/// Build the full authorize URL from request parameters
+fn build_authorize_url(host: &str, headers: &HeaderMap, params: &AuthorizationRequest) -> String {
+    // Determine the scheme from X-Forwarded-Proto header or default to https
+    let scheme = headers
+        .get("x-forwarded-proto")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("https");
+    
+    // Build the full URL
+    let mut url = format!("{}://{}/.oauth/authorize?", scheme, host);
+    let mut params_vec = vec![];
+    
+    params_vec.push(format!("response_type={}", urlencoding::encode(&params.response_type)));
+    params_vec.push(format!("client_id={}", urlencoding::encode(&params.client_id)));
+    params_vec.push(format!("redirect_uri={}", urlencoding::encode(&params.redirect_uri)));
+    
+    if let Some(ref scope) = params.scope {
+        params_vec.push(format!("scope={}", urlencoding::encode(scope)));
+    }
+    if let Some(ref state) = params.state {
+        params_vec.push(format!("state={}", urlencoding::encode(state)));
+    }
+    if let Some(ref code_challenge) = params.code_challenge {
+        params_vec.push(format!("code_challenge={}", urlencoding::encode(code_challenge)));
+    }
+    if let Some(ref code_challenge_method) = params.code_challenge_method {
+        params_vec.push(format!("code_challenge_method={}", urlencoding::encode(code_challenge_method)));
+    }
+    
+    url.push_str(&params_vec.join("&"));
+    url
 }
 
 #[cfg(test)]
