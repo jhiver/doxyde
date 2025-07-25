@@ -12,9 +12,7 @@ use axum_extra::{
     headers::{authorization::Bearer, Authorization},
     TypedHeader,
 };
-use futures::stream;
 use serde_json::Value;
-use std::convert::Infallible;
 use std::time::Duration;
 
 use crate::{
@@ -176,11 +174,19 @@ pub async fn mcp_oauth_sse_handler(
     
     tracing::info!("Creating SSE endpoint event with URI: {}", endpoint_uri);
 
-    let event = Event::default()
+    let endpoint_event = Event::default()
         .event("endpoint")
         .data(endpoint_uri.clone());
 
-    let stream = stream::once(async move { Ok::<_, Infallible>(event) });
+    // Create a stream that sends the endpoint event immediately
+    // The keep_alive will handle sending periodic heartbeats
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Result<Event, std::convert::Infallible>>();
+    
+    // Send the endpoint event immediately
+    let _ = tx.send(Ok(endpoint_event));
+    
+    // Convert the receiver into a stream
+    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx);
 
     let sse = Sse::new(stream).keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
     
