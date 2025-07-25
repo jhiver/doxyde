@@ -82,6 +82,17 @@ pub fn create_router(state: AppState) -> Router {
             get(crate::oauth2::discovery::oauth_protected_resource_handler)
                 .options(|| async { StatusCode::NO_CONTENT }),
         )
+        // Workaround: Claude Desktop incorrectly appends /.mcp to discovery URLs
+        .route(
+            "/.well-known/oauth-authorization-server/.mcp",
+            get(crate::oauth2::discovery::oauth_authorization_server_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource/.mcp",
+            get(crate::oauth2::discovery::oauth_protected_resource_handler)
+                .options(|| async { StatusCode::NO_CONTENT }),
+        )
         .route(
             "/.oauth/register",
             routing::post(crate::oauth2::client_registration::client_registration_handler)
