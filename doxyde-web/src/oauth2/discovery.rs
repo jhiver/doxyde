@@ -58,6 +58,32 @@ pub async fn oauth_protected_resource_handler(
     (StatusCode::OK, Json(metadata))
 }
 
+/// Handler for .well-known directory listing
+pub async fn well_known_directory_handler(
+    State(state): State<AppState>,
+) -> impl IntoResponse {
+    let base_url = get_base_url(&state);
+    
+    let directory = json!({
+        "links": [
+            {
+                "rel": "oauth-authorization-server",
+                "href": format!("{}/.well-known/oauth-authorization-server", base_url)
+            },
+            {
+                "rel": "openid-configuration",
+                "href": format!("{}/.well-known/openid-configuration", base_url)
+            },
+            {
+                "rel": "oauth-protected-resource",
+                "href": format!("{}/.well-known/oauth-protected-resource", base_url)
+            }
+        ]
+    });
+
+    (StatusCode::OK, Json(directory))
+}
+
 /// Get base URL from configuration or request
 fn get_base_url(_state: &AppState) -> String {
     // TODO: Get from configuration or request headers
@@ -96,6 +122,29 @@ mod tests {
             json.get("code_challenge_methods_supported").unwrap(),
             &json!(["S256"])
         );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_well_known_directory() -> anyhow::Result<()> {
+        let state = create_test_app_state().await?;
+        let app = crate::routes::create_router(state);
+
+        let request = Request::builder()
+            .uri("/.well-known")
+            .header("host", "example.com")
+            .body(Body::empty())?;
+
+        let response = app.clone().oneshot(request).await?;
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = axum::body::to_bytes(response.into_body(), 10_000_000).await?;
+        let json: serde_json::Value = serde_json::from_slice(&body)?;
+
+        assert!(json.get("links").is_some());
+        let links = json.get("links").unwrap().as_array().unwrap();
+        assert_eq!(links.len(), 3);
 
         Ok(())
     }

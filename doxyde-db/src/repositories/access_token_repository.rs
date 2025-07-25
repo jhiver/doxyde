@@ -159,6 +159,7 @@ mod tests {
         let repo = AccessTokenRepository::new(pool);
 
         let token = AccessToken {
+            token: "test_token_123".to_string(),
             token_hash: "hashed_token_123".to_string(),
             client_id: "client-123".to_string(),
             user_id: 1,

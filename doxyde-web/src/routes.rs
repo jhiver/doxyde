@@ -58,6 +58,10 @@ pub fn create_router(state: AppState) -> Router {
         )
         // OAuth2 endpoints
         .route(
+            "/.well-known",
+            get(crate::oauth2::discovery::well_known_directory_handler),
+        )
+        .route(
             "/.well-known/oauth-authorization-server",
             get(crate::oauth2::discovery::oauth_authorization_server_handler),
         )

@@ -166,6 +166,7 @@ mod tests {
         let repo = RefreshTokenRepository::new(pool);
 
         let token = RefreshToken {
+            token: "test_refresh_123".to_string(),
             token_hash: "hashed_refresh_123".to_string(),
             client_id: "client-123".to_string(),
             user_id: 1,
