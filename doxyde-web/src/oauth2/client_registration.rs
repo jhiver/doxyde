@@ -37,11 +37,13 @@ fn default_token_auth_method() -> String {
 #[derive(Debug, Serialize)]
 pub struct ClientRegistrationResponse {
     pub client_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
     pub client_name: String,
     pub redirect_uris: Vec<String>,
     pub grant_types: Vec<String>,
     pub response_types: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub scope: Option<String>,
     pub token_endpoint_auth_method: String,
     pub client_id_issued_at: i64,
