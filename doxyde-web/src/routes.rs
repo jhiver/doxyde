@@ -16,7 +16,7 @@
 
 use crate::{
     content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
-    handlers, rate_limit::login_rate_limit_middleware,
+    handlers, rate_limit::login_rate_limit_middleware, request_logging::request_logging_middleware,
     security_headers::security_headers_middleware, session_activity::update_session_activity,
     AppState,
 };
@@ -59,6 +59,10 @@ pub fn create_router(state: AppState) -> Router {
         // OAuth2 endpoints
         .route(
             "/.well-known",
+            get(crate::oauth2::discovery::well_known_directory_handler),
+        )
+        .route(
+            "/.well-known/",
             get(crate::oauth2::discovery::well_known_directory_handler),
         )
         .route(
@@ -123,6 +127,7 @@ pub fn create_router(state: AppState) -> Router {
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
+        .layer(middleware::from_fn(request_logging_middleware))
         .layer(middleware::from_fn(debug_form_middleware))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),

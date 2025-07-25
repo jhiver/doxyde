@@ -34,6 +34,7 @@ pub mod mcp_simple;
 pub mod oauth2;
 pub mod path_security;
 pub mod rate_limit;
+pub mod request_logging;
 pub mod routes;
 pub mod security_headers;
 pub mod services;

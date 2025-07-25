@@ -224,6 +224,16 @@ pub async fn content_handler(
     // Parse the path to extract content path and action
     let path = uri.path();
 
+    // Add comprehensive debugging for .well-known requests
+    if path.starts_with("/.well-known") || path.starts_with(".well-known") {
+        tracing::warn!(
+            path = %path,
+            host = %host,
+            uri = %uri,
+            "DEBUGGING: .well-known request reached content handler (should be handled by route)"
+        );
+    }
+
     // Check if this is an image request (format: /slug.extension)
     if let Some((slug, format)) = check_image_pattern(path) {
         return handle_image_request(state, host.to_string(), slug, format).await;

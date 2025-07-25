@@ -13,6 +13,8 @@ use crate::state::AppState;
 pub async fn oauth_authorization_server_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    tracing::info!("DEBUGGING: oauth_authorization_server_handler called");
+    
     let base_url = get_base_url(&state);
     
     let metadata = json!({
@@ -38,6 +40,7 @@ pub async fn oauth_authorization_server_handler(
 pub async fn openid_configuration_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    tracing::info!("DEBUGGING: openid_configuration_handler called");
     oauth_authorization_server_handler(State(state)).await
 }
 
@@ -46,6 +49,8 @@ pub async fn openid_configuration_handler(
 pub async fn oauth_protected_resource_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    tracing::info!("DEBUGGING: oauth_protected_resource_handler called");
+    
     let base_url = get_base_url(&state);
     
     let metadata = json!({
@@ -62,6 +67,8 @@ pub async fn oauth_protected_resource_handler(
 pub async fn well_known_directory_handler(
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    tracing::info!("DEBUGGING: well_known_directory_handler called");
+    
     let base_url = get_base_url(&state);
     
     let directory = json!({
