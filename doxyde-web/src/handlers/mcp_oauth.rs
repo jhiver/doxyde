@@ -27,8 +27,16 @@ pub async fn mcp_oauth_handler(
     State(state): State<AppState>,
     auth_header: Option<TypedHeader<Authorization<Bearer>>>,
     _headers: HeaderMap,
+    query: Option<axum::extract::Query<std::collections::HashMap<String, String>>>,
     Json(request): Json<Value>,
 ) -> Result<Response, AppError> {
+    // Log session ID if present
+    if let Some(query_params) = query {
+        if let Some(session_id) = query_params.get("session_id") {
+            tracing::info!("OAuth MCP POST request with session_id: {}", session_id);
+        }
+    }
+    
     // Debug log the incoming request
     tracing::debug!(
         "OAuth MCP request received: {}",
@@ -168,9 +176,13 @@ pub async fn mcp_oauth_sse_handler(
             "https"
         };
 
+    // Generate a session ID for this SSE connection
+    let session_id = uuid::Uuid::new_v4();
+    
     // Create SSE stream
     // The endpoint event should send the URI as a plain string, not JSON
-    let endpoint_uri = format!("{}://{}/.mcp", protocol, host);
+    // Include session_id as query parameter like the Python implementation
+    let endpoint_uri = format!("{}://{}/.mcp?session_id={}", protocol, host, session_id);
     
     tracing::info!("Creating SSE endpoint event with URI: {}", endpoint_uri);
 
