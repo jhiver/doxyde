@@ -55,12 +55,14 @@ pub async fn oauth_protected_resource_handler(
     
     // According to RFC 9728, we need to indicate the authorization servers
     // The resource field should be the base URL, not the MCP endpoint
+    // But Claude Desktop requires the mcp_endpoint field
     let metadata = json!({
         "resource": base_url.clone(),
         "authorization_servers": [base_url.clone()],
         "bearer_methods_supported": ["header"],
         "scopes_supported": ["mcp:read", "mcp:write"],
         "resource_documentation": "https://github.com/jhiver/doxyde",
+        "mcp_endpoint": format!("{}/.mcp", base_url),
     });
 
     (StatusCode::OK, Json(metadata))
