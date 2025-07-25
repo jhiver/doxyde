@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Host, State},
     http::StatusCode,
     response::IntoResponse,
     Json,
@@ -11,11 +11,12 @@ use crate::state::AppState;
 /// OAuth2 Authorization Server Metadata
 /// https://datatracker.ietf.org/doc/html/rfc8414
 pub async fn oauth_authorization_server_handler(
+    Host(host): Host,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: oauth_authorization_server_handler called");
     
-    let base_url = get_base_url(&state);
+    let base_url = get_base_url_from_host(&host, &state);
     
     let metadata = json!({
         "issuer": base_url,
@@ -38,20 +39,22 @@ pub async fn oauth_authorization_server_handler(
 
 /// OpenID Connect Discovery (alias for OAuth2 metadata)
 pub async fn openid_configuration_handler(
-    State(state): State<AppState>,
+    host: Host,
+    state: State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: openid_configuration_handler called");
-    oauth_authorization_server_handler(State(state)).await
+    oauth_authorization_server_handler(host, state).await
 }
 
 /// OAuth Protected Resource Metadata
 /// Indicates this resource server accepts OAuth2 tokens
 pub async fn oauth_protected_resource_handler(
+    Host(host): Host,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: oauth_protected_resource_handler called");
     
-    let base_url = get_base_url(&state);
+    let base_url = get_base_url_from_host(&host, &state);
     
     // According to RFC 9728, we need to indicate the authorization servers
     // The resource field should be the base URL, not the MCP endpoint
@@ -70,11 +73,12 @@ pub async fn oauth_protected_resource_handler(
 
 /// Handler for .well-known directory listing
 pub async fn well_known_directory_handler(
+    Host(host): Host,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
     tracing::info!("DEBUGGING: well_known_directory_handler called");
     
-    let base_url = get_base_url(&state);
+    let base_url = get_base_url_from_host(&host, &state);
     
     let directory = json!({
         "links": [
@@ -96,11 +100,17 @@ pub async fn well_known_directory_handler(
     (StatusCode::OK, Json(directory))
 }
 
-/// Get base URL from configuration or request
-fn get_base_url(_state: &AppState) -> String {
-    // TODO: Get from configuration or request headers
-    // For now, use a default
-    std::env::var("BASE_URL").unwrap_or_else(|_| "https://localhost:3000".to_string())
+/// Get base URL from host header
+fn get_base_url_from_host(host: &str, _state: &AppState) -> String {
+    // Check if we're behind a proxy (looking at common patterns)
+    // If host contains port, use as-is, otherwise assume HTTPS
+    if host.contains(':') && !host.starts_with("localhost:") {
+        // Has explicit port, likely HTTP in development
+        format!("http://{}", host)
+    } else {
+        // Production domain or localhost, use HTTPS
+        format!("https://{}", host)
+    }
 }
 
 #[cfg(test)]
