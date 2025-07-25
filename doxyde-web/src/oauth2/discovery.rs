@@ -55,13 +55,13 @@ pub async fn oauth_protected_resource_handler(
     
     let base_url = get_base_url(&state);
     
+    // According to RFC 9728, we need to indicate the authorization servers
     let metadata = json!({
-        "resource_server": base_url,
+        "resource": format!("{}/.mcp", base_url),
+        "authorization_servers": [base_url],
         "bearer_token_supported": true,
         "resource_documentation": "https://github.com/jhiver/doxyde",
         "scopes_supported": ["mcp:read", "mcp:write"],
-        // Add MCP endpoint URL for Claude Desktop
-        "mcp_endpoint": format!("{}/.mcp", base_url),
     });
 
     (StatusCode::OK, Json(metadata))

@@ -97,17 +97,19 @@ pub fn create_router(state: AppState) -> Router {
         // OAuth2-protected MCP endpoint
         .route(
             "/.mcp",
-            routing::post(handlers::mcp_oauth_handler).layer(middleware::from_fn_with_state(
-                state.api_rate_limiter.clone(),
-                |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
-                 request: axum::http::Request<axum::body::Body>,
-                 next: axum::middleware::Next| async move {
-                    match limiter.check() {
-                        Ok(_) => Ok(next.run(request).await),
-                        Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
-                    }
-                },
-            )),
+            routing::post(handlers::mcp_oauth_handler)
+                .head(handlers::mcp_oauth_head_handler)
+                .layer(middleware::from_fn_with_state(
+                    state.api_rate_limiter.clone(),
+                    |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
+                     request: axum::http::Request<axum::body::Body>,
+                     next: axum::middleware::Next| async move {
+                        match limiter.check() {
+                            Ok(_) => Ok(next.run(request).await),
+                            Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
+                        }
+                    },
+                )),
         )
         // Legacy MCP Server endpoint (backward compatibility)
         .route(
