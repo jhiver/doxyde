@@ -170,14 +170,12 @@ pub async fn mcp_oauth_sse_handler(
         };
 
     // Create SSE stream
-    let endpoint_data = serde_json::json!({
-        "uri": format!("{}://{}/.mcp", protocol, host)
-    });
+    // The endpoint event should send the URI as a plain string, not JSON
+    let endpoint_uri = format!("{}://{}/.mcp", protocol, host);
 
     let event = Event::default()
         .event("endpoint")
-        .json_data(endpoint_data)
-        .unwrap_or_else(|_| Event::default());
+        .data(endpoint_uri);
 
     let stream = stream::once(async move { Ok::<_, Infallible>(event) });
 
