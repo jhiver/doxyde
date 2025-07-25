@@ -98,7 +98,7 @@ pub async fn create_token_handler(
     token_repo.create(&token).await?;
 
     // Redirect to show the newly created token
-    Ok(Redirect::to(&format!("/.mcp/{}", token_id)))
+    Ok(Redirect::to(&format!("/.tokens/{}", token_id)))
 }
 
 pub async fn show_token_handler(
@@ -192,7 +192,7 @@ mod tests {
         let app = crate::routes::create_router(state);
 
         let request = Request::builder()
-            .uri("/.mcp")
+            .uri("/.tokens")
             .header("cookie", format!("session_id={}", session.id))
             .header("host", "example.com")
             .body(Body::empty())?;
@@ -230,7 +230,7 @@ mod tests {
         // Create token
         let request = Request::builder()
             .method("POST")
-            .uri("/.mcp")
+            .uri("/.tokens")
             .header("cookie", format!("session_id={}", session.id))
             .header("content-type", "application/x-www-form-urlencoded")
             .header("host", "example.com")
@@ -244,11 +244,11 @@ mod tests {
 
         // Extract token ID from redirect
         let location = response.headers().get("location").unwrap().to_str()?;
-        let token_id = location.trim_start_matches("/.mcp/");
+        let token_id = location.trim_start_matches("/.tokens/");
 
         // Show token
         let request = Request::builder()
-            .uri(&format!("/.mcp/{}", token_id))
+            .uri(&format!("/.tokens/{}", token_id))
             .header("cookie", format!("session_id={}", session.id))
             .header("host", "example.com")
             .body(Body::empty())?;

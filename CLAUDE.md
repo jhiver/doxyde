@@ -332,26 +332,28 @@ git push origin feature/user-avatars
 - Consistent error handling patterns
 - Improved test coverage
 
-## 0.1 Release Plan (4-6 weeks)
+## 0.1 Release Plan (2-4 weeks remaining)
 
-### Essential for 0.1 Release
+### ✅ Completed Tasks
 
-#### Week 1-2: Security Fundamentals
-- Basic security audit (critical vulnerabilities only)
-- Fix session handling issues
-- Add security headers (CSP, HSTS, X-Frame-Options)
-- Implement basic rate limiting
-- Ensure path traversal protection
-- Add CSRF tokens where missing
+#### Week 1-2: Security Fundamentals ✅
+- ✅ Basic security audit (critical vulnerabilities only)
+- ✅ Fix session handling issues
+- ✅ Add security headers (CSP, HSTS, X-Frame-Options)
+- ✅ Implement basic rate limiting
+- ✅ Ensure path traversal protection
+- ✅ Add CSRF tokens where missing
 
-#### Week 2-3: Route Naming & Mobile Design
-- Move `/health` → `/.health`
-- Move `/static` → `/.static`
-- Update all template references
-- Implement hamburger menu for mobile
-- Create responsive layouts
-- Add viewport meta tag
-- Make touch-friendly (44px targets)
+#### Week 2-3: Route Naming & Mobile Design ✅
+- ✅ Move `/health` → `/.health`
+- ✅ Move `/static` → `/.static`
+- ✅ Update all template references
+- ✅ Implement hamburger menu for mobile
+- ✅ Create responsive layouts
+- ✅ Add viewport meta tag
+- ✅ Make touch-friendly (44px targets)
+
+### 🚀 Remaining Tasks for 0.1 Release
 
 #### Week 3-4: Basic File Upload Improvements
 - Add drag-and-drop for images

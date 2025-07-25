@@ -31,6 +31,7 @@ pub mod handlers;
 pub mod logo;
 pub mod markdown;
 pub mod mcp_simple;
+pub mod oauth2;
 pub mod path_security;
 pub mod rate_limit;
 pub mod routes;

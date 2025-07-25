@@ -21,6 +21,7 @@ pub mod edit;
 pub mod image_serve;
 pub mod image_upload;
 pub mod mcp_http;
+pub mod mcp_oauth;
 pub mod mcp_tokens;
 pub mod move_page;
 pub mod pages;
@@ -42,6 +43,7 @@ pub use image_upload::{
     upload_component_image_handler, upload_image_ajax_handler, upload_image_handler,
 };
 pub use mcp_http::mcp_http_handler;
+pub use mcp_oauth::{mcp_legacy_handler, mcp_oauth_handler};
 pub use mcp_tokens::{
     create_token_handler, list_tokens_handler, revoke_token_handler, show_token_handler,
 };

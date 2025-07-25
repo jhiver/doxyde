@@ -48,18 +48,63 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.logout", get(handlers::logout).post(handlers::logout))
         // MCP Token management
         .route(
-            "/.mcp",
+            "/.tokens",
             get(handlers::list_tokens_handler).post(handlers::create_token_handler),
         )
-        .route("/.mcp/:token_id", get(handlers::show_token_handler))
+        .route("/.tokens/:token_id", get(handlers::show_token_handler))
         .route(
-            "/.mcp/:token_id/revoke",
+            "/.tokens/:token_id/revoke",
             get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
         )
-        // MCP Server endpoint (supports both regular JSON-RPC and SSE)
+        // OAuth2 endpoints
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(crate::oauth2::discovery::oauth_authorization_server_handler),
+        )
+        .route(
+            "/.well-known/openid-configuration",
+            get(crate::oauth2::discovery::openid_configuration_handler),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(crate::oauth2::discovery::oauth_protected_resource_handler),
+        )
+        .route(
+            "/.oauth/register",
+            routing::post(crate::oauth2::client_registration::client_registration_handler),
+        )
+        .route(
+            "/.oauth/authorize",
+            get(crate::oauth2::authorization::authorization_handler)
+                .post(crate::oauth2::authorization::consent_handler),
+        )
+        .route(
+            "/.oauth/token",
+            routing::post(crate::oauth2::token::token_handler),
+        )
+        .route(
+            "/.oauth/revoke",
+            routing::post(crate::oauth2::token::revoke_handler),
+        )
+        // OAuth2-protected MCP endpoint
+        .route(
+            "/.mcp",
+            routing::post(handlers::mcp_oauth_handler).layer(middleware::from_fn_with_state(
+                state.api_rate_limiter.clone(),
+                |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
+                 request: axum::http::Request<axum::body::Body>,
+                 next: axum::middleware::Next| async move {
+                    match limiter.check() {
+                        Ok(_) => Ok(next.run(request).await),
+                        Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
+                    }
+                },
+            )),
+        )
+        // Legacy MCP Server endpoint (backward compatibility)
         .route(
             "/.mcp/:token_id",
-            routing::post(handlers::mcp_http_handler).layer(middleware::from_fn_with_state(
+            routing::post(handlers::mcp_legacy_handler).layer(middleware::from_fn_with_state(
                 state.api_rate_limiter.clone(),
                 |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
                  request: axum::http::Request<axum::body::Body>,

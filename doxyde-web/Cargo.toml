@@ -44,6 +44,8 @@ html-escape = "0.2.13"
 base64 = "0.22.1"
 tower_governor = "0.7.0"
 governor = "0.10.0"
+sha2 = "0.10"
+argon2 = "0.5"
 
 [dev-dependencies]
 pretty_assertions.workspace = true
