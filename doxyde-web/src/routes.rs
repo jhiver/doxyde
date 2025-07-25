@@ -118,6 +118,7 @@ pub fn create_router(state: AppState) -> Router {
         .route(
             "/.mcp",
             routing::post(handlers::mcp_oauth_handler)
+                .get(handlers::mcp_oauth_sse_handler)
                 .head(handlers::mcp_oauth_head_handler)
                 .options(|| async { StatusCode::NO_CONTENT })
                 .layer(middleware::from_fn_with_state(
