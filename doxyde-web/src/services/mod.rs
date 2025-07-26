@@ -1,3 +1,2 @@
-pub mod mcp_service;
-
-pub use mcp_service::McpService;
+// Services module - currently empty
+// Future services can be added here

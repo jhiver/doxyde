@@ -120,79 +120,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE
         );
-        
-        CREATE TABLE mcp_tokens (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            site_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            last_used_at TEXT,
-            revoked_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
-        );
-        
-        -- OAuth2 tables
-        CREATE TABLE oauth_clients (
-            client_id TEXT PRIMARY KEY,
-            client_secret_hash TEXT,
-            client_name TEXT NOT NULL,
-            redirect_uris TEXT NOT NULL, -- JSON array
-            grant_types TEXT NOT NULL, -- JSON array
-            response_types TEXT NOT NULL, -- JSON array
-            scope TEXT,
-            token_endpoint_auth_method TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            created_by_token_id TEXT,
-            FOREIGN KEY (created_by_token_id) REFERENCES mcp_tokens(id) ON DELETE SET NULL
-        );
-        
-        CREATE TABLE authorization_codes (
-            code TEXT PRIMARY KEY,
-            client_id TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            mcp_token_id TEXT NOT NULL,
-            redirect_uri TEXT NOT NULL,
-            scope TEXT,
-            code_challenge TEXT,
-            code_challenge_method TEXT,
-            expires_at TEXT NOT NULL,
-            used_at TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (mcp_token_id) REFERENCES mcp_tokens(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE access_tokens (
-            token TEXT PRIMARY KEY,
-            token_hash TEXT NOT NULL UNIQUE,
-            client_id TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            mcp_token_id TEXT NOT NULL,
-            scope TEXT,
-            expires_at TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (mcp_token_id) REFERENCES mcp_tokens(id) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE refresh_tokens (
-            token TEXT PRIMARY KEY,
-            token_hash TEXT NOT NULL UNIQUE,
-            client_id TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
-            mcp_token_id TEXT NOT NULL,
-            scope TEXT,
-            expires_at TEXT NOT NULL,
-            used_at TEXT,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (client_id) REFERENCES oauth_clients(client_id) ON DELETE CASCADE,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (mcp_token_id) REFERENCES mcp_tokens(id) ON DELETE CASCADE
-        );
         "#,
     )
     .execute(&pool)
@@ -239,51 +166,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     "#,
     )?;
 
-    // Add MCP templates for tests
-    tera.add_raw_template(
-        "mcp/list.html",
-        r#"
-        <!DOCTYPE html>
-        <html>
-        <head><title>MCP Tokens</title></head>
-        <body>
-            <h1>MCP Tokens</h1>
-            {% if tokens %}
-                <ul>
-                {% for token, site in tokens %}
-                    <li>{{ token.name }} - {{ site.title }}</li>
-                {% endfor %}
-                </ul>
-            {% else %}
-                <p>No tokens</p>
-            {% endif %}
-            <form method="post">
-                <input type="text" name="name" required>
-                <select name="site_id" required>
-                {% for site, role in sites %}
-                    <option value="{{ site.id }}">{{ site.title }}</option>
-                {% endfor %}
-                </select>
-                <button type="submit">Create</button>
-            </form>
-        </body>
-        </html>
-    "#,
-    )?;
-
-    tera.add_raw_template(
-        "mcp/show.html",
-        r#"
-        <!DOCTYPE html>
-        <html>
-        <head><title>MCP Token</title></head>
-        <body>
-            <h1>{{ token.name }}</h1>
-            <p>URL: https://{{ mcp_url }}</p>
-        </body>
-        </html>
-    "#,
-    )?;
 
     // Create a test config
     let config = crate::config::Config {

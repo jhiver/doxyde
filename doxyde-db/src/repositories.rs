@@ -14,27 +14,17 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod access_token_repository;
-pub mod authorization_code_repository;
 pub mod component_repository;
-pub mod mcp_token_repository;
-pub mod oauth_client_repository;
 pub mod page_repository;
 pub mod page_version_repository;
-pub mod refresh_token_repository;
 pub mod session_repository;
 pub mod site_repository;
 pub mod site_user_repository;
 pub mod user_repository;
 
-pub use access_token_repository::*;
-pub use authorization_code_repository::*;
 pub use component_repository::*;
-pub use mcp_token_repository::*;
-pub use oauth_client_repository::*;
 pub use page_repository::*;
 pub use page_version_repository::*;
-pub use refresh_token_repository::*;
 pub use session_repository::*;
 pub use site_repository::*;
 pub use site_user_repository::*;
