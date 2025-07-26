@@ -66,13 +66,8 @@ fn determine_protocol(headers: &HeaderMap, host: &str) -> &'static str {
         return "http";
     }
     
-    // For doxyde.com without explicit port, check if we're behind a proxy
-    // If no X-Forwarded-Proto header, assume http to avoid redirect issues
-    if host == "doxyde.com" || host.starts_with("doxyde.com:") {
-        return "http";
-    }
-    
-    // Default to https for other domains
+    // For production domains without X-Forwarded-Proto, default to https
+    // This matches what the browser will use when accessing the site
     "https"
 }
 
@@ -205,7 +200,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type".parse().unwrap(),
+        "Authorization, Content-Type, MCP-Protocol-Version".parse().unwrap(),
     );
     headers.insert(
         header::ACCESS_CONTROL_MAX_AGE,
@@ -268,6 +263,6 @@ mod tests {
         let headers = response.headers();
         assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*");
         assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_METHODS).unwrap(), "GET, OPTIONS");
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap(), "Authorization, Content-Type");
+        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap(), "Authorization, Content-Type, MCP-Protocol-Version");
     }
 }
