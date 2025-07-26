@@ -167,7 +167,7 @@ pub async fn oauth_protected_resource_metadata(
     let base_url = format!("{}://{}", protocol, site_domain);
     
     let metadata = ProtectedResourceMetadata {
-        resource: format!("{}/.mcp", base_url),
+        resource: base_url.clone(),
         bearer_methods_supported: vec![
             "header".to_string(),
         ],
