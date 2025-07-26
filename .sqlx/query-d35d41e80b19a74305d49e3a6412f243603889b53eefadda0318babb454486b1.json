@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        INSERT INTO mcp_tokens (site_id, token_hash, name, scopes, created_by, expires_at)\n        VALUES (?, ?, ?, ?, ?, ?)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 6
+    },
+    "nullable": []
+  },
+  "hash": "d35d41e80b19a74305d49e3a6412f243603889b53eefadda0318babb454486b1"
+}

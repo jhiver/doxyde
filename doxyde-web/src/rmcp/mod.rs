@@ -14,41 +14,9 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod action_registry;
-pub mod auth;
-pub mod autoreload_templates;
-pub mod component_registry;
-pub mod component_render;
-pub mod config;
-pub mod content;
-pub mod csrf;
-pub mod db;
-pub mod debug_middleware;
-pub mod draft;
-pub mod error;
-pub mod error_middleware;
 pub mod handlers;
-pub mod logo;
-pub mod markdown;
-pub mod path_security;
-pub mod rate_limit;
-pub mod request_logging;
-pub mod rmcp;
-pub mod routes;
-pub mod security_headers;
-pub mod services;
-pub mod session;
-pub mod session_activity;
-pub mod state;
-pub mod template_context;
-pub mod template_utils;
-pub mod templates;
-pub mod uploads;
+pub mod oauth;
+pub mod service;
 
-#[cfg(test)]
-mod template_tests;
-#[cfg(test)]
-pub mod test_helpers;
-
-pub use config::Config;
-pub use state::AppState;
+pub use handlers::handle_sse;
+pub use oauth::{create_token, list_tokens, revoke_token};

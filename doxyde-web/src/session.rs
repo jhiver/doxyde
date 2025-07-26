@@ -14,41 +14,24 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod action_registry;
-pub mod auth;
-pub mod autoreload_templates;
-pub mod component_registry;
-pub mod component_render;
-pub mod config;
-pub mod content;
-pub mod csrf;
-pub mod db;
-pub mod debug_middleware;
-pub mod draft;
-pub mod error;
-pub mod error_middleware;
-pub mod handlers;
-pub mod logo;
-pub mod markdown;
-pub mod path_security;
-pub mod rate_limit;
-pub mod request_logging;
-pub mod rmcp;
-pub mod routes;
-pub mod security_headers;
-pub mod services;
-pub mod session;
-pub mod session_activity;
-pub mod state;
-pub mod template_context;
-pub mod template_utils;
-pub mod templates;
-pub mod uploads;
+use anyhow::Result;
+use doxyde_core::User;
+use doxyde_db::repositories::{SessionRepository, UserRepository};
+use sqlx::SqlitePool;
 
-#[cfg(test)]
-mod template_tests;
-#[cfg(test)]
-pub mod test_helpers;
+pub async fn get_current_user(
+    db: &SqlitePool,
+    session: &axum_extra::extract::CookieJar,
+) -> Result<Option<User>> {
+    if let Some(session_cookie) = session.get("session_id") {
+        let session_repo = SessionRepository::new(db.clone());
+        let user_repo = UserRepository::new(db.clone());
 
-pub use config::Config;
-pub use state::AppState;
+        if let Some(session_data) = session_repo.find_by_id(session_cookie.value()).await? {
+            if !session_data.is_expired() {
+                return user_repo.find_by_id(session_data.user_id).await;
+            }
+        }
+    }
+    Ok(None)
+}

@@ -17,11 +17,11 @@
 use crate::{
     content, debug_middleware::debug_form_middleware,
     error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware,
-    request_logging::request_logging_middleware, security_headers::security_headers_middleware,
+    request_logging::request_logging_middleware, rmcp, security_headers::security_headers_middleware,
     session_activity::update_session_activity, AppState,
 };
 use axum::extract::DefaultBodyLimit;
-use axum::{middleware, routing::get, Router};
+use axum::{middleware, routing::{delete, get, post}, Router};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
@@ -46,6 +46,12 @@ pub fn create_router(state: AppState) -> Router {
                 )),
         )
         .route("/.logout", get(handlers::logout).post(handlers::logout))
+        // MCP routes
+        .route("/.mcp/sse", get(rmcp::handle_sse))
+        // OAuth management (admin only)
+        .route("/.mcp/token", post(rmcp::create_token))
+        .route("/.mcp/tokens", get(rmcp::list_tokens))
+        .route("/.mcp/token/:id", delete(rmcp::revoke_token))
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
