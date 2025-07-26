@@ -18,5 +18,5 @@ pub mod handlers;
 pub mod oauth;
 pub mod service;
 
-pub use handlers::handle_sse;
+pub use handlers::{handle_http, handle_sse};
 pub use oauth::{create_token, list_tokens, revoke_token};

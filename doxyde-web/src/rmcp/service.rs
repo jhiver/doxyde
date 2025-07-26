@@ -45,7 +45,7 @@ impl DoxydeRmcpService {
 #[tool_router]
 impl DoxydeRmcpService {
     #[tool(description = "Get the current time in a specified timezone")]
-    fn time(&self, Parameters(req): Parameters<TimeRequest>) -> String {
+    pub fn time(&self, Parameters(req): Parameters<TimeRequest>) -> String {
         let timezone = req.timezone.unwrap_or_else(|| "UTC".to_string());
         debug!("Getting time for timezone: {}", timezone);
         

@@ -18,12 +18,17 @@ use axum::{
     extract::{State, Request},
     http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::Response,
+    Json,
 };
-use rmcp::transport::sse_server::{SseServer, SseServerConfig};
+use rmcp::{
+    transport::sse_server::{SseServer, SseServerConfig},
+    Service,
+};
+use serde_json::{json, Value};
 use std::net::SocketAddr;
 use std::time::Duration;
 use tokio_util::sync::CancellationToken;
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use super::{oauth::validate_token, service::DoxydeRmcpService};
 use crate::AppState;
@@ -82,4 +87,153 @@ pub async fn handle_sse(
     // and use it to handle this request
     error!("SSE endpoint reached but full integration not yet implemented");
     Err(StatusCode::NOT_IMPLEMENTED)
+}
+
+// HTTP handler for MCP
+pub async fn handle_http(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Result<Json<Value>, StatusCode> {
+    // Validate OAuth token
+    if let Some(token) = extract_bearer_token(&headers) {
+        match validate_token(&state.db, token).await {
+            Ok(Some(_token_info)) => {
+                debug!("Valid OAuth token for HTTP request");
+            }
+            Ok(None) => {
+                return Ok(Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32603,
+                        "message": "Invalid token"
+                    },
+                    "id": null
+                })));
+            }
+            Err(e) => {
+                error!("Token validation error: {}", e);
+                return Ok(Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32603,
+                        "message": "Token validation failed"
+                    },
+                    "id": null
+                })));
+            }
+        }
+    } else {
+        return Ok(Json(json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32603,
+                "message": "Authorization required"
+            },
+            "id": null
+        })));
+    }
+
+    // Extract method and id from request
+    let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
+    let id = body.get("id").cloned().unwrap_or(Value::Null);
+
+    debug!("MCP HTTP request: method={}", method);
+
+    // Create the service
+    let service = DoxydeRmcpService::new();
+
+    // Handle different methods
+    match method {
+        "initialize" => {
+            let result = service.get_info();
+            Ok(Json(json!({
+                "jsonrpc": "2.0",
+                "result": {
+                    "protocolVersion": "1.0.0",
+                    "capabilities": result.capabilities,
+                    "serverInfo": result.server_info,
+                    "instructions": result.instructions
+                },
+                "id": id
+            })))
+        }
+        "tools/list" => {
+            Ok(Json(json!({
+                "jsonrpc": "2.0",
+                "result": {
+                    "tools": [{
+                        "name": "time",
+                        "description": "Get the current time in a specified timezone",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "timezone": {
+                                    "type": "string",
+                                    "description": "Timezone name (e.g., 'America/New_York', 'UTC')"
+                                }
+                            }
+                        }
+                    }]
+                },
+                "id": id
+            })))
+        }
+        "tools/call" => {
+            let params = body.get("params").cloned().unwrap_or(json!({}));
+            let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let arguments = params.get("arguments").cloned();
+
+            if tool_name == "time" {
+                let timezone = arguments
+                    .as_ref()
+                    .and_then(|args| args.get("timezone"))
+                    .and_then(|tz| tz.as_str())
+                    .map(String::from);
+
+                let result = service.time(rmcp::handler::server::tool::Parameters(
+                    super::service::TimeRequest { timezone }
+                ));
+
+                // Parse the JSON string result
+                match serde_json::from_str::<Value>(&result) {
+                    Ok(content) => Ok(Json(json!({
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [{"type": "text", "text": result}],
+                            "isError": false
+                        },
+                        "id": id
+                    }))),
+                    Err(_) => Ok(Json(json!({
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": [{"type": "text", "text": result}],
+                            "isError": result.starts_with("Error:")
+                        },
+                        "id": id
+                    })))
+                }
+            } else {
+                Ok(Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32601,
+                        "message": format!("Unknown tool: {}", tool_name)
+                    },
+                    "id": id
+                })))
+            }
+        }
+        _ => {
+            Ok(Json(json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": format!("Method not found: {}", method)
+                },
+                "id": id
+            })))
+        }
+    }
 }
