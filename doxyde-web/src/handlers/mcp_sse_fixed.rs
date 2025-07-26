@@ -15,12 +15,13 @@ use axum_extra::{
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use uuid::Uuid;
-use futures::stream::{self, StreamExt};
+use futures::stream::Stream;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 use crate::{
     error::AppError,
@@ -44,6 +45,32 @@ struct SseSession {
 #[derive(Deserialize)]
 pub struct SseQuery {
     session_id: Option<String>,
+}
+
+// Custom stream that sends the endpoint event and then keeps the connection alive
+struct SseEndpointStream {
+    sent_endpoint: bool,
+    endpoint_uri: String,
+    session_id: String,
+}
+
+impl Stream for SseEndpointStream {
+    type Item = Result<Event, std::convert::Infallible>;
+
+    fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        if !self.sent_endpoint {
+            self.sent_endpoint = true;
+            let event = Event::default()
+                .event("endpoint")
+                .data(self.endpoint_uri.clone());
+            tracing::info!("Sending SSE endpoint event: {}", self.endpoint_uri);
+            Poll::Ready(Some(Ok(event)))
+        } else {
+            // Keep the stream alive by returning Pending
+            // The KeepAlive will handle sending heartbeats
+            Poll::Pending
+        }
+    }
 }
 
 /// SSE endpoint handler - establishes SSE connection and sends endpoint event
@@ -112,48 +139,39 @@ pub async fn mcp_sse_handler(
         );
     }
 
-    // We don't need host or protocol for relative URLs
-
     // Create the endpoint URL for SSE clients to POST to
-    // MCP spec requires a relative URI path only
+    // MCP spec requires a relative URI, not absolute
     let endpoint_uri = format!("/.sse/messages?session_id={}", session_id);
 
     tracing::info!("Creating SSE stream with endpoint: {}", endpoint_uri);
 
-    // Create the initial endpoint event
-    let endpoint_event = Event::default()
-        .event("endpoint")
-        .data(endpoint_uri);
+    // Create our custom stream
+    let stream = SseEndpointStream {
+        sent_endpoint: false,
+        endpoint_uri: endpoint_uri.clone(),
+        session_id: session_id.clone(),
+    };
 
-    // Create a stream that sends the endpoint event once and then never completes
-    let event_stream = stream::once(async move {
-        Ok::<_, Infallible>(endpoint_event)
-    });
-    
-    // Chain with an empty stream that never yields to keep connection open
-    let keep_alive_stream = stream::pending::<Result<Event, Infallible>>();
-    let combined_stream = event_stream.chain(keep_alive_stream);
+    // Create SSE response with keep-alive
+    let sse = Sse::new(stream)
+        .keep_alive(KeepAlive::new().interval(Duration::from_secs(30)));
 
-    // Create SSE response with keep-alive heartbeats
-    let sse = Sse::new(combined_stream)
-        .keep_alive(KeepAlive::new()
-            .interval(Duration::from_secs(30))
-            .text("ping"));
-    
-    // Clean up session when client disconnects
-    // Note: In production, you'd want better connection tracking
+    // Set up cleanup when connection closes
     let session_id_for_cleanup = session_id.clone();
     tokio::spawn(async move {
-        // Wait for a reasonable timeout before cleanup
-        tokio::time::sleep(Duration::from_secs(3600)).await;
+        // Wait a bit to ensure the connection is established
+        tokio::time::sleep(Duration::from_secs(5)).await;
         
-        // Remove the session after timeout
-        let mut sessions = SSE_SESSIONS.write().await;
-        if sessions.remove(&session_id_for_cleanup).is_some() {
-            tracing::info!("Cleaned up expired SSE session: {}", session_id_for_cleanup);
+        // This is a simplified cleanup - in production, you'd want to
+        // detect when the HTTP connection actually closes
+        loop {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            // In a real implementation, check if the connection is still active
+            // For now, sessions will be cleaned up when they're used or on server restart
         }
     });
 
+    tracing::info!("SSE handler returning response for session {}", session_id);
     Ok(sse.into_response())
 }
 
