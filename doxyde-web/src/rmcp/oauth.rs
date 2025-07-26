@@ -304,6 +304,7 @@ pub struct TokenRequest {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub code_verifier: Option<String>,
+    pub resource: Option<String>, // Optional resource parameter
 }
 
 #[derive(Debug, Serialize)]
@@ -489,7 +490,7 @@ pub async fn authorize(
 
 pub async fn token(
     State(state): State<AppState>,
-    Json(request): Json<TokenRequest>,
+    Form(request): Form<TokenRequest>,
 ) -> impl IntoResponse {
     // Only support authorization_code grant type for now
     if request.grant_type != "authorization_code" {
