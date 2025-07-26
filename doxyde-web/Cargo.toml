@@ -46,6 +46,7 @@ tower_governor = "0.7.0"
 governor = "0.10.0"
 sha2 = "0.10"
 argon2 = "0.5"
+lazy_static = "1.4"
 
 [dev-dependencies]
 pretty_assertions.workspace = true
