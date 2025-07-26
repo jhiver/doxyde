@@ -24,7 +24,6 @@ use serde::{Deserialize, Serialize};
 use crate::AppState;
 use anyhow::Context;
 use sqlx;
-use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthorizationServerMetadata {
@@ -51,22 +50,22 @@ pub struct ProtectedResourceMetadata {
 }
 
 fn determine_protocol(headers: &HeaderMap, host: &str) -> &'static str {
-    // Debug log all headers
-    debug!("Headers received for protocol detection:");
-    for (name, value) in headers {
-        if let Ok(value_str) = value.to_str() {
-            debug!("  {}: {}", name, value_str);
+    // Check Cloudflare's CF-Visitor header first (contains original scheme)
+    if let Some(cf_visitor) = headers.get("cf-visitor") {
+        if let Ok(cf_visitor_str) = cf_visitor.to_str() {
+            if cf_visitor_str.contains("\"https\"") {
+                return "https";
+            }
         }
     }
     
-    // Check X-Forwarded-Proto header first (set by reverse proxies)
+    // Check X-Forwarded-Proto header (set by reverse proxies)
     // Try both lowercase and the actual header constant
     if let Some(proto) = headers.get("x-forwarded-proto")
         .or_else(|| headers.get("X-Forwarded-Proto"))
         .or_else(|| headers.get(header::FORWARDED)) 
     {
         if let Ok(proto_str) = proto.to_str() {
-            debug!("Found X-Forwarded-Proto: {}", proto_str);
             return match proto_str.to_lowercase().as_str() {
                 "https" => "https",
                 "http" => "http",
@@ -75,17 +74,12 @@ fn determine_protocol(headers: &HeaderMap, host: &str) -> &'static str {
         }
     }
     
-    debug!("No X-Forwarded-Proto header found");
-    
     // Check if host contains a port that indicates local development
     if host.contains(":3000") || host.contains(":8000") || host.contains(":8001") || host == "localhost" {
-        debug!("Local development detected, using http");
         return "http";
     }
     
-    // For production domains without X-Forwarded-Proto, default to https
-    // This matches what the browser will use when accessing the site
-    debug!("Defaulting to https for host: {}", host);
+    // For production domains without protocol headers, default to https
     "https"
 }
 
