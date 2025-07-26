@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
-    extract::State,
+    extract::{State, Host},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
@@ -49,8 +49,37 @@ pub struct ProtectedResourceMetadata {
     pub scopes_supported: Vec<String>,
 }
 
+fn determine_protocol(headers: &HeaderMap, host: &str) -> &'static str {
+    // Check X-Forwarded-Proto header first (set by reverse proxies)
+    if let Some(proto) = headers.get("x-forwarded-proto") {
+        if let Ok(proto_str) = proto.to_str() {
+            return match proto_str {
+                "https" => "https",
+                "http" => "http",
+                _ => "https"
+            };
+        }
+    }
+    
+    // Check if host contains a port that indicates local development
+    if host.contains(":3000") || host.contains(":8000") || host.contains(":8001") || host == "localhost" {
+        return "http";
+    }
+    
+    // For doxyde.com without explicit port, check if we're behind a proxy
+    // If no X-Forwarded-Proto header, assume http to avoid redirect issues
+    if host == "doxyde.com" || host.starts_with("doxyde.com:") {
+        return "http";
+    }
+    
+    // Default to https for other domains
+    "https"
+}
+
 pub async fn oauth_authorization_server_metadata(
     State(state): State<AppState>,
+    Host(host): Host,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     // Get site domain from database (use site_id 1 for now)
     let site_domain = match sqlx::query!("SELECT domain FROM sites WHERE id = 1")
@@ -60,12 +89,13 @@ pub async fn oauth_authorization_server_metadata(
     {
         Ok(row) => row.domain,
         Err(_) => {
-            // Fallback to localhost if no site exists
-            "localhost:3000".to_string()
+            // Fallback to the Host header if no site exists
+            host.clone()
         }
     };
     
-    let base_url = format!("https://{}", site_domain);
+    let protocol = determine_protocol(&headers, &site_domain);
+    let base_url = format!("{}://{}", protocol, site_domain);
     
     let metadata = AuthorizationServerMetadata {
         issuer: base_url.clone(),
@@ -110,6 +140,8 @@ pub async fn oauth_authorization_server_metadata(
 
 pub async fn oauth_protected_resource_metadata(
     State(state): State<AppState>,
+    Host(host): Host,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
     // Get site domain from database (use site_id 1 for now)
     let site_domain = match sqlx::query!("SELECT domain FROM sites WHERE id = 1")
@@ -119,12 +151,13 @@ pub async fn oauth_protected_resource_metadata(
     {
         Ok(row) => row.domain,
         Err(_) => {
-            // Fallback to localhost if no site exists
-            "localhost:3000".to_string()
+            // Fallback to the Host header if no site exists
+            host.clone()
         }
     };
     
-    let base_url = format!("https://{}", site_domain);
+    let protocol = determine_protocol(&headers, &site_domain);
+    let base_url = format!("{}://{}", protocol, site_domain);
     
     let metadata = ProtectedResourceMetadata {
         resource: format!("{}/.mcp", base_url),
@@ -149,8 +182,10 @@ pub async fn oauth_protected_resource_metadata(
 
 pub async fn oauth_protected_resource_mcp_metadata(
     State(state): State<AppState>,
+    Host(host): Host,
+    headers: HeaderMap,
 ) -> impl IntoResponse {
-    oauth_protected_resource_metadata(State(state)).await
+    oauth_protected_resource_metadata(State(state), Host(host), headers).await
 }
 
 pub async fn options_handler() -> impl IntoResponse {
@@ -190,7 +225,12 @@ mod tests {
             .await
             .expect("Failed to create test state");
 
-        let response = oauth_authorization_server_metadata(State(state)).await.into_response();
+        let headers = HeaderMap::new();
+        let response = oauth_authorization_server_metadata(
+            State(state),
+            Host("localhost:3000".to_string()),
+            headers
+        ).await.into_response();
         
         assert_eq!(response.status(), StatusCode::OK);
         
@@ -205,7 +245,12 @@ mod tests {
             .await
             .expect("Failed to create test state");
 
-        let response = oauth_protected_resource_metadata(State(state)).await.into_response();
+        let headers = HeaderMap::new();
+        let response = oauth_protected_resource_metadata(
+            State(state),
+            Host("localhost:3000".to_string()),
+            headers
+        ).await.into_response();
         
         assert_eq!(response.status(), StatusCode::OK);
         
