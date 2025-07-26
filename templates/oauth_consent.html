@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Authorize Application - {{ super() }}{% endblock %}
+
+{% block main %}
+<div class="login-container">
+    <div class="login-box" style="max-width: 500px;">
+        <h1 class="text-center">Authorization Request</h1>
+        
+        <div class="oauth-app-info">
+            <p class="text-center mb-4">
+                <strong>{{ client_name }}</strong> is requesting access to your account
+            </p>
+        </div>
+
+        {% if error %}
+        <div class="alert alert-error">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <div class="oauth-scope-list">
+            <h3>This application will be able to:</h3>
+            <ul>
+                {% if "read" in scopes or "mcp:read" in scopes %}
+                <li>✓ Read your content and data</li>
+                {% endif %}
+                {% if "write" in scopes or "mcp:write" in scopes %}
+                <li>✓ Create and modify content</li>
+                {% endif %}
+                {% if "admin" in scopes or "mcp:admin" in scopes %}
+                <li>✓ Access administrative functions</li>
+                {% endif %}
+            </ul>
+        </div>
+
+        <div class="oauth-user-info">
+            <p class="text-muted">
+                You are logged in as: <strong>{{ user.username }}</strong>
+            </p>
+        </div>
+
+        <form method="post" action="/.oauth/authorize" class="oauth-consent-form">
+            {% if csrf_token %}
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% endif %}
+            <input type="hidden" name="client_id" value="{{ client_id }}">
+            <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+            <input type="hidden" name="response_type" value="{{ response_type }}">
+            <input type="hidden" name="scope" value="{{ scope }}">
+            {% if state %}
+            <input type="hidden" name="state" value="{{ state }}">
+            {% endif %}
+            {% if code_challenge %}
+            <input type="hidden" name="code_challenge" value="{{ code_challenge }}">
+            <input type="hidden" name="code_challenge_method" value="{{ code_challenge_method }}">
+            {% endif %}
+            
+            <div class="form-group" style="margin-top: 2rem;">
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" name="action" value="allow" class="btn btn-primary" style="flex: 1;">
+                        Allow Access
+                    </button>
+                    <button type="submit" name="action" value="deny" class="btn btn-secondary" style="flex: 1;">
+                        Deny
+                    </button>
+                </div>
+            </div>
+        </form>
+
+        <div class="oauth-warning">
+            <p class="text-muted text-small">
+                By authorizing this application, you allow it to access your data according to the permissions listed above. 
+                You can revoke this access at any time from your account settings.
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+.oauth-scope-list {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.oauth-scope-list h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+}
+
+.oauth-scope-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.oauth-scope-list li {
+    padding: 0.5rem 0;
+    font-size: 1rem;
+}
+
+.oauth-user-info {
+    text-align: center;
+    margin: 1.5rem 0;
+    padding: 1rem;
+    background: #e9ecef;
+    border-radius: 8px;
+}
+
+.oauth-warning {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.text-small {
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}

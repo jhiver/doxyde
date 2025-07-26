@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT client_name, redirect_uris, scope\n        FROM oauth_clients\n        WHERE client_id = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "client_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "redirect_uris",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "scope",
+        "ordinal": 2,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "25f568b8ec619b052208e8e33c32e9a81419e300de448408af2d3186bde4da30"
+}

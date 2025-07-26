@@ -69,6 +69,7 @@ pub fn create_router(state: AppState) -> Router {
             .options(rmcp::oauth_options))
         .route("/.oauth/authorize", 
             get(rmcp::authorize)
+            .post(rmcp::authorize_consent)
             .options(rmcp::oauth_options))
         .route("/.oauth/token", 
             post(rmcp::token)

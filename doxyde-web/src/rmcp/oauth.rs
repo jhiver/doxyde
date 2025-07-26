@@ -16,11 +16,12 @@
 
 use anyhow::{Context, Result};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Form, Path, Query, State},
     http::{header, HeaderMap, StatusCode},
-    response::IntoResponse,
+    response::{Html, IntoResponse, Redirect},
     Json,
 };
+use axum_extra::extract::cookie::Cookie;
 use base64::Engine;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -283,7 +284,7 @@ pub struct ClientRegistrationResponse {
 }
 
 // OAuth2 Authorization Request
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AuthorizationRequest {
     pub response_type: String,
     pub client_id: String,
@@ -334,6 +335,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
 }
 
 pub async fn register_client(
+    State(state): State<AppState>,
     Json(request): Json<ClientRegistrationRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
     // Generate client credentials
@@ -343,7 +345,7 @@ pub async fn register_client(
     // Hash the client secret
     let mut hasher = Sha256::new();
     hasher.update(client_secret.as_bytes());
-    let _client_secret_hash = format!("{:x}", hasher.finalize());
+    let client_secret_hash = format!("{:x}", hasher.finalize());
     
     // Default values
     let grant_types = request.grant_types.unwrap_or_else(|| vec!["authorization_code".to_string()]);
@@ -351,61 +353,436 @@ pub async fn register_client(
     let scope = request.scope.unwrap_or_else(|| "mcp:read mcp:write".to_string());
     let token_endpoint_auth_method = request.token_endpoint_auth_method.unwrap_or_else(|| "client_secret_basic".to_string());
     
-    // For now, we'll store this in memory or return a mock response
-    // In a real implementation, you'd save to the oauth_clients table
+    // Store in database
+    let redirect_uris_json = serde_json::to_string(&request.redirect_uris).unwrap();
+    let grant_types_json = serde_json::to_string(&grant_types).unwrap();
+    let response_types_json = serde_json::to_string(&response_types).unwrap();
     
-    let response = ClientRegistrationResponse {
+    match sqlx::query!(
+        r#"
+        INSERT INTO oauth_clients 
+        (client_id, client_secret_hash, client_name, redirect_uris, grant_types, response_types, scope, token_endpoint_auth_method)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
         client_id,
-        client_secret: Some(client_secret),
-        client_name: request.client_name,
-        redirect_uris: request.redirect_uris,
-        grant_types,
-        response_types,
+        client_secret_hash,
+        request.client_name,
+        redirect_uris_json,
+        grant_types_json,
+        response_types_json,
         scope,
-        token_endpoint_auth_method,
-        client_id_issued_at: Utc::now().timestamp(),
-        client_secret_expires_at: 0, // Never expires
-    };
-    
-    let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
-    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-    
-    Ok((StatusCode::CREATED, headers, Json(response)))
+        token_endpoint_auth_method
+    )
+    .execute(&state.db)
+    .await {
+        Ok(_) => {
+            let response = ClientRegistrationResponse {
+                client_id,
+                client_secret: Some(client_secret),
+                client_name: request.client_name,
+                redirect_uris: request.redirect_uris,
+                grant_types,
+                response_types,
+                scope,
+                token_endpoint_auth_method,
+                client_id_issued_at: Utc::now().timestamp(),
+                client_secret_expires_at: 0, // Never expires
+            };
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            Ok((StatusCode::CREATED, headers, Json(response)))
+        }
+        Err(e) => {
+            eprintln!("Failed to register OAuth client: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
 pub async fn authorize(
-    Query(_request): Query<AuthorizationRequest>,
-) -> Result<impl IntoResponse, StatusCode> {
-    // For now, return a simple error response
-    // In a real implementation, you'd show a login/consent screen
-    let error_response = serde_json::json!({
-        "error": "unsupported_response_type",
-        "error_description": "Authorization endpoint not yet implemented"
-    });
+    State(state): State<AppState>,
+    session: axum_extra::extract::CookieJar,
+    Query(request): Query<AuthorizationRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate client_id exists
+    let client = match sqlx::query!(
+        r#"
+        SELECT client_name, redirect_uris, scope
+        FROM oauth_clients
+        WHERE client_id = ?
+        "#,
+        request.client_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    .context("Failed to check client")? {
+        Some(client) => client,
+        None => {
+            let error_url = format!("{}?error=invalid_client&error_description=Unknown+client", 
+                request.redirect_uri);
+            return Ok(Redirect::to(&error_url).into_response());
+        }
+    };
     
-    let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
-    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    // Validate redirect_uri
+    let redirect_uris: Vec<String> = serde_json::from_str(&client.redirect_uris)
+        .context("Failed to parse redirect URIs")?;
+    if !redirect_uris.contains(&request.redirect_uri) {
+        return Err(AppError::bad_request("Invalid redirect_uri"));
+    }
     
-    Ok((StatusCode::BAD_REQUEST, headers, Json(error_response)))
+    // Check if user is authenticated
+    let user = match get_current_user(&state.db, &session).await? {
+        Some(user) => user,
+        None => {
+            // Redirect to login, preserving OAuth parameters
+            let oauth_params = serde_urlencoded::to_string(&request)
+                .context("Failed to serialize OAuth params")?;
+            let login_url = format!("/.login?return_to=/.oauth/authorize?{}", 
+                urlencoding::encode(&oauth_params));
+            return Ok(Redirect::to(&login_url).into_response());
+        }
+    };
+    
+    // Parse requested scopes
+    let requested_scopes: Vec<&str> = request.scope
+        .as_deref()
+        .unwrap_or("mcp:read")
+        .split(' ')
+        .collect();
+    
+    // Show consent screen
+    let mut context = tera::Context::new();
+    context.insert("client_name", &client.client_name);
+    context.insert("client_id", &request.client_id);
+    context.insert("redirect_uri", &request.redirect_uri);
+    context.insert("response_type", &request.response_type);
+    context.insert("scope", &request.scope.as_deref().unwrap_or("mcp:read"));
+    context.insert("scopes", &requested_scopes);
+    context.insert("user", &user);
+    
+    if let Some(state_param) = &request.state {
+        context.insert("state", state_param);
+    }
+    if let Some(challenge) = &request.code_challenge {
+        context.insert("code_challenge", challenge);
+        context.insert("code_challenge_method", 
+            &request.code_challenge_method.as_deref().unwrap_or("S256"));
+    }
+    
+    // Add CSRF token
+    let csrf_token = uuid::Uuid::new_v4().to_string();
+    context.insert("csrf_token", &csrf_token);
+    
+    // Store CSRF token in session for validation
+    let session = session.add(Cookie::new("oauth_csrf", csrf_token));
+    
+    let html = state.templates
+        .render("oauth_consent.html", &context)
+        .context("Failed to render OAuth consent template")?;
+    
+    Ok((session, Html(html)).into_response())
 }
 
 pub async fn token(
-    Json(_request): Json<TokenRequest>,
-) -> Result<impl IntoResponse, StatusCode> {
-    // For now, return a simple error response
-    // In a real implementation, you'd validate the authorization code and issue tokens
-    let error_response = serde_json::json!({
-        "error": "unsupported_grant_type",
-        "error_description": "Token endpoint not yet implemented"
-    });
+    State(state): State<AppState>,
+    Json(request): Json<TokenRequest>,
+) -> impl IntoResponse {
+    // Only support authorization_code grant type for now
+    if request.grant_type != "authorization_code" {
+        let error_response = serde_json::json!({
+            "error": "unsupported_grant_type",
+            "error_description": "Only authorization_code grant type is supported"
+        });
+        
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
+        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        
+        return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+    }
     
-    let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
-    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    let code = match &request.code {
+        Some(code) => code,
+        None => {
+            let error_response = serde_json::json!({
+                "error": "invalid_request",
+                "error_description": "Missing authorization code"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+        }
+    };
     
-    Ok((StatusCode::BAD_REQUEST, headers, Json(error_response)))
+    // Retrieve and validate authorization code
+    let auth_code = match sqlx::query!(
+        r#"
+        SELECT client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used_at
+        FROM oauth_authorization_codes
+        WHERE code = ?
+        "#,
+        code
+    )
+    .fetch_optional(&state.db)
+    .await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let error_response = serde_json::json!({
+                "error": "invalid_grant",
+                "error_description": "Invalid authorization code"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+        }
+        Err(e) => {
+            eprintln!("Database error: {}", e);
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Internal server error"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
+        }
+    };
+    
+    // Check if code was already used
+    if auth_code.used_at.is_some() {
+        let error_response = serde_json::json!({
+            "error": "invalid_grant",
+            "error_description": "Authorization code already used"
+        });
+        
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
+        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        
+        return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+    }
+    
+    // Check if code expired
+    let expires_at = chrono::DateTime::parse_from_rfc3339(&auth_code.expires_at)
+        .unwrap()
+        .with_timezone(&Utc);
+    if Utc::now() > expires_at {
+        let error_response = serde_json::json!({
+            "error": "invalid_grant",
+            "error_description": "Authorization code expired"
+        });
+        
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
+        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        
+        return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+    }
+    
+    // Validate PKCE if present
+    if let Some(challenge) = auth_code.code_challenge {
+        let verifier = match &request.code_verifier {
+            Some(v) => v,
+            None => {
+                let error_response = serde_json::json!({
+                    "error": "invalid_request",
+                    "error_description": "Missing code_verifier"
+                });
+                
+                let mut headers = HeaderMap::new();
+                add_cors_headers(&mut headers);
+                headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                
+                return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+            }
+        };
+        
+        // Verify PKCE challenge
+        let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
+        let computed_challenge = if method == "S256" {
+            let mut hasher = Sha256::new();
+            hasher.update(verifier.as_bytes());
+            base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(hasher.finalize())
+        } else {
+            verifier.clone()
+        };
+        
+        if computed_challenge != challenge {
+            let error_response = serde_json::json!({
+                "error": "invalid_grant",
+                "error_description": "Invalid code_verifier"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+        }
+    }
+    
+    // Mark code as used
+    let _ = sqlx::query!(
+        "UPDATE oauth_authorization_codes SET used_at = datetime('now') WHERE code = ?",
+        code
+    )
+    .execute(&state.db)
+    .await;
+    
+    // Generate access token
+    let access_token = format!("mcp_token_{}", uuid::Uuid::new_v4());
+    let mut hasher = Sha256::new();
+    hasher.update(access_token.as_bytes());
+    let token_hash = format!("{:x}", hasher.finalize());
+    
+    let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
+    
+    // Store access token
+    match sqlx::query!(
+        r#"
+        INSERT INTO oauth_access_tokens 
+        (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#,
+        token_hash,
+        auth_code.client_id,
+        auth_code.user_id,
+        "1", // Dummy MCP token ID for now
+        auth_code.scope,
+        expires_at
+    )
+    .execute(&state.db)
+    .await {
+        Ok(_) => {
+            let response = TokenResponse {
+                access_token,
+                token_type: "Bearer".to_string(),
+                expires_in: 3600,
+                scope: auth_code.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                refresh_token: None, // Not implementing refresh tokens yet
+            };
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            (StatusCode::OK, headers, Json(response)).into_response()
+        }
+        Err(e) => {
+            eprintln!("Failed to create access token: {}", e);
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Failed to create access token"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+        }
+    }
+}
+
+// OAuth consent form submission
+#[derive(Debug, Deserialize)]
+pub struct AuthorizeConsentRequest {
+    pub csrf_token: String,
+    pub action: String, // "allow" or "deny"
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub response_type: String,
+    pub scope: String,
+    pub state: Option<String>,
+    pub code_challenge: Option<String>,
+    pub code_challenge_method: Option<String>,
+}
+
+pub async fn authorize_consent(
+    State(state): State<AppState>,
+    session: axum_extra::extract::CookieJar,
+    Form(request): Form<AuthorizeConsentRequest>,
+) -> Result<impl IntoResponse, AppError> {
+    // Validate CSRF token
+    let stored_csrf = session.get("oauth_csrf")
+        .and_then(|c| Some(c.value().to_string()));
+    
+    if stored_csrf != Some(request.csrf_token.clone()) {
+        return Err(AppError::bad_request("Invalid CSRF token"));
+    }
+    
+    // Remove CSRF token from session
+    let session = session.remove(Cookie::from("oauth_csrf"));
+    
+    // Check if user denied access
+    if request.action == "deny" {
+        let mut redirect_url = format!("{}?error=access_denied", request.redirect_uri);
+        if let Some(state) = &request.state {
+            redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
+        }
+        return Ok((session, Redirect::to(&redirect_url)).into_response());
+    }
+    
+    // Get current user
+    let user = get_current_user(&state.db, &session).await?
+        .ok_or_else(|| AppError::unauthorized("Not authenticated"))?;
+    
+    // Generate authorization code
+    let code = format!("code_{}", uuid::Uuid::new_v4());
+    let expires_at = (Utc::now() + Duration::minutes(10)).to_rfc3339();
+    
+    // For now, use a dummy MCP token ID - in production, you'd create or lookup an MCP token
+    let mcp_token_id = "1"; 
+    let user_id = user.id.unwrap_or(0);
+    
+    // Store authorization code
+    match sqlx::query!(
+        r#"
+        INSERT INTO oauth_authorization_codes 
+        (code, client_id, user_id, mcp_token_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        "#,
+        code,
+        request.client_id,
+        user_id,
+        mcp_token_id,
+        request.redirect_uri,
+        request.scope,
+        request.code_challenge,
+        request.code_challenge_method,
+        expires_at
+    )
+    .execute(&state.db)
+    .await {
+        Ok(_) => {
+            // Redirect back to client with authorization code
+            let mut redirect_url = format!("{}?code={}", request.redirect_uri, code);
+            if let Some(state) = &request.state {
+                redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
+            }
+            Ok((session, Redirect::to(&redirect_url)).into_response())
+        }
+        Err(e) => {
+            eprintln!("Failed to store authorization code: {}", e);
+            let mut redirect_url = format!("{}?error=server_error", request.redirect_uri);
+            if let Some(state) = &request.state {
+                redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
+            }
+            Ok((session, Redirect::to(&redirect_url)).into_response())
+        }
+    }
 }
 
 pub async fn oauth_options() -> impl IntoResponse {
