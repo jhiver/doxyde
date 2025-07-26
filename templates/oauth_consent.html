@@ -40,7 +40,7 @@
             </p>
         </div>
 
-        <form method="post" action="/.oauth/authorize" class="oauth-consent-form">
+        <form method="post" class="oauth-consent-form">
             {% if csrf_token %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% endif %}
