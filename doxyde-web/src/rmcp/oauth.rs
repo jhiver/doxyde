@@ -16,8 +16,9 @@
 
 use anyhow::{Context, Result};
 use axum::{
+    body::Body,
     extract::{Form, Path, Query, State},
-    http::{header, HeaderMap, StatusCode},
+    http::{header, HeaderMap, Response, StatusCode},
     response::{Html, IntoResponse, Redirect},
     Json,
 };
@@ -305,6 +306,7 @@ pub struct TokenRequest {
     pub client_secret: Option<String>,
     pub code_verifier: Option<String>,
     pub resource: Option<String>, // Optional resource parameter
+    pub refresh_token: Option<String>, // For refresh token grant
 }
 
 #[derive(Debug, Serialize)]
@@ -491,20 +493,29 @@ pub async fn authorize(
 pub async fn token(
     State(state): State<AppState>,
     Form(request): Form<TokenRequest>,
-) -> impl IntoResponse {
-    // Only support authorization_code grant type for now
-    if request.grant_type != "authorization_code" {
-        let error_response = serde_json::json!({
-            "error": "unsupported_grant_type",
-            "error_description": "Only authorization_code grant type is supported"
-        });
-        
-        let mut headers = HeaderMap::new();
-        add_cors_headers(&mut headers);
-        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-        
-        return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+) -> Response<Body> {
+    match request.grant_type.as_str() {
+        "authorization_code" => handle_authorization_code_grant(state, request).await,
+        "refresh_token" => handle_refresh_token_grant(state, request).await,
+        _ => {
+            let error_response = serde_json::json!({
+                "error": "unsupported_grant_type",
+                "error_description": "Only authorization_code and refresh_token grant types are supported"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response()
+        }
     }
+}
+
+async fn handle_authorization_code_grant(
+    state: AppState,
+    request: TokenRequest,
+) -> Response<Body> {
     
     let code = match &request.code {
         Some(code) => code,
@@ -650,6 +661,14 @@ pub async fn token(
     
     let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
     
+    // Generate refresh token
+    let refresh_token = format!("mcp_refresh_{}", uuid::Uuid::new_v4());
+    let mut refresh_hasher = Sha256::new();
+    refresh_hasher.update(refresh_token.as_bytes());
+    let refresh_token_hash = format!("{:x}", refresh_hasher.finalize());
+    
+    let refresh_expires_at = (Utc::now() + Duration::days(30)).to_rfc3339();
+    
     // Store access token
     match sqlx::query!(
         r#"
@@ -667,19 +686,239 @@ pub async fn token(
     .execute(&state.db)
     .await {
         Ok(_) => {
-            let response = TokenResponse {
-                access_token,
-                token_type: "Bearer".to_string(),
-                expires_in: 3600,
-                scope: auth_code.scope.unwrap_or_else(|| "mcp:read".to_string()),
-                refresh_token: None, // Not implementing refresh tokens yet
-            };
+            // Store refresh token
+            match sqlx::query!(
+                r#"
+                INSERT INTO oauth_refresh_tokens 
+                (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+                refresh_token_hash,
+                auth_code.client_id,
+                auth_code.user_id,
+                auth_code.mcp_token_id,
+                auth_code.scope,
+                refresh_expires_at
+            )
+            .execute(&state.db)
+            .await {
+                Ok(_) => {
+                    let response = TokenResponse {
+                        access_token,
+                        token_type: "Bearer".to_string(),
+                        expires_in: 3600,
+                        scope: auth_code.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                        refresh_token: Some(refresh_token),
+                    };
+                    
+                    let mut headers = HeaderMap::new();
+                    add_cors_headers(&mut headers);
+                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    
+                    (StatusCode::OK, headers, Json(response)).into_response()
+                }
+                Err(e) => {
+                    eprintln!("Failed to create refresh token: {}", e);
+                    let error_response = serde_json::json!({
+                        "error": "server_error",
+                        "error_description": "Failed to create refresh token"
+                    });
+                    
+                    let mut headers = HeaderMap::new();
+                    add_cors_headers(&mut headers);
+                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    
+                    (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("Failed to create access token: {}", e);
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Failed to create access token"
+            });
             
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
             
-            (StatusCode::OK, headers, Json(response)).into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+        }
+    }
+}
+
+async fn handle_refresh_token_grant(
+    state: AppState,
+    request: TokenRequest,
+) -> Response<Body> {
+    let refresh_token = match &request.refresh_token {
+        Some(token) => token,
+        None => {
+            let error_response = serde_json::json!({
+                "error": "invalid_request",
+                "error_description": "Missing refresh_token"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+        }
+    };
+    
+    // Hash the refresh token to look it up
+    let mut hasher = Sha256::new();
+    hasher.update(refresh_token.as_bytes());
+    let refresh_token_hash = format!("{:x}", hasher.finalize());
+    
+    // Retrieve and validate refresh token
+    let stored_refresh = match sqlx::query!(
+        r#"
+        SELECT client_id, user_id, mcp_token_id, scope, expires_at, used_at
+        FROM oauth_refresh_tokens
+        WHERE token_hash = ?
+        "#,
+        refresh_token_hash
+    )
+    .fetch_optional(&state.db)
+    .await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            let error_response = serde_json::json!({
+                "error": "invalid_grant",
+                "error_description": "Invalid refresh token"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+        }
+        Err(e) => {
+            eprintln!("Database error: {}", e);
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Internal server error"
+            });
+            
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            
+            return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
+        }
+    };
+    
+    // Check if refresh token is expired
+    let expires_at = chrono::DateTime::parse_from_rfc3339(&stored_refresh.expires_at)
+        .unwrap()
+        .with_timezone(&Utc);
+    if Utc::now() > expires_at {
+        let error_response = serde_json::json!({
+            "error": "invalid_grant",
+            "error_description": "Refresh token expired"
+        });
+        
+        let mut headers = HeaderMap::new();
+        add_cors_headers(&mut headers);
+        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        
+        return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
+    }
+    
+    // Generate new access token
+    let access_token = format!("mcp_token_{}", uuid::Uuid::new_v4());
+    let mut hasher = Sha256::new();
+    hasher.update(access_token.as_bytes());
+    let token_hash = format!("{:x}", hasher.finalize());
+    
+    let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
+    
+    // Store new access token
+    match sqlx::query!(
+        r#"
+        INSERT INTO oauth_access_tokens 
+        (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        "#,
+        token_hash,
+        stored_refresh.client_id,
+        stored_refresh.user_id,
+        stored_refresh.mcp_token_id,
+        stored_refresh.scope,
+        expires_at
+    )
+    .execute(&state.db)
+    .await {
+        Ok(_) => {
+            // Mark refresh token as used
+            let _ = sqlx::query!(
+                "UPDATE oauth_refresh_tokens SET used_at = datetime('now') WHERE token_hash = ?",
+                refresh_token_hash
+            )
+            .execute(&state.db)
+            .await;
+            
+            // Generate new refresh token (refresh token rotation)
+            let new_refresh_token = format!("mcp_refresh_{}", uuid::Uuid::new_v4());
+            let mut refresh_hasher = Sha256::new();
+            refresh_hasher.update(new_refresh_token.as_bytes());
+            let new_refresh_token_hash = format!("{:x}", refresh_hasher.finalize());
+            
+            let refresh_expires_at = (Utc::now() + Duration::days(30)).to_rfc3339();
+            
+            // Store new refresh token
+            match sqlx::query!(
+                r#"
+                INSERT INTO oauth_refresh_tokens 
+                (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                "#,
+                new_refresh_token_hash,
+                stored_refresh.client_id,
+                stored_refresh.user_id,
+                stored_refresh.mcp_token_id,
+                stored_refresh.scope,
+                refresh_expires_at
+            )
+            .execute(&state.db)
+            .await {
+                Ok(_) => {
+                    let response = TokenResponse {
+                        access_token,
+                        token_type: "Bearer".to_string(),
+                        expires_in: 3600,
+                        scope: stored_refresh.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                        refresh_token: Some(new_refresh_token),
+                    };
+                    
+                    let mut headers = HeaderMap::new();
+                    add_cors_headers(&mut headers);
+                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    
+                    (StatusCode::OK, headers, Json(response)).into_response()
+                }
+                Err(e) => {
+                    eprintln!("Failed to create new refresh token: {}", e);
+                    // Still return the access token even if refresh token rotation failed
+                    let response = TokenResponse {
+                        access_token,
+                        token_type: "Bearer".to_string(),
+                        expires_in: 3600,
+                        scope: stored_refresh.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                        refresh_token: None,
+                    };
+                    
+                    let mut headers = HeaderMap::new();
+                    add_cors_headers(&mut headers);
+                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    
+                    (StatusCode::OK, headers, Json(response)).into_response()
+                }
+            }
         }
         Err(e) => {
             eprintln!("Failed to create access token: {}", e);
