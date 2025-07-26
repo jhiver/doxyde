@@ -63,6 +63,16 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.well-known/oauth-protected-resource/.mcp", 
             get(rmcp::oauth_protected_resource_mcp_metadata)
             .options(rmcp::options_handler))
+        // OAuth2 endpoints
+        .route("/.oauth/register", 
+            post(rmcp::register_client)
+            .options(rmcp::oauth_options))
+        .route("/.oauth/authorize", 
+            get(rmcp::authorize)
+            .options(rmcp::oauth_options))
+        .route("/.oauth/token", 
+            post(rmcp::token)
+            .options(rmcp::oauth_options))
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware

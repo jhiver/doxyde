@@ -197,7 +197,7 @@ pub async fn handle_http(
 
                 // Parse the JSON string result
                 match serde_json::from_str::<Value>(&result) {
-                    Ok(content) => Ok(Json(json!({
+                    Ok(_content) => Ok(Json(json!({
                         "jsonrpc": "2.0",
                         "result": {
                             "content": [{"type": "text", "text": result}],

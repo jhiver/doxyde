@@ -24,4 +24,4 @@ pub use discovery::{
     oauth_protected_resource_mcp_metadata, options_handler,
 };
 pub use handlers::{handle_http, handle_sse};
-pub use oauth::{create_token, list_tokens, revoke_token};
+pub use oauth::{create_token, list_tokens, revoke_token, register_client, authorize, token, oauth_options};

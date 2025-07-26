@@ -17,10 +17,11 @@
 use anyhow::{Context, Result};
 use axum::{
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
+use base64::Engine;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -254,4 +255,161 @@ pub async fn revoke_token(
     }
 
     Ok(StatusCode::NO_CONTENT)
+}
+
+// OAuth2 Dynamic Client Registration structures
+#[derive(Debug, Deserialize)]
+pub struct ClientRegistrationRequest {
+    pub client_name: String,
+    pub redirect_uris: Vec<String>,
+    pub grant_types: Option<Vec<String>>,
+    pub response_types: Option<Vec<String>>,
+    pub scope: Option<String>,
+    pub token_endpoint_auth_method: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ClientRegistrationResponse {
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub client_name: String,
+    pub redirect_uris: Vec<String>,
+    pub grant_types: Vec<String>,
+    pub response_types: Vec<String>,
+    pub scope: String,
+    pub token_endpoint_auth_method: String,
+    pub client_id_issued_at: i64,
+    pub client_secret_expires_at: i64,
+}
+
+// OAuth2 Authorization Request
+#[derive(Debug, Deserialize)]
+pub struct AuthorizationRequest {
+    pub response_type: String,
+    pub client_id: String,
+    pub redirect_uri: String,
+    pub scope: Option<String>,
+    pub state: Option<String>,
+    pub code_challenge: Option<String>,
+    pub code_challenge_method: Option<String>,
+}
+
+// OAuth2 Token Request
+#[derive(Debug, Deserialize)]
+pub struct TokenRequest {
+    pub grant_type: String,
+    pub code: Option<String>,
+    pub redirect_uri: Option<String>,
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
+    pub code_verifier: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct TokenResponse {
+    pub access_token: String,
+    pub token_type: String,
+    pub expires_in: i64,
+    pub scope: String,
+    pub refresh_token: Option<String>,
+}
+
+fn add_cors_headers(headers: &mut HeaderMap) {
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_ORIGIN,
+        "*".parse().unwrap(),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_METHODS,
+        "GET, POST, OPTIONS".parse().unwrap(),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_ALLOW_HEADERS,
+        "Authorization, Content-Type, MCP-Protocol-Version".parse().unwrap(),
+    );
+    headers.insert(
+        header::ACCESS_CONTROL_MAX_AGE,
+        "3600".parse().unwrap(),
+    );
+}
+
+pub async fn register_client(
+    Json(request): Json<ClientRegistrationRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // Generate client credentials
+    let client_id = format!("mcp_{}", uuid::Uuid::new_v4());
+    let client_secret = base64::engine::general_purpose::STANDARD.encode(&rand::random::<[u8; 32]>());
+    
+    // Hash the client secret
+    let mut hasher = Sha256::new();
+    hasher.update(client_secret.as_bytes());
+    let _client_secret_hash = format!("{:x}", hasher.finalize());
+    
+    // Default values
+    let grant_types = request.grant_types.unwrap_or_else(|| vec!["authorization_code".to_string()]);
+    let response_types = request.response_types.unwrap_or_else(|| vec!["code".to_string()]);
+    let scope = request.scope.unwrap_or_else(|| "mcp:read mcp:write".to_string());
+    let token_endpoint_auth_method = request.token_endpoint_auth_method.unwrap_or_else(|| "client_secret_basic".to_string());
+    
+    // For now, we'll store this in memory or return a mock response
+    // In a real implementation, you'd save to the oauth_clients table
+    
+    let response = ClientRegistrationResponse {
+        client_id,
+        client_secret: Some(client_secret),
+        client_name: request.client_name,
+        redirect_uris: request.redirect_uris,
+        grant_types,
+        response_types,
+        scope,
+        token_endpoint_auth_method,
+        client_id_issued_at: Utc::now().timestamp(),
+        client_secret_expires_at: 0, // Never expires
+    };
+    
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    
+    Ok((StatusCode::CREATED, headers, Json(response)))
+}
+
+pub async fn authorize(
+    Query(_request): Query<AuthorizationRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // For now, return a simple error response
+    // In a real implementation, you'd show a login/consent screen
+    let error_response = serde_json::json!({
+        "error": "unsupported_response_type",
+        "error_description": "Authorization endpoint not yet implemented"
+    });
+    
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    
+    Ok((StatusCode::BAD_REQUEST, headers, Json(error_response)))
+}
+
+pub async fn token(
+    Json(_request): Json<TokenRequest>,
+) -> Result<impl IntoResponse, StatusCode> {
+    // For now, return a simple error response
+    // In a real implementation, you'd validate the authorization code and issue tokens
+    let error_response = serde_json::json!({
+        "error": "unsupported_grant_type",
+        "error_description": "Token endpoint not yet implemented"
+    });
+    
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    
+    Ok((StatusCode::BAD_REQUEST, headers, Json(error_response)))
+}
+
+pub async fn oauth_options() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    (StatusCode::NO_CONTENT, headers)
 }
