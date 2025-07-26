@@ -53,6 +53,16 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.mcp/token", post(rmcp::create_token))
         .route("/.mcp/tokens", get(rmcp::list_tokens))
         .route("/.mcp/token/:id", delete(rmcp::revoke_token))
+        // OAuth metadata discovery endpoints
+        .route("/.well-known/oauth-authorization-server", 
+            get(rmcp::oauth_authorization_server_metadata)
+            .options(rmcp::options_handler))
+        .route("/.well-known/oauth-protected-resource", 
+            get(rmcp::oauth_protected_resource_metadata)
+            .options(rmcp::options_handler))
+        .route("/.well-known/oauth-protected-resource/.mcp", 
+            get(rmcp::oauth_protected_resource_mcp_metadata)
+            .options(rmcp::options_handler))
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
