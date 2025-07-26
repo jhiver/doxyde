@@ -524,7 +524,7 @@ pub async fn token(
     // Retrieve and validate authorization code
     let auth_code = match sqlx::query!(
         r#"
-        SELECT client_id, user_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used_at
+        SELECT client_id, user_id, mcp_token_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used_at
         FROM oauth_authorization_codes
         WHERE code = ?
         "#,
@@ -659,7 +659,7 @@ pub async fn token(
         token_hash,
         auth_code.client_id,
         auth_code.user_id,
-        "1", // Dummy MCP token ID for now
+        auth_code.mcp_token_id,
         auth_code.scope,
         expires_at
     )
@@ -723,16 +723,13 @@ pub async fn authorize_consent(
         return Err(AppError::bad_request("Invalid CSRF token"));
     }
     
-    // Remove CSRF token from session
-    let session = session.remove(Cookie::from("oauth_csrf"));
-    
     // Check if user denied access
     if request.action == "deny" {
         let mut redirect_url = format!("{}?error=access_denied", request.redirect_uri);
         if let Some(state) = &request.state {
             redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
         }
-        return Ok((session, Redirect::to(&redirect_url)).into_response());
+        return Ok(Redirect::to(&redirect_url).into_response());
     }
     
     // Get current user
@@ -743,9 +740,34 @@ pub async fn authorize_consent(
     let code = format!("code_{}", uuid::Uuid::new_v4());
     let expires_at = (Utc::now() + Duration::minutes(10)).to_rfc3339();
     
-    // For now, use a dummy MCP token ID - in production, you'd create or lookup an MCP token
-    let mcp_token_id = "1"; 
+    // Create an MCP token for this OAuth flow
     let user_id = user.id.unwrap_or(0);
+    let token_hash = format!("oauth_{}", uuid::Uuid::new_v4());
+    let token_name = format!("OAuth token for {}", request.client_id);
+    
+    let mcp_token_id = match sqlx::query!(
+        r#"
+        INSERT INTO mcp_tokens (site_id, token_hash, name, created_by)
+        VALUES (1, ?, ?, ?)
+        "#,
+        token_hash,
+        token_name,
+        user_id
+    )
+    .execute(&state.db)
+    .await {
+        Ok(result) => result.last_insert_rowid(),
+        Err(e) => {
+            eprintln!("Failed to create MCP token: {}", e);
+            let mut redirect_url = format!("{}?error=server_error", request.redirect_uri);
+            if let Some(state) = &request.state {
+                redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
+            }
+            return Ok(Redirect::to(&redirect_url).into_response());
+        }
+    };
+    
+    let mcp_token_id_str = mcp_token_id.to_string();
     
     // Store authorization code
     match sqlx::query!(
@@ -757,7 +779,7 @@ pub async fn authorize_consent(
         code,
         request.client_id,
         user_id,
-        mcp_token_id,
+        mcp_token_id_str,
         request.redirect_uri,
         request.scope,
         request.code_challenge,
@@ -772,7 +794,7 @@ pub async fn authorize_consent(
             if let Some(state) = &request.state {
                 redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
             }
-            Ok((session, Redirect::to(&redirect_url)).into_response())
+            Ok(Redirect::to(&redirect_url).into_response())
         }
         Err(e) => {
             eprintln!("Failed to store authorization code: {}", e);
@@ -780,7 +802,7 @@ pub async fn authorize_consent(
             if let Some(state) = &request.state {
                 redirect_url.push_str(&format!("&state={}", urlencoding::encode(state)));
             }
-            Ok((session, Redirect::to(&redirect_url)).into_response())
+            Ok(Redirect::to(&redirect_url).into_response())
         }
     }
 }
