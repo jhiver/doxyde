@@ -75,11 +75,11 @@ fn default_database_url() -> String {
 }
 
 fn default_sse_path() -> String {
-    "/.mcp/sse".to_string()
+    "/".to_string()
 }
 
 fn default_post_path() -> String {
-    "/.mcp/sse/message".to_string()
+    "/message".to_string()
 }
 
 fn default_keep_alive_secs() -> u64 {
@@ -95,8 +95,8 @@ mod tests {
         let config = Config::default();
         assert_eq!(config.bind_addr, "127.0.0.1:3001");
         assert_eq!(config.database_url, "sqlite:doxyde.db");
-        assert_eq!(config.sse_path, "/.mcp/sse");
-        assert_eq!(config.post_path, "/.mcp/sse/message");
+        assert_eq!(config.sse_path, "/");
+        assert_eq!(config.post_path, "/message");
         assert_eq!(config.keep_alive_secs, 30);
     }
 

@@ -10,10 +10,10 @@ bind_addr = "127.0.0.1:3001"
 database_url = "sqlite:doxyde.db"
 
 # SSE endpoint path
-sse_path = "/.mcp/sse"
+sse_path = "/"
 
 # POST endpoint path for SSE messages
-post_path = "/.mcp/sse/message"
+post_path = "/message"
 
 # Keep-alive interval in seconds
 # Sends ping messages to keep connections alive
