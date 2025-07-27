@@ -152,7 +152,7 @@ pub async fn handle_http(
             Ok(Json(json!({
                 "jsonrpc": "2.0",
                 "result": {
-                    "protocolVersion": "1.0.0",
+                    "protocolVersion": result.protocol_version,
                     "capabilities": result.capabilities,
                     "serverInfo": result.server_info,
                     "instructions": result.instructions
