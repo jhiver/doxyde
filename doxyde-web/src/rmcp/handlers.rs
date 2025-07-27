@@ -95,6 +95,29 @@ pub async fn handle_http(
     headers: HeaderMap,
     Json(body): Json<Value>,
 ) -> Result<Json<Value>, StatusCode> {
+    // Extract request ID early (before authentication)
+    let request_id = body.get("id").cloned();
+    
+    // Helper function to create error response with proper ID handling
+    let create_error_response = |code: i32, message: &str| -> Json<Value> {
+        let mut response = json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": code,
+                "message": message
+            }
+        });
+        
+        // Only include id if it exists and is not null
+        if let Some(id) = &request_id {
+            if !id.is_null() {
+                response["id"] = id.clone();
+            }
+        }
+        
+        Json(response)
+    };
+    
     // Validate OAuth token
     if let Some(token) = extract_bearer_token(&headers) {
         match validate_token(&state.db, token).await {
@@ -102,41 +125,20 @@ pub async fn handle_http(
                 debug!("Valid OAuth token for HTTP request");
             }
             Ok(None) => {
-                return Ok(Json(json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": "Invalid token"
-                    },
-                    "id": null
-                })));
+                return Ok(create_error_response(-32603, "Invalid token"));
             }
             Err(e) => {
                 error!("Token validation error: {}", e);
-                return Ok(Json(json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32603,
-                        "message": "Token validation failed"
-                    },
-                    "id": null
-                })));
+                return Ok(create_error_response(-32603, "Token validation failed"));
             }
         }
     } else {
-        return Ok(Json(json!({
-            "jsonrpc": "2.0",
-            "error": {
-                "code": -32603,
-                "message": "Authorization required"
-            },
-            "id": null
-        })));
+        return Ok(create_error_response(-32603, "Authorization required"));
     }
 
-    // Extract method and id from request
+    // Extract method from request
     let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
-    let id = body.get("id").cloned().unwrap_or(Value::Null);
+    let id = request_id.unwrap_or(Value::Null);
 
     debug!("MCP HTTP request: method={}", method);
 
