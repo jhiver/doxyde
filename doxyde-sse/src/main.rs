@@ -23,10 +23,12 @@ use axum::{
     middleware as axum_middleware,
     routing::get,
     Router,
+    Json,
 };
 use config::Config;
 use doxyde_shared::{mcp::DoxydeRmcpService, oauth::validate_token};
 use rmcp::transport::sse_server::{SseServer, SseServerConfig};
+use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::task::JoinHandle;
@@ -38,9 +40,84 @@ struct AppState {
     db: SqlitePool,
 }
 
+// OAuth metadata structures
+#[derive(Debug, Serialize, Deserialize)]
+struct AuthorizationServerMetadata {
+    issuer: String,
+    authorization_endpoint: String,
+    token_endpoint: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    registration_endpoint: Option<String>,
+    scopes_supported: Vec<String>,
+    response_types_supported: Vec<String>,
+    response_modes_supported: Vec<String>,
+    grant_types_supported: Vec<String>,
+    token_endpoint_auth_methods_supported: Vec<String>,
+    code_challenge_methods_supported: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct ProtectedResourceMetadata {
+    #[serde(rename = "oauth-authorization-server")]
+    oauth_authorization_server: String,
+    #[serde(rename = "protected-resources")]
+    protected_resources: Vec<String>,
+}
+
 // Health check endpoint
 async fn health_handler() -> &'static str {
     "OK"
+}
+
+// OAuth discovery endpoints that point to main doxyde.com server
+async fn oauth_authorization_server_metadata() -> Json<AuthorizationServerMetadata> {
+    Json(AuthorizationServerMetadata {
+        issuer: "https://doxyde.com".to_string(),
+        authorization_endpoint: "https://doxyde.com/.oauth/authorize".to_string(),
+        token_endpoint: "https://doxyde.com/.oauth/token".to_string(),
+        registration_endpoint: Some("https://doxyde.com/.oauth/register".to_string()),
+        scopes_supported: vec![
+            "read".to_string(),
+            "write".to_string(),
+            "admin".to_string(),
+        ],
+        response_types_supported: vec![
+            "code".to_string(),
+            "token".to_string(),
+        ],
+        response_modes_supported: vec![
+            "query".to_string(),
+            "fragment".to_string(),
+        ],
+        grant_types_supported: vec![
+            "authorization_code".to_string(),
+            "implicit".to_string(),
+            "client_credentials".to_string(),
+        ],
+        token_endpoint_auth_methods_supported: vec![
+            "client_secret_basic".to_string(),
+            "client_secret_post".to_string(),
+        ],
+        code_challenge_methods_supported: vec![
+            "plain".to_string(),
+            "S256".to_string(),
+        ],
+    })
+}
+
+async fn oauth_protected_resource_metadata() -> Json<ProtectedResourceMetadata> {
+    Json(ProtectedResourceMetadata {
+        oauth_authorization_server: "https://doxyde.com/.well-known/oauth-authorization-server".to_string(),
+        protected_resources: vec![
+            "https://sse.doxyde.com/".to_string(),
+            "https://sse.doxyde.com/message".to_string(),
+        ],
+    })
+}
+
+async fn oauth_protected_resource_mcp_metadata() -> Json<ProtectedResourceMetadata> {
+    // Same as above but specific to MCP endpoints
+    oauth_protected_resource_metadata().await
 }
 
 // OAuth validation middleware for SSE connections
@@ -127,9 +204,12 @@ async fn main() -> Result<()> {
         },
     ));
 
-    // Create main router with health endpoint
+    // Create main router with health and OAuth discovery endpoints
     let app = Router::new()
         .route("/health", get(health_handler))
+        .route("/.well-known/oauth-authorization-server", get(oauth_authorization_server_metadata))
+        .route("/.well-known/oauth-protected-resource", get(oauth_protected_resource_metadata))
+        .route("/.well-known/oauth-protected-resource/.mcp", get(oauth_protected_resource_mcp_metadata))
         .merge(protected_sse_router);
 
     // Spawn the SSE server task
