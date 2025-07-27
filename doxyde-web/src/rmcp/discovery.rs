@@ -110,6 +110,8 @@ pub async fn oauth_authorization_server_metadata(
         token_endpoint: format!("{}/.oauth/token", base_url),
         registration_endpoint: Some(format!("{}/.oauth/register", base_url)),
         scopes_supported: vec![
+            "mcp:read".to_string(),
+            "mcp:write".to_string(),
             "read".to_string(),
             "write".to_string(),
             "admin".to_string(),
@@ -174,6 +176,8 @@ pub async fn oauth_protected_resource_metadata(
         resource_documentation: Some(format!("{}/docs/mcp", base_url)),
         resource_registration_endpoint: Some(format!("{}/.mcp/register", base_url)),
         scopes_supported: vec![
+            "mcp:read".to_string(),
+            "mcp:write".to_string(),
             "read".to_string(),
             "write".to_string(),
             "admin".to_string(),

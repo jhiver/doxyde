@@ -77,6 +77,8 @@ async fn oauth_authorization_server_metadata() -> Json<AuthorizationServerMetada
         token_endpoint: "https://doxyde.com/.oauth/token".to_string(),
         registration_endpoint: Some("https://doxyde.com/.oauth/register".to_string()),
         scopes_supported: vec![
+            "mcp:read".to_string(),
+            "mcp:write".to_string(),
             "read".to_string(),
             "write".to_string(),
             "admin".to_string(),
