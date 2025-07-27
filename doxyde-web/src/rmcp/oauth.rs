@@ -73,7 +73,50 @@ pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<Token
     hasher.update(token.as_bytes());
     let token_hash = format!("{:x}", hasher.finalize());
 
-    // Look up token
+    // First check OAuth access tokens
+    let oauth_result = sqlx::query!(
+        r#"
+        SELECT oat.mcp_token_id as "mcp_token_id!", oat.scope, oat.expires_at,
+               mt.id as "id!: i64", mt.site_id as "site_id!: i64"
+        FROM oauth_access_tokens oat
+        INNER JOIN mcp_tokens mt ON mt.id = CAST(oat.mcp_token_id AS INTEGER)
+        WHERE oat.token_hash = ?
+        "#,
+        token_hash
+    )
+    .fetch_optional(db)
+    .await
+    .context("Failed to validate OAuth token")?;
+
+    if let Some(row) = oauth_result {
+        // Check expiration
+        let expiry = chrono::DateTime::parse_from_rfc3339(&row.expires_at)
+            .context("Failed to parse expiry date")?
+            .with_timezone(&Utc);
+        if Utc::now() > expiry {
+            return Ok(None); // Token expired
+        }
+
+        // Update last_used_at on the MCP token
+        let _ = sqlx::query!(
+            r#"
+            UPDATE mcp_tokens
+            SET last_used_at = datetime('now')
+            WHERE id = ?
+            "#,
+            row.id
+        )
+        .execute(db)
+        .await;
+
+        return Ok(Some(TokenInfo {
+            id: row.id,
+            site_id: row.site_id,
+            scopes: row.scope,
+        }));
+    }
+
+    // Fall back to checking MCP tokens directly
     let result = sqlx::query!(
         r#"
         SELECT id, site_id, scopes, expires_at
