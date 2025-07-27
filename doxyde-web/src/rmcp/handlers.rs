@@ -48,11 +48,12 @@ pub async fn handle_sse(
     headers: HeaderMap,
     _req: Request,
 ) -> Result<Response, StatusCode> {
-    // Validate OAuth token
-    if let Some(token) = extract_bearer_token(&headers) {
+    // Validate OAuth token and get site_id
+    let site_id = if let Some(token) = extract_bearer_token(&headers) {
         match validate_token(&state.db, token).await {
-            Ok(Some(_token_info)) => {
-                info!("Valid OAuth token for SSE connection");
+            Ok(Some(token_info)) => {
+                info!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
+                token_info.site_id
             }
             Ok(None) => {
                 error!("Invalid OAuth token");
@@ -66,7 +67,7 @@ pub async fn handle_sse(
     } else {
         error!("Missing Authorization header");
         return Err(StatusCode::UNAUTHORIZED);
-    }
+    };
 
     // Create SSE server config
     let config = SseServerConfig {
@@ -80,8 +81,9 @@ pub async fn handle_sse(
     // Create SSE server and router
     let (sse_server, _router) = SseServer::new(config);
     
-    // Spawn a task to handle the service
-    let _service_handle = sse_server.with_service(|| DoxydeRmcpService::new());
+    // Spawn a task to handle the service with the validated site_id
+    let db_clone = state.db.clone();
+    let _service_handle = sse_server.with_service(move || DoxydeRmcpService::new(db_clone.clone(), site_id));
     
     // For now, return not implemented until we properly integrate the SSE handler
     // The proper implementation would need to extract the SSE handler from the router
@@ -119,11 +121,12 @@ pub async fn handle_http(
         Json(response)
     };
     
-    // Validate OAuth token
-    if let Some(token) = extract_bearer_token(&headers) {
+    // Validate OAuth token and get site_id
+    let site_id = if let Some(token) = extract_bearer_token(&headers) {
         match validate_token(&state.db, token).await {
-            Ok(Some(_token_info)) => {
-                debug!("Valid OAuth token for HTTP request");
+            Ok(Some(token_info)) => {
+                debug!("Valid OAuth token for HTTP request: site_id={}", token_info.site_id);
+                token_info.site_id
             }
             Ok(None) => {
                 return Ok(create_error_response(-32603, "Invalid token"));
@@ -135,7 +138,7 @@ pub async fn handle_http(
         }
     } else {
         return Ok(create_error_response(-32603, "Authorization required"));
-    }
+    };
 
     // Extract method from request
     let method = body.get("method").and_then(|m| m.as_str()).unwrap_or("");
@@ -143,8 +146,8 @@ pub async fn handle_http(
 
     debug!("MCP HTTP request: method={}", method);
 
-    // Create the service
-    let service = DoxydeRmcpService::new();
+    // Create the service with database pool and site_id
+    let service = DoxydeRmcpService::new(state.db.clone(), site_id);
 
     // Handle different methods
     match method {
@@ -162,71 +165,28 @@ pub async fn handle_http(
             })))
         }
         "tools/list" => {
+            // For now, return empty tools list until we implement actual tools
             Ok(Json(json!({
                 "jsonrpc": "2.0",
                 "result": {
-                    "tools": [{
-                        "name": "time",
-                        "description": "Get the current time in a specified timezone",
-                        "inputSchema": {
-                            "type": "object",
-                            "properties": {
-                                "timezone": {
-                                    "type": "string",
-                                    "description": "Timezone name (e.g., 'America/New_York', 'UTC')"
-                                }
-                            }
-                        }
-                    }]
+                    "tools": []
                 },
                 "id": id
             })))
         }
         "tools/call" => {
+            // No tools implemented yet
             let params = body.get("params").cloned().unwrap_or(json!({}));
             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            let arguments = params.get("arguments").cloned();
-
-            if tool_name == "time" {
-                let timezone = arguments
-                    .as_ref()
-                    .and_then(|args| args.get("timezone"))
-                    .and_then(|tz| tz.as_str())
-                    .map(String::from);
-
-                let result = service.time(rmcp::handler::server::tool::Parameters(
-                    doxyde_shared::mcp::TimeRequest { timezone }
-                ));
-
-                // Parse the JSON string result
-                match serde_json::from_str::<Value>(&result) {
-                    Ok(_content) => Ok(Json(json!({
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [{"type": "text", "text": result}],
-                            "isError": false
-                        },
-                        "id": id
-                    }))),
-                    Err(_) => Ok(Json(json!({
-                        "jsonrpc": "2.0",
-                        "result": {
-                            "content": [{"type": "text", "text": result}],
-                            "isError": result.starts_with("Error:")
-                        },
-                        "id": id
-                    })))
-                }
-            } else {
-                Ok(Json(json!({
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32601,
-                        "message": format!("Unknown tool: {}", tool_name)
-                    },
-                    "id": id
-                })))
-            }
+            
+            Ok(Json(json!({
+                "jsonrpc": "2.0",
+                "error": {
+                    "code": -32601,
+                    "message": format!("Unknown tool: {}", tool_name)
+                },
+                "id": id
+            })))
         }
         _ => {
             Ok(Json(json!({

@@ -190,16 +190,39 @@ async fn main() -> Result<()> {
     // Create SSE server and get router
     let (sse_server, sse_router) = SseServer::new(sse_config);
 
-    // Register the MCP service
-    let _service_handle = sse_server.with_service(|| DoxydeRmcpService::new());
-
+    // We'll register services dynamically per connection with validated site_id
+    // For now, just create the SSE router without a service
+    
     // Create protected SSE router with OAuth middleware
     let protected_sse_router = sse_router.layer(axum_middleware::from_fn_with_state(
         app_state.clone(),
         |State(state): State<Arc<AppState>>, headers: HeaderMap, req: axum::extract::Request, next: axum::middleware::Next| async move {
-            match validate_sse_auth(State(state), headers).await {
-                Ok(()) => Ok(next.run(req).await),
-                Err(status) => Err(status),
+            // Extract bearer token from Authorization header
+            let token = headers
+                .get(AUTHORIZATION)
+                .and_then(|value| value.to_str().ok())
+                .and_then(|auth| auth.strip_prefix("Bearer "));
+
+            if let Some(token) = token {
+                match validate_token(&state.db, token).await {
+                    Ok(Some(token_info)) => {
+                        debug!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
+                        // TODO: In production, we need to pass site_id to the service
+                        // For now, the service creation happens elsewhere
+                        Ok(next.run(req).await)
+                    }
+                    Ok(None) => {
+                        error!("Invalid OAuth token");
+                        Err(StatusCode::UNAUTHORIZED)
+                    }
+                    Err(e) => {
+                        error!("Token validation error: {}", e);
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    }
+                }
+            } else {
+                error!("Missing Authorization header");
+                Err(StatusCode::UNAUTHORIZED)
             }
         },
     ));

@@ -16,4 +16,4 @@
 
 pub mod service;
 
-pub use service::{DoxydeRmcpService, TimeRequest};
+pub use service::DoxydeRmcpService;

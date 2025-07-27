@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 # Core dependencies
 anyhow.workspace = true
+async-trait = "0.1"
 chrono.workspace = true
 chrono-tz = "0.10"
 serde.workspace = true
@@ -27,6 +28,10 @@ base64 = "0.22"
 
 # Async
 tokio.workspace = true
+
+# Doxyde crates
+doxyde-core = { path = "../doxyde-core" }
+doxyde-db = { path = "../doxyde-db" }
 
 [dev-dependencies]
 pretty_assertions.workspace = true
