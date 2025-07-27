@@ -17,7 +17,13 @@
 mod config;
 
 use anyhow::Result;
-use axum::{extract::State, http::{header::AUTHORIZATION, HeaderMap, StatusCode}, middleware as axum_middleware};
+use axum::{
+    extract::State, 
+    http::{header::AUTHORIZATION, HeaderMap, StatusCode}, 
+    middleware as axum_middleware,
+    routing::get,
+    Router,
+};
 use config::Config;
 use doxyde_shared::{mcp::DoxydeRmcpService, oauth::validate_token};
 use rmcp::transport::sse_server::{SseServer, SseServerConfig};
@@ -30,6 +36,11 @@ use tracing::{debug, error, info};
 #[derive(Clone)]
 struct AppState {
     db: SqlitePool,
+}
+
+// Health check endpoint
+async fn health_handler() -> &'static str {
+    "OK"
 }
 
 // OAuth validation middleware for SSE connections
@@ -100,10 +111,13 @@ async fn main() -> Result<()> {
     };
 
     // Create SSE server and get router
-    let (sse_server, mut sse_router) = SseServer::new(sse_config);
+    let (sse_server, sse_router) = SseServer::new(sse_config);
 
-    // Apply OAuth validation middleware to SSE endpoints
-    sse_router = sse_router.layer(axum_middleware::from_fn_with_state(
+    // Register the MCP service
+    let _service_handle = sse_server.with_service(|| DoxydeRmcpService::new());
+
+    // Create protected SSE router with OAuth middleware
+    let protected_sse_router = sse_router.layer(axum_middleware::from_fn_with_state(
         app_state.clone(),
         |State(state): State<Arc<AppState>>, headers: HeaderMap, req: axum::extract::Request, next: axum::middleware::Next| async move {
             match validate_sse_auth(State(state), headers).await {
@@ -113,8 +127,10 @@ async fn main() -> Result<()> {
         },
     ));
 
-    // Register the MCP service
-    let _service_handle = sse_server.with_service(|| DoxydeRmcpService::new());
+    // Create main router with health endpoint
+    let app = Router::new()
+        .route("/health", get(health_handler))
+        .merge(protected_sse_router);
 
     // Spawn the SSE server task
     let server_handle: JoinHandle<Result<(), std::io::Error>> = tokio::spawn(async move {
@@ -124,7 +140,7 @@ async fn main() -> Result<()> {
         
         axum::serve(
             tokio::net::TcpListener::bind(&bind_addr).await?,
-            sse_router.into_make_service(),
+            app.into_make_service(),
         )
         .await
     });
