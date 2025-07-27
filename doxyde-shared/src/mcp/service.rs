@@ -17,7 +17,7 @@
 use rmcp::{
     handler::server::{router::tool::ToolRouter, ServerHandler},
     model::{ServerCapabilities, ServerInfo},
-    tool, tool_router,
+    tool, tool_router, tool_handler,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;
@@ -34,10 +34,12 @@ pub struct DoxydeRmcpService {
 
 impl DoxydeRmcpService {
     pub fn new(pool: SqlitePool, site_id: i64) -> Self {
+        let router = Self::tool_router();
+        info!("Created DoxydeRmcpService with tool_router for site_id={}", site_id);
         Self {
             pool,
             site_id,
-            tool_router: Self::tool_router(),
+            tool_router: router,
         }
     }
 }
@@ -55,6 +57,7 @@ impl DoxydeRmcpService {
     }
 }
 
+#[tool_handler]
 impl ServerHandler for DoxydeRmcpService {
     fn get_info(&self) -> ServerInfo {
         info!("Getting server info");
