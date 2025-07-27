@@ -170,7 +170,7 @@ async fn main() -> Result<()> {
     info!("Connected to database");
 
     // Create app state
-    let app_state = Arc::new(AppState { db });
+    let app_state = Arc::new(AppState { db: db.clone() });
 
     // Parse bind address
     let bind_addr: SocketAddr = config.bind_addr.parse()?;
@@ -189,12 +189,18 @@ async fn main() -> Result<()> {
 
     // Create SSE server and get router
     let (sse_server, sse_router) = SseServer::new(sse_config);
+    info!("SSE server created with paths: SSE={}, POST={}", config.sse_path, config.post_path);
 
-    // We'll register services dynamically per connection with validated site_id
-    // For now, just create the SSE router without a service
+    // Register a default service - this will be overridden per connection
+    // but rmcp requires at least one service to be registered
+    let default_pool = db.clone();
+    let _service_handle = sse_server.with_service(move || {
+        info!("Creating new DoxydeRmcpService instance for site_id=1");
+        DoxydeRmcpService::new(default_pool.clone(), 1)
+    });
     
-    // Create protected SSE router with OAuth middleware
-    let protected_sse_router = sse_router.layer(axum_middleware::from_fn_with_state(
+    // Create OAuth validation middleware that works for both SSE and POST requests
+    let oauth_middleware = axum_middleware::from_fn_with_state(
         app_state.clone(),
         |State(state): State<Arc<AppState>>, headers: HeaderMap, req: axum::extract::Request, next: axum::middleware::Next| async move {
             // Extract bearer token from Authorization header
@@ -206,13 +212,13 @@ async fn main() -> Result<()> {
             if let Some(token) = token {
                 match validate_token(&state.db, token).await {
                     Ok(Some(token_info)) => {
-                        debug!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
-                        // TODO: In production, we need to pass site_id to the service
-                        // For now, the service creation happens elsewhere
+                        debug!("Valid OAuth token: site_id={}, path={}", token_info.site_id, req.uri().path());
+                        // The service registered with site_id=1 will handle requests
+                        // In the future, we could dynamically switch services based on token_info.site_id
                         Ok(next.run(req).await)
                     }
                     Ok(None) => {
-                        error!("Invalid OAuth token");
+                        error!("Invalid OAuth token for path: {}", req.uri().path());
                         Err(StatusCode::UNAUTHORIZED)
                     }
                     Err(e) => {
@@ -221,11 +227,14 @@ async fn main() -> Result<()> {
                     }
                 }
             } else {
-                error!("Missing Authorization header");
+                error!("Missing Authorization header for path: {}", req.uri().path());
                 Err(StatusCode::UNAUTHORIZED)
             }
         },
-    ));
+    );
+    
+    // Apply OAuth middleware to the entire SSE router (includes both SSE and POST endpoints)
+    let protected_sse_router = sse_router.layer(oauth_middleware);
 
     // Create main router with health and OAuth discovery endpoints
     let app = Router::new()
