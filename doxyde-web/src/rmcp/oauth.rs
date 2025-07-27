@@ -27,7 +27,6 @@ use base64::Engine;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::SqlitePool;
 
 use crate::{error::AppError, session::get_current_user, AppState};
 
@@ -61,106 +60,7 @@ pub struct ListTokensQuery {
     pub site_id: Option<i64>,
 }
 
-pub struct TokenInfo {
-    pub id: i64,
-    pub site_id: i64,
-    pub scopes: Option<String>,
-}
-
-pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<TokenInfo>> {
-    // Hash the token
-    let mut hasher = Sha256::new();
-    hasher.update(token.as_bytes());
-    let token_hash = format!("{:x}", hasher.finalize());
-
-    // First check OAuth access tokens
-    let oauth_result = sqlx::query!(
-        r#"
-        SELECT oat.mcp_token_id as "mcp_token_id!", oat.scope, oat.expires_at,
-               mt.id as "id!: i64", mt.site_id as "site_id!: i64"
-        FROM oauth_access_tokens oat
-        INNER JOIN mcp_tokens mt ON mt.id = CAST(oat.mcp_token_id AS INTEGER)
-        WHERE oat.token_hash = ?
-        "#,
-        token_hash
-    )
-    .fetch_optional(db)
-    .await
-    .context("Failed to validate OAuth token")?;
-
-    if let Some(row) = oauth_result {
-        // Check expiration
-        let expiry = chrono::DateTime::parse_from_rfc3339(&row.expires_at)
-            .context("Failed to parse expiry date")?
-            .with_timezone(&Utc);
-        if Utc::now() > expiry {
-            return Ok(None); // Token expired
-        }
-
-        // Update last_used_at on the MCP token
-        let _ = sqlx::query!(
-            r#"
-            UPDATE mcp_tokens
-            SET last_used_at = datetime('now')
-            WHERE id = ?
-            "#,
-            row.id
-        )
-        .execute(db)
-        .await;
-
-        return Ok(Some(TokenInfo {
-            id: row.id,
-            site_id: row.site_id,
-            scopes: row.scope,
-        }));
-    }
-
-    // Fall back to checking MCP tokens directly
-    let result = sqlx::query!(
-        r#"
-        SELECT id, site_id, scopes, expires_at
-        FROM mcp_tokens
-        WHERE token_hash = ?
-        "#,
-        token_hash
-    )
-    .fetch_optional(db)
-    .await
-    .context("Failed to validate token")?;
-
-    if let Some(row) = result {
-        // Check expiration
-        if let Some(expires_at) = row.expires_at {
-            let expiry = chrono::DateTime::parse_from_rfc3339(&expires_at)
-                .context("Failed to parse expiry date")?
-                .with_timezone(&Utc);
-            if Utc::now() > expiry {
-                return Ok(None); // Token expired
-            }
-        }
-
-        // Update last_used_at
-        let _ = sqlx::query!(
-            r#"
-            UPDATE mcp_tokens
-            SET last_used_at = datetime('now')
-            WHERE id = ?
-            "#,
-            row.id
-        )
-        .execute(db)
-        .await;
-
-        Ok(Some(TokenInfo {
-            id: row.id.unwrap_or(0),
-            site_id: row.site_id,
-            scopes: row.scopes,
-        }))
-    } else {
-        Ok(None)
-    }
-}
+pub use doxyde_shared::oauth::{validate_token, TokenInfo};
 
 pub async fn create_token(
     State(state): State<AppState>,

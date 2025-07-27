@@ -30,8 +30,9 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use super::{oauth::validate_token, service::DoxydeRmcpService};
+use super::oauth::validate_token;
 use crate::AppState;
+use doxyde_shared::mcp::DoxydeRmcpService;
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers
@@ -194,7 +195,7 @@ pub async fn handle_http(
                     .map(String::from);
 
                 let result = service.time(rmcp::handler::server::tool::Parameters(
-                    super::service::TimeRequest { timezone }
+                    doxyde_shared::mcp::TimeRequest { timezone }
                 ));
 
                 // Parse the JSON string result

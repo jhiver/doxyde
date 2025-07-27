@@ -1,0 +1,33 @@
+[package]
+name = "doxyde-shared"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+# Core dependencies
+anyhow.workspace = true
+chrono.workspace = true
+chrono-tz = "0.10"
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+# Database
+sqlx.workspace = true
+
+# MCP/RMCP
+rmcp = { version = "0.3", features = ["server", "macros"] }
+schemars = "0.8"
+
+# Auth
+sha2 = "0.10"
+base64 = "0.22"
+
+# Async
+tokio.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true

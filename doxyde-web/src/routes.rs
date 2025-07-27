@@ -48,7 +48,6 @@ pub fn create_router(state: AppState) -> Router {
         .route("/.logout", get(handlers::logout).post(handlers::logout))
         // MCP routes
         .route("/.mcp", post(rmcp::handle_http))
-        .route("/.mcp/sse", get(rmcp::handle_sse))
         // OAuth management (admin only)
         .route("/.mcp/token", post(rmcp::create_token))
         .route("/.mcp/tokens", get(rmcp::list_tokens))

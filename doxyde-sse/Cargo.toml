@@ -1,0 +1,42 @@
+[package]
+name = "doxyde-sse"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "doxyde-sse"
+path = "src/main.rs"
+
+[dependencies]
+# Core dependencies
+anyhow.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+# Database
+sqlx.workspace = true
+
+# Web framework
+axum = { version = "0.8", features = ["multipart"] }
+tower.workspace = true
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+tokio.workspace = true
+tokio-util = { version = "0.7", features = ["rt"] }
+
+# MCP/RMCP
+rmcp = { version = "0.3", features = ["server", "transport-sse-server", "macros"] }
+
+# Shared code
+doxyde-shared = { path = "../doxyde-shared" }
+
+# Configuration
+figment = { version = "0.10", features = ["toml", "env"] }
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+tempfile.workspace = true

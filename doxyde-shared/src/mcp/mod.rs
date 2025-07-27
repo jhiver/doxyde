@@ -14,13 +14,6 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-pub mod discovery;
-pub mod handlers;
-pub mod oauth;
+pub mod service;
 
-pub use discovery::{
-    oauth_authorization_server_metadata, oauth_protected_resource_metadata,
-    oauth_protected_resource_mcp_metadata, options_handler,
-};
-pub use handlers::{handle_http, handle_sse};
-pub use oauth::{create_token, list_tokens, revoke_token, register_client, authorize, authorize_consent, token, oauth_options};
+pub use service::{DoxydeRmcpService, TimeRequest};

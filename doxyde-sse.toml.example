@@ -1,0 +1,20 @@
+# Example configuration file for doxyde-sse
+# Copy to doxyde-sse.toml and customize as needed
+
+# Bind address for the SSE server
+# In production, use 127.0.0.1 and proxy through nginx
+bind_addr = "127.0.0.1:3001"
+
+# Database URL
+# Must point to the same database as doxyde-web
+database_url = "sqlite:doxyde.db"
+
+# SSE endpoint path
+sse_path = "/.mcp/sse"
+
+# POST endpoint path for SSE messages
+post_path = "/.mcp/sse/message"
+
+# Keep-alive interval in seconds
+# Sends ping messages to keep connections alive
+keep_alive_secs = 30

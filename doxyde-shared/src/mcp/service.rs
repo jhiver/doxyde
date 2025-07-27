@@ -31,6 +31,7 @@ pub struct TimeRequest {
 
 #[derive(Debug, Clone)]
 pub struct DoxydeRmcpService {
+    #[allow(dead_code)]
     tool_router: ToolRouter<Self>,
 }
 
@@ -87,5 +88,74 @@ impl ServerHandler for DoxydeRmcpService {
             },
             instructions: Some("Doxyde CMS MCP integration for AI-native content management".to_string()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_service() {
+        let _service = DoxydeRmcpService::new();
+        // Just verify it can be created
+        assert!(true);
+    }
+
+    #[test]
+    fn test_time_utc() {
+        let service = DoxydeRmcpService::new();
+        let result = service.time(Parameters(TimeRequest { timezone: None }));
+        assert!(result.contains("UTC"));
+        assert!(result.contains("time"));
+        assert!(result.contains("timezone"));
+    }
+
+    #[test]
+    fn test_time_new_york() {
+        let service = DoxydeRmcpService::new();
+        let result = service.time(Parameters(TimeRequest {
+            timezone: Some("America/New_York".to_string()),
+        }));
+        assert!(result.contains("America/New_York"));
+        assert!(result.contains("time"));
+    }
+
+    #[test]
+    fn test_time_london() {
+        let service = DoxydeRmcpService::new();
+        let result = service.time(Parameters(TimeRequest {
+            timezone: Some("Europe/London".to_string()),
+        }));
+        assert!(result.contains("Europe/London"));
+        assert!(result.contains("time"));
+    }
+
+    #[test]
+    fn test_time_tokyo() {
+        let service = DoxydeRmcpService::new();
+        let result = service.time(Parameters(TimeRequest {
+            timezone: Some("Asia/Tokyo".to_string()),
+        }));
+        assert!(result.contains("Asia/Tokyo"));
+        assert!(result.contains("time"));
+    }
+
+    #[test]
+    fn test_time_unknown_timezone() {
+        let service = DoxydeRmcpService::new();
+        let result = service.time(Parameters(TimeRequest {
+            timezone: Some("Unknown/Timezone".to_string()),
+        }));
+        assert!(result.contains("Error: Unknown timezone"));
+    }
+
+    #[test]
+    fn test_get_info() {
+        let service = DoxydeRmcpService::new();
+        let info = service.get_info();
+        assert_eq!(info.server_info.name, "Doxyde MCP Service");
+        assert!(info.instructions.is_some());
+        assert!(info.instructions.unwrap().contains("Doxyde CMS"));
     }
 }
