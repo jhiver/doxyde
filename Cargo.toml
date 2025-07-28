@@ -5,7 +5,8 @@ members = [
     "doxyde-web",
     "doxyde-cli",
     "doxyde-tagger",
-    "doxyde-mcp",
+    "doxyde-shared",
+    "doxyde-sse",
 ]
 resolver = "2"
 
@@ -62,3 +63,6 @@ image = "0.25"
 futures = "0.3"
 url = "2.5"
 once_cell = "1.19"
+
+# Configuration
+figment = { version = "0.10", features = ["toml", "env"] }

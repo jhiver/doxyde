@@ -10,7 +10,7 @@ fn create_test_pool() -> SqlitePool {
             .await
             .expect("Failed to create in-memory database");
 
-        sqlx::migrate!("../../migrations")
+        sqlx::migrate!("../migrations")
             .run(&pool)
             .await
             .expect("Failed to run migrations");

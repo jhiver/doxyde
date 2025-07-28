@@ -1,0 +1,68 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT client_id, user_id, mcp_token_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at, used_at\n        FROM oauth_authorization_codes\n        WHERE code = ?\n        ",
+  "describe": {
+    "columns": [
+      {
+        "name": "client_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "user_id",
+        "ordinal": 1,
+        "type_info": "Integer"
+      },
+      {
+        "name": "mcp_token_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "redirect_uri",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "scope",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "code_challenge",
+        "ordinal": 5,
+        "type_info": "Text"
+      },
+      {
+        "name": "code_challenge_method",
+        "ordinal": 6,
+        "type_info": "Text"
+      },
+      {
+        "name": "expires_at",
+        "ordinal": 7,
+        "type_info": "Text"
+      },
+      {
+        "name": "used_at",
+        "ordinal": 8,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "11de996fa034f17f5d7f1348dbee5fdbbdcfca7c5142f0f96c6702040cb19530"
+}

@@ -16,12 +16,16 @@
 
 use crate::{
     content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
-    handlers, rate_limit::login_rate_limit_middleware,
-    security_headers::security_headers_middleware, session_activity::update_session_activity,
+    handlers, rate_limit::login_rate_limit_middleware, request_logging::request_logging_middleware,
+    rmcp, security_headers::security_headers_middleware, session_activity::update_session_activity,
     AppState,
 };
-use axum::extract::{DefaultBodyLimit, State};
-use axum::{middleware, routing, routing::get, Router};
+use axum::extract::DefaultBodyLimit;
+use axum::{
+    middleware,
+    routing::{delete, get, post},
+    Router,
+};
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
@@ -46,34 +50,44 @@ pub fn create_router(state: AppState) -> Router {
                 )),
         )
         .route("/.logout", get(handlers::logout).post(handlers::logout))
-        // MCP Token management
+        // MCP routes
+        .route("/.mcp", post(rmcp::handle_http))
+        // OAuth management (admin only)
+        .route("/.mcp/token", post(rmcp::create_token))
+        .route("/.mcp/tokens", get(rmcp::list_tokens))
+        .route("/.mcp/token/:id", delete(rmcp::revoke_token))
+        // OAuth metadata discovery endpoints
         .route(
-            "/.mcp",
-            get(handlers::list_tokens_handler).post(handlers::create_token_handler),
+            "/.well-known/oauth-authorization-server",
+            get(rmcp::oauth_authorization_server_metadata).options(rmcp::options_handler),
         )
-        .route("/.mcp/:token_id", get(handlers::show_token_handler))
         .route(
-            "/.mcp/:token_id/revoke",
-            get(handlers::revoke_token_handler).post(handlers::revoke_token_handler),
+            "/.well-known/oauth-protected-resource",
+            get(rmcp::oauth_protected_resource_metadata).options(rmcp::options_handler),
         )
-        // MCP Server endpoint (supports both regular JSON-RPC and SSE)
         .route(
-            "/.mcp/:token_id",
-            routing::post(handlers::mcp_http_handler).layer(middleware::from_fn_with_state(
-                state.api_rate_limiter.clone(),
-                |State(limiter): State<crate::rate_limit::SharedRateLimiter>,
-                 request: axum::http::Request<axum::body::Body>,
-                 next: axum::middleware::Next| async move {
-                    match limiter.check() {
-                        Ok(_) => Ok(next.run(request).await),
-                        Err(_) => Err(axum::http::StatusCode::TOO_MANY_REQUESTS),
-                    }
-                },
-            )),
+            "/.well-known/oauth-protected-resource/.mcp",
+            get(rmcp::oauth_protected_resource_mcp_metadata).options(rmcp::options_handler),
+        )
+        // OAuth2 endpoints
+        .route(
+            "/.oauth/register",
+            post(rmcp::register_client).options(rmcp::oauth_options),
+        )
+        .route(
+            "/.oauth/authorize",
+            get(rmcp::authorize)
+                .post(rmcp::authorize_consent)
+                .options(rmcp::oauth_options),
+        )
+        .route(
+            "/.oauth/token",
+            post(rmcp::token).options(rmcp::oauth_options),
         )
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
+        .layer(middleware::from_fn(request_logging_middleware))
         .layer(middleware::from_fn(debug_form_middleware))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE oauth_refresh_tokens SET used_at = datetime('now') WHERE token_hash = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "8c242ac6a24907619f3d7660fead000025c2839eabc710939b1cfa0a959fc1ee"
+}

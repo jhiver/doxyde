@@ -76,11 +76,10 @@ impl ComponentRenderer for BlogSummaryComponent {
     fn render(&self, template: &str) -> String {
         // If no pages are loaded, show a placeholder
         if self.pages.is_empty() {
-            return format!(
-                r#"<div class="blog-summary empty">
+            return r#"<div class="blog-summary empty">
                     <p>No articles to display</p>
                 </div>"#
-            );
+                .to_string();
         }
 
         match template {

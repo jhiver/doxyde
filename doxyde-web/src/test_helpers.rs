@@ -120,18 +120,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
             FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE
         );
-        
-        CREATE TABLE mcp_tokens (
-            id TEXT PRIMARY KEY,
-            user_id INTEGER NOT NULL,
-            site_id INTEGER NOT NULL,
-            name TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            last_used_at TEXT,
-            revoked_at TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE
-        );
         "#,
     )
     .execute(&pool)
@@ -173,52 +161,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
                 <input type="text" name="confirm" placeholder="Type DELETE to confirm">
                 <button type="submit">Delete</button>
             </form>
-        </body>
-        </html>
-    "#,
-    )?;
-
-    // Add MCP templates for tests
-    tera.add_raw_template(
-        "mcp/list.html",
-        r#"
-        <!DOCTYPE html>
-        <html>
-        <head><title>MCP Tokens</title></head>
-        <body>
-            <h1>MCP Tokens</h1>
-            {% if tokens %}
-                <ul>
-                {% for token, site in tokens %}
-                    <li>{{ token.name }} - {{ site.title }}</li>
-                {% endfor %}
-                </ul>
-            {% else %}
-                <p>No tokens</p>
-            {% endif %}
-            <form method="post">
-                <input type="text" name="name" required>
-                <select name="site_id" required>
-                {% for site, role in sites %}
-                    <option value="{{ site.id }}">{{ site.title }}</option>
-                {% endfor %}
-                </select>
-                <button type="submit">Create</button>
-            </form>
-        </body>
-        </html>
-    "#,
-    )?;
-
-    tera.add_raw_template(
-        "mcp/show.html",
-        r#"
-        <!DOCTYPE html>
-        <html>
-        <head><title>MCP Token</title></head>
-        <body>
-            <h1>{{ token.name }}</h1>
-            <p>URL: https://{{ mcp_url }}</p>
         </body>
         </html>
     "#,
@@ -292,7 +234,7 @@ pub async fn create_test_session(
     let session_repo = SessionRepository::new(pool.clone());
     let session = Session::new(user_id);
 
-    let _session_id = session_repo.create(&session).await?;
+    session_repo.create(&session).await?;
     let session = session_repo.find_by_id(&session.id).await?.unwrap();
 
     Ok(session)

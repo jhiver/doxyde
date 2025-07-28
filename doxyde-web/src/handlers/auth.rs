@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Host, State},
+    extract::{Host, Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     Form,
@@ -31,12 +31,22 @@ use tera::Context;
 use crate::{template_context::add_base_context, AppState};
 
 /// Helper to create a login context with site-specific data
-async fn create_login_context(state: &AppState, host: &str, error: Option<&str>) -> Context {
+async fn create_login_context(
+    state: &AppState,
+    host: &str,
+    error: Option<&str>,
+    return_to: Option<&str>,
+) -> Context {
     let mut context = Context::new();
 
     // Add error if present
     if let Some(err) = error {
         context.insert("error", err);
+    }
+
+    // Add return_to if present
+    if let Some(return_url) = return_to {
+        context.insert("return_to", return_url);
     }
 
     // Try to resolve the site from the host
@@ -60,14 +70,21 @@ async fn create_login_context(state: &AppState, host: &str, error: Option<&str>)
 pub struct LoginForm {
     pub username: String,
     pub password: String,
+    pub return_to: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LoginQuery {
+    pub return_to: Option<String>,
 }
 
 /// Display login form
 pub async fn login_form(
     Host(host): Host,
     State(state): State<AppState>,
+    Query(query): Query<LoginQuery>,
 ) -> Result<Html<String>, StatusCode> {
-    let context = create_login_context(&state, &host, None).await;
+    let context = create_login_context(&state, &host, None, query.return_to.as_deref()).await;
 
     let html = state
         .templates
@@ -107,7 +124,13 @@ pub async fn login(
         Some(u) if u.is_active => u,
         Some(_) => {
             // Account disabled
-            let context = create_login_context(&state, &host, Some("Account is disabled")).await;
+            let context = create_login_context(
+                &state,
+                &host,
+                Some("Account is disabled"),
+                form.return_to.as_deref(),
+            )
+            .await;
             let html = state
                 .templates
                 .render("login.html", &context)
@@ -119,8 +142,13 @@ pub async fn login(
         }
         None => {
             // User not found
-            let context =
-                create_login_context(&state, &host, Some("Invalid username or password")).await;
+            let context = create_login_context(
+                &state,
+                &host,
+                Some("Invalid username or password"),
+                form.return_to.as_deref(),
+            )
+            .await;
             let html = state
                 .templates
                 .render("login.html", &context)
@@ -137,8 +165,13 @@ pub async fn login(
         Ok(true) => {} // Password is correct, continue
         Ok(false) => {
             // Return to login form with error message
-            let context =
-                create_login_context(&state, &host, Some("Invalid username or password")).await;
+            let context = create_login_context(
+                &state,
+                &host,
+                Some("Invalid username or password"),
+                form.return_to.as_deref(),
+            )
+            .await;
             let html = state
                 .templates
                 .render("login.html", &context)
@@ -151,8 +184,13 @@ pub async fn login(
         Err(e) => {
             // Check if it's a disabled password
             if e.to_string().contains("Password disabled") {
-                let context =
-                    create_login_context(&state, &host, Some("Account is disabled")).await;
+                let context = create_login_context(
+                    &state,
+                    &host,
+                    Some("Account is disabled"),
+                    form.return_to.as_deref(),
+                )
+                .await;
                 let html = state
                     .templates
                     .render("login.html", &context)
@@ -199,7 +237,13 @@ pub async fn login(
 
     let cookie = cookie_builder.build();
 
-    Ok((jar.add(cookie), Redirect::to("/")).into_response())
+    // Redirect to return_to URL if provided and valid, otherwise to home
+    let redirect_url = form
+        .return_to
+        .filter(|url| url.starts_with('/') && !url.starts_with("//")) // Only allow relative URLs for security
+        .unwrap_or_else(|| "/".to_string());
+
+    Ok((jar.add(cookie), Redirect::to(&redirect_url)).into_response())
 }
 
 /// Handle logout
@@ -285,7 +329,12 @@ mod tests {
             crate::rate_limit::create_api_rate_limiter(),
         );
 
-        let response = login_form(Host("localhost:3000".to_string()), State(state)).await;
+        let response = login_form(
+            Host("localhost:3000".to_string()),
+            State(state),
+            Query(LoginQuery { return_to: None }),
+        )
+        .await;
         assert!(response.is_ok());
 
         Ok(())
@@ -328,6 +377,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -385,6 +435,7 @@ mod tests {
         let form = LoginForm {
             username: "test@example.com".to_string(),
             password: "password123".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -437,6 +488,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "wrongpassword".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -484,6 +536,7 @@ mod tests {
         let form = LoginForm {
             username: "nonexistent".to_string(),
             password: "password123".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -539,6 +592,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();
@@ -603,6 +657,7 @@ mod tests {
         let form = LoginForm {
             username: "testuser".to_string(),
             password: "password123".to_string(),
+            return_to: None,
         };
 
         let jar = CookieJar::new();

@@ -133,16 +133,12 @@ fn process_markdown_placeholders(html: &str) -> String {
 
                 // Extract the div's classes if any
                 let div_content = &result[div_start..start];
-                let class_attr = if let Some(class_start) = div_content.find("class=\"") {
+                let class_attr = div_content.find("class=\"").and_then(|class_start| {
                     let class_start = class_start + 7;
-                    if let Some(class_end) = div_content[class_start..].find('"') {
-                        Some(&div_content[class_start..class_start + class_end])
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                };
+                    div_content[class_start..]
+                        .find('"')
+                        .map(|class_end| &div_content[class_start..class_start + class_end])
+                });
 
                 // Build the replacement div without data-markdown attribute
                 let replacement = if let Some(classes) = class_attr {

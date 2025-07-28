@@ -18,6 +18,9 @@
             {% if csrf_token %}
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             {% endif %}
+            {% if return_to %}
+            <input type="hidden" name="return_to" value="{{ return_to }}">
+            {% endif %}
             <div class="form-group">
                 <label for="username">Username or Email</label>
                 <input type="text" id="username" name="username" required autofocus>
