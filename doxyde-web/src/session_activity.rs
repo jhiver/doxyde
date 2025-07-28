@@ -83,8 +83,10 @@ pub async fn check_session_idle_timeout(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_idle_timeout_calculation() {
-        // This is just a placeholder test
-        assert!(true);
+    fn test_session_activity_middleware() {
+        // This module primarily contains middleware that updates session activity
+        // The actual testing is done through integration tests
+        // This test ensures the module compiles and can be imported
+        let _ = super::update_session_activity;
     }
 }

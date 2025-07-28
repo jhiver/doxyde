@@ -39,12 +39,19 @@ pub struct ActionRegistry {
     handlers: HashMap<String, ActionHandlerFn>,
 }
 
-impl ActionRegistry {
-    /// Create a new action registry
-    pub fn new() -> Self {
+#[allow(clippy::derivable_impls)]
+impl Default for ActionRegistry {
+    fn default() -> Self {
         Self {
             handlers: HashMap::new(),
         }
+    }
+}
+
+impl ActionRegistry {
+    /// Create a new action registry
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Register an action handler

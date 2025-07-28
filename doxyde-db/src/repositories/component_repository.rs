@@ -890,7 +890,7 @@ mod tests {
         let repo = ComponentRepository::new(pool.clone());
 
         // Test different component types
-        let test_cases = vec![
+        let test_cases = [
             ("text", serde_json::json!({"text": "Hello"})),
             (
                 "image",

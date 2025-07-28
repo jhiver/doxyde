@@ -325,9 +325,8 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is HTML
-        match response.into_response() {
-            response => {
-                let (parts, body) = response.into_parts();
+        let response = response.into_response();
+        let (parts, body) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::OK);
                 assert!(parts
                     .headers
@@ -344,8 +343,6 @@ mod tests {
                 assert!(body_str.contains(&page2.title));
                 // Should not show page1 itself
                 assert!(!body_str.contains(&format!("value=\"{}\"", page1.id.unwrap())));
-            }
-        }
 
         Ok(())
     }
@@ -378,13 +375,10 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is redirect to root
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
+        let response = response.into_response();
+        let (parts, _) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::SEE_OTHER);
                 assert_eq!(parts.headers.get("location").unwrap(), "/");
-            }
-        }
 
         Ok(())
     }
@@ -449,16 +443,13 @@ mod tests {
         .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is redirect to new location
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
+        let response = response.into_response();
+        let (parts, _) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::SEE_OTHER);
                 assert_eq!(
                     parts.headers.get("location").unwrap(),
                     &format!("/{}/{}", page2.slug, page1.slug)
                 );
-            }
-        }
 
         // Verify page was actually moved
         let page_repo = PageRepository::new(state.db);
@@ -490,12 +481,9 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is OK
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
+        let response = response.into_response();
+        let (parts, _) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::OK);
-            }
-        }
 
         Ok(())
     }

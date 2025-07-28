@@ -79,7 +79,7 @@ pub async fn create_token(
     // Generate random token
     let token_bytes: [u8; 32] = rand::random();
     use base64::Engine;
-    let token = base64::engine::general_purpose::STANDARD.encode(&token_bytes);
+    let token = base64::engine::general_purpose::STANDARD.encode(token_bytes);
 
     // Hash the token for storage
     let mut hasher = Sha256::new();
@@ -286,7 +286,7 @@ pub async fn register_client(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Generate client credentials
     let client_id = format!("mcp_{}", uuid::Uuid::new_v4());
-    let client_secret = base64::engine::general_purpose::STANDARD.encode(&rand::random::<[u8; 32]>());
+    let client_secret = base64::engine::general_purpose::STANDARD.encode(rand::random::<[u8; 32]>());
     
     // Hash the client secret
     let mut hasher = Sha256::new();
@@ -900,7 +900,7 @@ pub async fn authorize_consent(
 ) -> Result<impl IntoResponse, AppError> {
     // Validate CSRF token
     let stored_csrf = session.get("oauth_csrf")
-        .and_then(|c| Some(c.value().to_string()));
+        .map(|c| c.value().to_string());
     
     if stored_csrf != Some(request.csrf_token.clone()) {
         return Err(AppError::bad_request("Invalid CSRF token"));

@@ -291,66 +291,6 @@ pub async fn content_handler(
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_content_path_no_action() {
-        let path = ContentPath::parse("/about/team");
-        assert_eq!(path.path, "/about/team");
-        assert!(path.action.is_none());
-    }
-
-    #[test]
-    fn test_parse_content_path_with_action() {
-        let path = ContentPath::parse("/about/team/.edit");
-        assert_eq!(path.path, "/about/team");
-        assert_eq!(path.action, Some(".edit".to_string()));
-    }
-
-    #[test]
-    fn test_parse_content_path_root() {
-        let path = ContentPath::parse("/");
-        assert_eq!(path.path, "/");
-        assert!(path.action.is_none());
-    }
-
-    #[test]
-    fn test_parse_content_path_root_action() {
-        let path = ContentPath::parse("/.new");
-        assert_eq!(path.path, "/");
-        assert_eq!(path.action, Some(".new".to_string()));
-    }
-
-    #[test]
-    fn test_parse_content_path_empty() {
-        let path = ContentPath::parse("");
-        assert_eq!(path.path, "/");
-        assert!(path.action.is_none());
-    }
-
-    #[test]
-    fn test_parse_content_path_multiple_dots() {
-        let path = ContentPath::parse("/about/.test/team/.edit");
-        assert_eq!(path.path, "/about/.test/team");
-        assert_eq!(path.action, Some(".edit".to_string()));
-    }
-
-    #[test]
-    fn test_parse_content_path_trailing_slash() {
-        let path = ContentPath::parse("/about/team/");
-        assert_eq!(path.path, "/about/team/");
-        assert!(path.action.is_none());
-    }
-
-    #[test]
-    fn test_parse_content_path_action_trailing_slash() {
-        let path = ContentPath::parse("/about/team/.edit/");
-        assert_eq!(path.path, "/about/team");
-        assert_eq!(path.action, Some(".edit".to_string()));
-    }
-}
 
 /// Check if a path matches the image URL pattern
 fn check_image_pattern(path: &str) -> Option<(String, String)> {
@@ -561,5 +501,65 @@ async fn resolve_page(
         }
 
         Ok(current_page)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_content_path_no_action() {
+        let path = ContentPath::parse("/about/team");
+        assert_eq!(path.path, "/about/team");
+        assert!(path.action.is_none());
+    }
+
+    #[test]
+    fn test_parse_content_path_with_action() {
+        let path = ContentPath::parse("/about/team/.edit");
+        assert_eq!(path.path, "/about/team");
+        assert_eq!(path.action, Some(".edit".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_path_root() {
+        let path = ContentPath::parse("/");
+        assert_eq!(path.path, "/");
+        assert!(path.action.is_none());
+    }
+
+    #[test]
+    fn test_parse_content_path_root_action() {
+        let path = ContentPath::parse("/.new");
+        assert_eq!(path.path, "/");
+        assert_eq!(path.action, Some(".new".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_path_empty() {
+        let path = ContentPath::parse("");
+        assert_eq!(path.path, "/");
+        assert!(path.action.is_none());
+    }
+
+    #[test]
+    fn test_parse_content_path_multiple_dots() {
+        let path = ContentPath::parse("/about/.test/team/.edit");
+        assert_eq!(path.path, "/about/.test/team");
+        assert_eq!(path.action, Some(".edit".to_string()));
+    }
+
+    #[test]
+    fn test_parse_content_path_trailing_slash() {
+        let path = ContentPath::parse("/about/team/");
+        assert_eq!(path.path, "/about/team/");
+        assert!(path.action.is_none());
+    }
+
+    #[test]
+    fn test_parse_content_path_action_trailing_slash() {
+        let path = ContentPath::parse("/about/team/.edit/");
+        assert_eq!(path.path, "/about/team");
+        assert_eq!(path.action, Some(".edit".to_string()));
     }
 }

@@ -253,9 +253,9 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is HTML
-        match response.into_response() {
-            response => {
-                let (parts, body) = response.into_parts();
+        let response = response.into_response();
+        {
+            let (parts, body) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::OK);
                 assert!(parts
                     .headers
@@ -271,7 +271,6 @@ mod tests {
                 // Should show warning about permanent deletion
                 assert!(body_str.contains("permanently delete"));
                 assert!(body_str.contains(&page.title));
-            }
         }
 
         Ok(())
@@ -330,15 +329,14 @@ mod tests {
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is redirect
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
+        let response = response.into_response();
+        {
+            let (parts, _) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::SEE_OTHER);
                 assert_eq!(
                     parts.headers.get("location").unwrap(),
                     &format!("/{}", parent.slug)
                 );
-            }
         }
 
         Ok(())
@@ -379,12 +377,11 @@ mod tests {
         .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is redirect to parent (root)
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
-                assert_eq!(parts.status, StatusCode::SEE_OTHER);
-                assert_eq!(parts.headers.get("location").unwrap(), "/");
-            }
+        let response = response.into_response();
+        {
+            let (parts, _) = response.into_parts();
+            assert_eq!(parts.status, StatusCode::SEE_OTHER);
+            assert_eq!(parts.headers.get("location").unwrap(), "/");
         }
 
         // Verify page was actually deleted
@@ -425,15 +422,14 @@ mod tests {
         .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is redirect back to page
-        match response.into_response() {
-            response => {
-                let (parts, _) = response.into_parts();
+        let response = response.into_response();
+        {
+            let (parts, _) = response.into_parts();
                 assert_eq!(parts.status, StatusCode::SEE_OTHER);
                 assert_eq!(
                     parts.headers.get("location").unwrap(),
                     &format!("/{}", page.slug)
                 );
-            }
         }
 
         // Verify page was NOT deleted

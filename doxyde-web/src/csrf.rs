@@ -21,13 +21,19 @@ pub struct CsrfToken {
     pub token: String,
 }
 
-impl CsrfToken {
-    pub fn new() -> Self {
+impl Default for CsrfToken {
+    fn default() -> Self {
         let mut bytes = [0u8; CSRF_TOKEN_LENGTH];
         rand::thread_rng().fill_bytes(&mut bytes);
         Self {
             token: URL_SAFE_NO_PAD.encode(bytes),
         }
+    }
+}
+
+impl CsrfToken {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn verify(&self, provided_token: &str) -> bool {

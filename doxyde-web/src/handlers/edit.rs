@@ -818,7 +818,7 @@ pub async fn save_draft_handler(
 
         // Use the component registry to parse content
         let registry = get_component_registry();
-        let content = match registry.parse_content(&component_type, content_str) {
+        let content = match registry.parse_content(component_type, content_str) {
             Ok(parsed_content) => parsed_content,
             Err(e) => {
                 tracing::error!(
@@ -831,7 +831,7 @@ pub async fn save_draft_handler(
         };
 
         // Validate the content if the handler provides validation
-        if let Some(handler) = registry.get_handler(&component_type) {
+        if let Some(handler) = registry.get_handler(component_type) {
             if let Err(e) = handler.validate_content(&content) {
                 tracing::error!(
                     "Component content validation failed for type {}: {}",

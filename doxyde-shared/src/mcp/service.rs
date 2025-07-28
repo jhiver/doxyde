@@ -522,7 +522,7 @@ impl DoxydeRmcpService {
 
         // Build final hierarchy
         for root_id in root_pages {
-            if let Some(node) = self.build_hierarchy_node(&page_map, root_id) {
+            if let Some(node) = Self::build_hierarchy_node(&page_map, root_id) {
                 hierarchy.push(node);
             }
         }
@@ -1133,7 +1133,7 @@ impl DoxydeRmcpService {
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
         let created_page = page_repo.find_by_id(page_id).await?.unwrap();
         
-        Ok(self.page_to_info(&all_pages, &created_page).await?)
+        self.page_to_info(&all_pages, &created_page).await
     }
 
     async fn internal_update_page(&self, req: UpdatePageRequest) -> Result<PageInfo> {
@@ -1218,7 +1218,7 @@ impl DoxydeRmcpService {
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
         let updated_page = page_repo.find_by_id(req.page_id).await?.unwrap();
         
-        Ok(self.page_to_info(&all_pages, &updated_page).await?)
+        self.page_to_info(&all_pages, &updated_page).await
     }
 
     async fn internal_delete_component(&self, component_id: i64) -> Result<()> {
@@ -1543,7 +1543,7 @@ impl DoxydeRmcpService {
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
         let moved_page = page_repo.find_by_id(req.page_id).await?.unwrap();
         
-        Ok(self.page_to_info(&all_pages, &moved_page).await?)
+        self.page_to_info(&all_pages, &moved_page).await
     }
     
     async fn would_create_circular_reference(&self, page_id: i64, new_parent_id: i64) -> Result<bool> {
@@ -1823,7 +1823,6 @@ impl DoxydeRmcpService {
     }
 
     fn build_hierarchy_node(
-        &self,
         page_map: &std::collections::HashMap<i64, (PageInfo, Vec<i64>)>,
         page_id: i64,
     ) -> Option<PageHierarchy> {
@@ -1837,7 +1836,7 @@ impl DoxydeRmcpService {
             });
 
             for child_id in sorted_child_ids {
-                if let Some(child_node) = self.build_hierarchy_node(page_map, child_id) {
+                if let Some(child_node) = Self::build_hierarchy_node(page_map, child_id) {
                     children.push(child_node);
                 }
             }

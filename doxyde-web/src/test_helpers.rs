@@ -235,7 +235,7 @@ pub async fn create_test_session(
     let session_repo = SessionRepository::new(pool.clone());
     let session = Session::new(user_id);
 
-    let _session_id = session_repo.create(&session).await?;
+    session_repo.create(&session).await?;
     let session = session_repo.find_by_id(&session.id).await?.unwrap();
 
     Ok(session)

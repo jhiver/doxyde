@@ -292,7 +292,7 @@ impl ComponentHandler for BlogSummaryComponentHandler {
     fn validate_content(&self, content: &Value) -> Result<(), String> {
         // Validate item_count is reasonable
         if let Some(count) = content.get("item_count").and_then(|v| v.as_i64()) {
-            if count < 1 || count > 50 {
+            if !(1..=50).contains(&count) {
                 return Err("Item count must be between 1 and 50".to_string());
             }
         }

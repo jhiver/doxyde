@@ -156,37 +156,6 @@ async fn options_handler() -> impl IntoResponse {
     (StatusCode::NO_CONTENT, headers)
 }
 
-// OAuth validation middleware for SSE connections
-async fn validate_sse_auth(
-    State(state): State<Arc<AppState>>,
-    headers: HeaderMap,
-) -> Result<(), StatusCode> {
-    // Extract bearer token from Authorization header
-    let token = headers
-        .get(AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-        .and_then(|auth| auth.strip_prefix("Bearer "));
-
-    if let Some(token) = token {
-        match validate_token(&state.db, token).await {
-            Ok(Some(token_info)) => {
-                debug!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
-                Ok(())
-            }
-            Ok(None) => {
-                error!("Invalid OAuth token");
-                Err(StatusCode::UNAUTHORIZED)
-            }
-            Err(e) => {
-                error!("Token validation error: {}", e);
-                Err(StatusCode::INTERNAL_SERVER_ERROR)
-            }
-        }
-    } else {
-        error!("Missing Authorization header");
-        Err(StatusCode::UNAUTHORIZED)
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -315,10 +284,73 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn shutdown_signal(ct: CancellationToken) {
+    let ctrl_c = async {
+        tokio::signal::ctrl_c()
+            .await
+            .expect("failed to install Ctrl+C handler");
+    };
+
+    #[cfg(unix)]
+    let terminate = async {
+        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install signal handler")
+            .recv()
+            .await;
+    };
+
+    #[cfg(not(unix))]
+    let terminate = std::future::pending::<()>();
+
+    tokio::select! {
+        _ = ctrl_c => {
+            info!("Received Ctrl+C, shutting down");
+        },
+        _ = terminate => {
+            info!("Received terminate signal, shutting down");
+        },
+        _ = ct.cancelled() => {
+            info!("Cancellation token triggered, shutting down");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use axum::http::header;
+
+    // OAuth validation middleware for SSE connections (used only in tests)
+    async fn validate_sse_auth(
+        State(state): State<Arc<AppState>>,
+        headers: HeaderMap,
+    ) -> Result<(), StatusCode> {
+        // Extract bearer token from Authorization header
+        let token = headers
+            .get(AUTHORIZATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|auth| auth.strip_prefix("Bearer "));
+
+        if let Some(token) = token {
+            match validate_token(&state.db, token).await {
+                Ok(Some(token_info)) => {
+                    debug!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
+                    Ok(())
+                }
+                Ok(None) => {
+                    error!("Invalid OAuth token");
+                    Err(StatusCode::UNAUTHORIZED)
+                }
+                Err(e) => {
+                    error!("Token validation error: {}", e);
+                    Err(StatusCode::INTERNAL_SERVER_ERROR)
+                }
+            }
+        } else {
+            error!("Missing Authorization header");
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
 
     // Note: AppState creation is tested implicitly in async tests
     // Cannot test synchronously as SqlitePool requires async runtime
@@ -369,36 +401,5 @@ mod tests {
         assert!(!ct.is_cancelled());
         ct.cancel();
         assert!(ct.is_cancelled());
-    }
-}
-
-async fn shutdown_signal(ct: CancellationToken) {
-    let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
-    };
-
-    #[cfg(unix)]
-    let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
-    };
-
-    #[cfg(not(unix))]
-    let terminate = std::future::pending::<()>();
-
-    tokio::select! {
-        _ = ctrl_c => {
-            info!("Received Ctrl+C, shutting down");
-        },
-        _ = terminate => {
-            info!("Received terminate signal, shutting down");
-        },
-        _ = ct.cancelled() => {
-            info!("Cancellation token triggered, shutting down");
-        }
     }
 }

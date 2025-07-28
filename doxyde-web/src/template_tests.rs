@@ -1,12 +1,9 @@
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::path::Path;
     use tera::Tera;
 
     #[test]
     fn test_all_templates_compile() {
-        let template_dir = Path::new("../templates");
 
         // Use Tera's built-in glob pattern to load all templates
         // This properly handles template inheritance
@@ -85,7 +82,7 @@ mod tests {
         }
 
         // Test rendering with various contexts
-        let test_contexts = vec![
+        let test_contexts = [
             // Logged out user
             {
                 let mut ctx = tera::Context::new();
