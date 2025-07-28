@@ -20,7 +20,6 @@ sqlx.workspace = true
 
 # MCP/RMCP
 rmcp = { version = "0.3", features = ["server", "macros"] }
-schemars = "0.8"
 
 # Auth
 sha2 = "0.10"
