@@ -19,11 +19,14 @@ mod config;
 use anyhow::Result;
 use axum::{
     extract::State, 
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode}, 
+    http::{header::{AUTHORIZATION, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_METHODS, 
+                    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_MAX_AGE}, 
+           HeaderMap, StatusCode}, 
     middleware as axum_middleware,
     routing::get,
     Router,
     Json,
+    response::IntoResponse,
 };
 use config::Config;
 use doxyde_shared::{mcp::DoxydeRmcpService, oauth::validate_token};
@@ -69,9 +72,26 @@ async fn health_handler() -> &'static str {
     "OK"
 }
 
+// Helper function to add CORS headers
+fn add_cors_headers(headers: &mut HeaderMap) {
+    headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
+    headers.insert(
+        ACCESS_CONTROL_ALLOW_METHODS,
+        "GET, POST, OPTIONS".parse().unwrap(),
+    );
+    headers.insert(
+        ACCESS_CONTROL_ALLOW_HEADERS,
+        "Authorization, Content-Type".parse().unwrap(),
+    );
+    headers.insert(ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
+}
+
 // OAuth discovery endpoints that point to main doxyde.com server
-async fn oauth_authorization_server_metadata() -> Json<AuthorizationServerMetadata> {
-    Json(AuthorizationServerMetadata {
+async fn oauth_authorization_server_metadata() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    
+    let metadata = AuthorizationServerMetadata {
         issuer: "https://doxyde.com".to_string(),
         authorization_endpoint: "https://doxyde.com/.oauth/authorize".to_string(),
         token_endpoint: "https://doxyde.com/.oauth/token".to_string(),
@@ -104,22 +124,36 @@ async fn oauth_authorization_server_metadata() -> Json<AuthorizationServerMetada
             "plain".to_string(),
             "S256".to_string(),
         ],
-    })
+    };
+    
+    (StatusCode::OK, headers, Json(metadata))
 }
 
-async fn oauth_protected_resource_metadata() -> Json<ProtectedResourceMetadata> {
-    Json(ProtectedResourceMetadata {
+async fn oauth_protected_resource_metadata() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    
+    let metadata = ProtectedResourceMetadata {
         oauth_authorization_server: "https://doxyde.com/.well-known/oauth-authorization-server".to_string(),
         protected_resources: vec![
             "https://sse.doxyde.com/".to_string(),
             "https://sse.doxyde.com/message".to_string(),
         ],
-    })
+    };
+    
+    (StatusCode::OK, headers, Json(metadata))
 }
 
-async fn oauth_protected_resource_mcp_metadata() -> Json<ProtectedResourceMetadata> {
+async fn oauth_protected_resource_mcp_metadata() -> impl IntoResponse {
     // Same as above but specific to MCP endpoints
     oauth_protected_resource_metadata().await
+}
+
+// OPTIONS handler for CORS preflight requests
+async fn options_handler() -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+    add_cors_headers(&mut headers);
+    (StatusCode::NO_CONTENT, headers)
 }
 
 // OAuth validation middleware for SSE connections
@@ -241,9 +275,15 @@ async fn main() -> Result<()> {
     // Create main router with health and OAuth discovery endpoints
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/.well-known/oauth-authorization-server", get(oauth_authorization_server_metadata))
-        .route("/.well-known/oauth-protected-resource", get(oauth_protected_resource_metadata))
-        .route("/.well-known/oauth-protected-resource/.mcp", get(oauth_protected_resource_mcp_metadata))
+        .route("/.well-known/oauth-authorization-server", 
+            get(oauth_authorization_server_metadata)
+            .options(options_handler))
+        .route("/.well-known/oauth-protected-resource", 
+            get(oauth_protected_resource_metadata)
+            .options(options_handler))
+        .route("/.well-known/oauth-protected-resource/.mcp", 
+            get(oauth_protected_resource_mcp_metadata)
+            .options(options_handler))
         .merge(protected_sse_router);
 
     // Spawn the SSE server task
