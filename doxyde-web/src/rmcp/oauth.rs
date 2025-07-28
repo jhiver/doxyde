@@ -308,7 +308,7 @@ pub async fn register_client(
 
     match sqlx::query!(
         r#"
-        INSERT INTO oauth_clients 
+        INSERT INTO oauth_clients
         (client_id, client_secret_hash, client_name, redirect_uris, grant_types, response_types, scope, token_endpoint_auth_method)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         "#,
@@ -336,11 +336,11 @@ pub async fn register_client(
                 client_id_issued_at: Utc::now().timestamp(),
                 client_secret_expires_at: 0, // Never expires
             };
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             Ok((StatusCode::CREATED, headers, Json(response)))
         }
         Err(e) => {
@@ -500,11 +500,11 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                 "error": "invalid_grant",
                 "error_description": "Invalid authorization code"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
         Err(e) => {
@@ -513,11 +513,11 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                 "error": "server_error",
                 "error_description": "Internal server error"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
         }
     };
@@ -622,7 +622,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
     // Store access token
     match sqlx::query!(
         r#"
-        INSERT INTO oauth_access_tokens 
+        INSERT INTO oauth_access_tokens
         (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
         VALUES (?, ?, ?, ?, ?, ?)
         "#,
@@ -640,7 +640,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             // Store refresh token
             match sqlx::query!(
                 r#"
-                INSERT INTO oauth_refresh_tokens 
+                INSERT INTO oauth_refresh_tokens
                 (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 "#,
@@ -805,7 +805,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
     // Store new access token
     match sqlx::query!(
         r#"
-        INSERT INTO oauth_access_tokens 
+        INSERT INTO oauth_access_tokens
         (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
         VALUES (?, ?, ?, ?, ?, ?)
         "#,
@@ -839,7 +839,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
             // Store new refresh token
             match sqlx::query!(
                 r#"
-                INSERT INTO oauth_refresh_tokens 
+                INSERT INTO oauth_refresh_tokens
                 (token_hash, client_id, user_id, mcp_token_id, scope, expires_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 "#,
@@ -989,7 +989,7 @@ pub async fn authorize_consent(
     // Store authorization code
     match sqlx::query!(
         r#"
-        INSERT INTO oauth_authorization_codes 
+        INSERT INTO oauth_authorization_codes
         (code, client_id, user_id, mcp_token_id, redirect_uri, scope, code_challenge, code_challenge_method, expires_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         "#,
