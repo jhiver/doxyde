@@ -291,7 +291,6 @@ pub async fn content_handler(
     }
 }
 
-
 /// Check if a path matches the image URL pattern
 fn check_image_pattern(path: &str) -> Option<(String, String)> {
     // Skip if path contains '/' beyond the first character

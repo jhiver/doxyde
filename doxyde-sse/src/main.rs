@@ -18,15 +18,18 @@ mod config;
 
 use anyhow::Result;
 use axum::{
-    extract::State, 
-    http::{header::{AUTHORIZATION, ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_ALLOW_METHODS, 
-                    ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_MAX_AGE}, 
-           HeaderMap, StatusCode}, 
+    extract::State,
+    http::{
+        header::{
+            ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
+            ACCESS_CONTROL_ALLOW_ORIGIN, ACCESS_CONTROL_MAX_AGE, AUTHORIZATION,
+        },
+        HeaderMap, StatusCode,
+    },
     middleware as axum_middleware,
-    routing::get,
-    Router,
-    Json,
     response::IntoResponse,
+    routing::get,
+    Json, Router,
 };
 use config::Config;
 use doxyde_shared::{mcp::DoxydeRmcpService, oauth::validate_token};
@@ -90,7 +93,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
 async fn oauth_authorization_server_metadata() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
-    
+
     let metadata = AuthorizationServerMetadata {
         issuer: "https://doxyde.com".to_string(),
         authorization_endpoint: "https://doxyde.com/.oauth/authorize".to_string(),
@@ -103,14 +106,8 @@ async fn oauth_authorization_server_metadata() -> impl IntoResponse {
             "write".to_string(),
             "admin".to_string(),
         ],
-        response_types_supported: vec![
-            "code".to_string(),
-            "token".to_string(),
-        ],
-        response_modes_supported: vec![
-            "query".to_string(),
-            "fragment".to_string(),
-        ],
+        response_types_supported: vec!["code".to_string(), "token".to_string()],
+        response_modes_supported: vec!["query".to_string(), "fragment".to_string()],
         grant_types_supported: vec![
             "authorization_code".to_string(),
             "implicit".to_string(),
@@ -120,27 +117,25 @@ async fn oauth_authorization_server_metadata() -> impl IntoResponse {
             "client_secret_basic".to_string(),
             "client_secret_post".to_string(),
         ],
-        code_challenge_methods_supported: vec![
-            "plain".to_string(),
-            "S256".to_string(),
-        ],
+        code_challenge_methods_supported: vec!["plain".to_string(), "S256".to_string()],
     };
-    
+
     (StatusCode::OK, headers, Json(metadata))
 }
 
 async fn oauth_protected_resource_metadata() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
-    
+
     let metadata = ProtectedResourceMetadata {
-        oauth_authorization_server: "https://doxyde.com/.well-known/oauth-authorization-server".to_string(),
+        oauth_authorization_server: "https://doxyde.com/.well-known/oauth-authorization-server"
+            .to_string(),
         protected_resources: vec![
             "https://sse.doxyde.com/".to_string(),
             "https://sse.doxyde.com/message".to_string(),
         ],
     };
-    
+
     (StatusCode::OK, headers, Json(metadata))
 }
 
@@ -155,7 +150,6 @@ async fn options_handler() -> impl IntoResponse {
     add_cors_headers(&mut headers);
     (StatusCode::NO_CONTENT, headers)
 }
-
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -194,7 +188,10 @@ async fn main() -> Result<()> {
 
     // Create SSE server and get router
     let (sse_server, sse_router) = SseServer::new(sse_config);
-    info!("SSE server created with paths: SSE={}, POST={}", config.sse_path, config.post_path);
+    info!(
+        "SSE server created with paths: SSE={}, POST={}",
+        config.sse_path, config.post_path
+    );
 
     // Register a default service - this will be overridden per connection
     // but rmcp requires at least one service to be registered
@@ -203,11 +200,14 @@ async fn main() -> Result<()> {
         info!("Creating new DoxydeRmcpService instance for site_id=1");
         DoxydeRmcpService::new(default_pool.clone(), 1)
     });
-    
+
     // Create OAuth validation middleware that works for both SSE and POST requests
     let oauth_middleware = axum_middleware::from_fn_with_state(
         app_state.clone(),
-        |State(state): State<Arc<AppState>>, headers: HeaderMap, req: axum::extract::Request, next: axum::middleware::Next| async move {
+        |State(state): State<Arc<AppState>>,
+         headers: HeaderMap,
+         req: axum::extract::Request,
+         next: axum::middleware::Next| async move {
             // Extract bearer token from Authorization header
             let token = headers
                 .get(AUTHORIZATION)
@@ -217,7 +217,11 @@ async fn main() -> Result<()> {
             if let Some(token) = token {
                 match validate_token(&state.db, token).await {
                     Ok(Some(token_info)) => {
-                        debug!("Valid OAuth token: site_id={}, path={}", token_info.site_id, req.uri().path());
+                        debug!(
+                            "Valid OAuth token: site_id={}, path={}",
+                            token_info.site_id,
+                            req.uri().path()
+                        );
                         // The service registered with site_id=1 will handle requests
                         // In the future, we could dynamically switch services based on token_info.site_id
                         Ok(next.run(req).await)
@@ -232,27 +236,33 @@ async fn main() -> Result<()> {
                     }
                 }
             } else {
-                error!("Missing Authorization header for path: {}", req.uri().path());
+                error!(
+                    "Missing Authorization header for path: {}",
+                    req.uri().path()
+                );
                 Err(StatusCode::UNAUTHORIZED)
             }
         },
     );
-    
+
     // Apply OAuth middleware to the entire SSE router (includes both SSE and POST endpoints)
     let protected_sse_router = sse_router.layer(oauth_middleware);
 
     // Create main router with health and OAuth discovery endpoints
     let app = Router::new()
         .route("/health", get(health_handler))
-        .route("/.well-known/oauth-authorization-server", 
-            get(oauth_authorization_server_metadata)
-            .options(options_handler))
-        .route("/.well-known/oauth-protected-resource", 
-            get(oauth_protected_resource_metadata)
-            .options(options_handler))
-        .route("/.well-known/oauth-protected-resource/.mcp", 
-            get(oauth_protected_resource_mcp_metadata)
-            .options(options_handler))
+        .route(
+            "/.well-known/oauth-authorization-server",
+            get(oauth_authorization_server_metadata).options(options_handler),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource",
+            get(oauth_protected_resource_metadata).options(options_handler),
+        )
+        .route(
+            "/.well-known/oauth-protected-resource/.mcp",
+            get(oauth_protected_resource_mcp_metadata).options(options_handler),
+        )
         .merge(protected_sse_router);
 
     // Spawn the SSE server task
@@ -260,7 +270,7 @@ async fn main() -> Result<()> {
         info!("SSE server listening on {}", bind_addr);
         info!("SSE endpoint: {}", config.sse_path);
         info!("POST endpoint: {}", config.post_path);
-        
+
         axum::serve(
             tokio::net::TcpListener::bind(&bind_addr).await?,
             app.into_make_service(),
@@ -334,7 +344,10 @@ mod tests {
         if let Some(token) = token {
             match validate_token(&state.db, token).await {
                 Ok(Some(token_info)) => {
-                    debug!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
+                    debug!(
+                        "Valid OAuth token for SSE connection: site_id={}",
+                        token_info.site_id
+                    );
                     Ok(())
                 }
                 Ok(None) => {
@@ -361,7 +374,7 @@ mod tests {
             db: SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         });
         let headers = HeaderMap::new();
-        
+
         let result = validate_sse_auth(State(state), headers).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
@@ -374,7 +387,7 @@ mod tests {
         });
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, "Invalid".parse().unwrap());
-        
+
         let result = validate_sse_auth(State(state), headers).await;
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::UNAUTHORIZED);
@@ -387,7 +400,7 @@ mod tests {
         });
         let mut headers = HeaderMap::new();
         headers.insert(header::AUTHORIZATION, "Bearer test-token".parse().unwrap());
-        
+
         // This will fail because the token doesn't exist in the database
         // But it tests that we extract the token correctly
         let result = validate_sse_auth(State(state), headers).await;

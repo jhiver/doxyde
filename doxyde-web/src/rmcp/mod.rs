@@ -19,8 +19,11 @@ pub mod handlers;
 pub mod oauth;
 
 pub use discovery::{
-    oauth_authorization_server_metadata, oauth_protected_resource_metadata,
-    oauth_protected_resource_mcp_metadata, options_handler,
+    oauth_authorization_server_metadata, oauth_protected_resource_mcp_metadata,
+    oauth_protected_resource_metadata, options_handler,
 };
 pub use handlers::{handle_http, handle_sse};
-pub use oauth::{create_token, list_tokens, revoke_token, register_client, authorize, authorize_consent, token, oauth_options};
+pub use oauth::{
+    authorize, authorize_consent, create_token, list_tokens, oauth_options, register_client,
+    revoke_token, token,
+};

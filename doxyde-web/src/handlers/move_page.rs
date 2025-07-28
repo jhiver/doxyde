@@ -327,22 +327,22 @@ mod tests {
         // Check response is HTML
         let response = response.into_response();
         let (parts, body) = response.into_parts();
-                assert_eq!(parts.status, StatusCode::OK);
-                assert!(parts
-                    .headers
-                    .get("content-type")
-                    .unwrap()
-                    .to_str()?
-                    .contains("text/html"));
+        assert_eq!(parts.status, StatusCode::OK);
+        assert!(parts
+            .headers
+            .get("content-type")
+            .unwrap()
+            .to_str()?
+            .contains("text/html"));
 
-                // Convert body to string
-                let body_bytes = to_bytes(body, usize::MAX).await.unwrap();
-                let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
+        // Convert body to string
+        let body_bytes = to_bytes(body, usize::MAX).await.unwrap();
+        let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
 
-                // Should show page2 as a valid target
-                assert!(body_str.contains(&page2.title));
-                // Should not show page1 itself
-                assert!(!body_str.contains(&format!("value=\"{}\"", page1.id.unwrap())));
+        // Should show page2 as a valid target
+        assert!(body_str.contains(&page2.title));
+        // Should not show page1 itself
+        assert!(!body_str.contains(&format!("value=\"{}\"", page1.id.unwrap())));
 
         Ok(())
     }
@@ -377,8 +377,8 @@ mod tests {
         // Check response is redirect to root
         let response = response.into_response();
         let (parts, _) = response.into_parts();
-                assert_eq!(parts.status, StatusCode::SEE_OTHER);
-                assert_eq!(parts.headers.get("location").unwrap(), "/");
+        assert_eq!(parts.status, StatusCode::SEE_OTHER);
+        assert_eq!(parts.headers.get("location").unwrap(), "/");
 
         Ok(())
     }
@@ -445,11 +445,11 @@ mod tests {
         // Check response is redirect to new location
         let response = response.into_response();
         let (parts, _) = response.into_parts();
-                assert_eq!(parts.status, StatusCode::SEE_OTHER);
-                assert_eq!(
-                    parts.headers.get("location").unwrap(),
-                    &format!("/{}/{}", page2.slug, page1.slug)
-                );
+        assert_eq!(parts.status, StatusCode::SEE_OTHER);
+        assert_eq!(
+            parts.headers.get("location").unwrap(),
+            &format!("/{}/{}", page2.slug, page1.slug)
+        );
 
         // Verify page was actually moved
         let page_repo = PageRepository::new(state.db);
@@ -483,7 +483,7 @@ mod tests {
         // Check response is OK
         let response = response.into_response();
         let (parts, _) = response.into_parts();
-                assert_eq!(parts.status, StatusCode::OK);
+        assert_eq!(parts.status, StatusCode::OK);
 
         Ok(())
     }

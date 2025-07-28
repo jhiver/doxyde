@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
-    extract::{State, Request},
+    extract::{Request, State},
     http::{header::AUTHORIZATION, HeaderMap, StatusCode},
     response::Response,
     Json,
@@ -52,7 +52,10 @@ pub async fn handle_sse(
     let site_id = if let Some(token) = extract_bearer_token(&headers) {
         match validate_token(&state.db, token).await {
             Ok(Some(token_info)) => {
-                info!("Valid OAuth token for SSE connection: site_id={}", token_info.site_id);
+                info!(
+                    "Valid OAuth token for SSE connection: site_id={}",
+                    token_info.site_id
+                );
                 token_info.site_id
             }
             Ok(None) => {
@@ -80,11 +83,12 @@ pub async fn handle_sse(
 
     // Create SSE server and router
     let (sse_server, _router) = SseServer::new(config);
-    
+
     // Spawn a task to handle the service with the validated site_id
     let db_clone = state.db.clone();
-    let _service_handle = sse_server.with_service(move || DoxydeRmcpService::new(db_clone.clone(), site_id));
-    
+    let _service_handle =
+        sse_server.with_service(move || DoxydeRmcpService::new(db_clone.clone(), site_id));
+
     // For now, return not implemented until we properly integrate the SSE handler
     // The proper implementation would need to extract the SSE handler from the router
     // and use it to handle this request
@@ -100,7 +104,7 @@ pub async fn handle_http(
 ) -> Result<Json<Value>, StatusCode> {
     // Extract request ID early (before authentication)
     let request_id = body.get("id").cloned();
-    
+
     // Helper function to create error response with proper ID handling
     let create_error_response = |code: i32, message: &str| -> Json<Value> {
         let mut response = json!({
@@ -110,22 +114,25 @@ pub async fn handle_http(
                 "message": message
             }
         });
-        
+
         // Only include id if it exists and is not null
         if let Some(id) = &request_id {
             if !id.is_null() {
                 response["id"] = id.clone();
             }
         }
-        
+
         Json(response)
     };
-    
+
     // Validate OAuth token and get site_id
     let site_id = if let Some(token) = extract_bearer_token(&headers) {
         match validate_token(&state.db, token).await {
             Ok(Some(token_info)) => {
-                debug!("Valid OAuth token for HTTP request: site_id={}", token_info.site_id);
+                debug!(
+                    "Valid OAuth token for HTTP request: site_id={}",
+                    token_info.site_id
+                );
                 token_info.site_id
             }
             Ok(None) => {
@@ -178,7 +185,7 @@ pub async fn handle_http(
             // No tools implemented yet
             let params = body.get("params").cloned().unwrap_or(json!({}));
             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            
+
             Ok(Json(json!({
                 "jsonrpc": "2.0",
                 "error": {
@@ -188,15 +195,13 @@ pub async fn handle_http(
                 "id": id
             })))
         }
-        _ => {
-            Ok(Json(json!({
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32601,
-                    "message": format!("Method not found: {}", method)
-                },
-                "id": id
-            })))
-        }
+        _ => Ok(Json(json!({
+            "jsonrpc": "2.0",
+            "error": {
+                "code": -32601,
+                "message": format!("Method not found: {}", method)
+            },
+            "id": id
+        }))),
     }
 }

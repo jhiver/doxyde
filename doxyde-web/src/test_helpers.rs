@@ -166,7 +166,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     "#,
     )?;
 
-
     // Create a test config
     let config = crate::config::Config {
         database_url: "sqlite::memory:".to_string(),

@@ -25,16 +25,16 @@ use std::time::Duration;
 pub struct Config {
     #[serde(default = "default_bind_addr")]
     pub bind_addr: String,
-    
+
     #[serde(default = "default_database_url")]
     pub database_url: String,
-    
+
     #[serde(default = "default_sse_path")]
     pub sse_path: String,
-    
+
     #[serde(default = "default_post_path")]
     pub post_path: String,
-    
+
     #[serde(default = "default_keep_alive_secs")]
     pub keep_alive_secs: u64,
 }
@@ -57,10 +57,10 @@ impl Config {
             .merge(Toml::file("doxyde-sse.toml"))
             .merge(Env::prefixed("DOXYDE_SSE_"))
             .extract()?;
-        
+
         Ok(config)
     }
-    
+
     pub fn keep_alive_duration(&self) -> Duration {
         Duration::from_secs(self.keep_alive_secs)
     }

@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::AppState;
+use anyhow::Context;
 use axum::{
-    extract::{State, Host},
+    extract::{Host, State},
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
 use serde::{Deserialize, Serialize};
-use crate::AppState;
-use anyhow::Context;
 use sqlx;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -58,27 +58,32 @@ fn determine_protocol(headers: &HeaderMap, host: &str) -> &'static str {
             }
         }
     }
-    
+
     // Check X-Forwarded-Proto header (set by reverse proxies)
     // Try both lowercase and the actual header constant
-    if let Some(proto) = headers.get("x-forwarded-proto")
+    if let Some(proto) = headers
+        .get("x-forwarded-proto")
         .or_else(|| headers.get("X-Forwarded-Proto"))
-        .or_else(|| headers.get(header::FORWARDED)) 
+        .or_else(|| headers.get(header::FORWARDED))
     {
         if let Ok(proto_str) = proto.to_str() {
             return match proto_str.to_lowercase().as_str() {
                 "https" => "https",
                 "http" => "http",
-                _ => "https"
+                _ => "https",
             };
         }
     }
-    
+
     // Check if host contains a port that indicates local development
-    if host.contains(":3000") || host.contains(":8000") || host.contains(":8001") || host == "localhost" {
+    if host.contains(":3000")
+        || host.contains(":8000")
+        || host.contains(":8001")
+        || host == "localhost"
+    {
         return "http";
     }
-    
+
     // For production domains without protocol headers, default to https
     "https"
 }
@@ -100,10 +105,10 @@ pub async fn oauth_authorization_server_metadata(
             host.clone()
         }
     };
-    
+
     let protocol = determine_protocol(&headers, &site_domain);
     let base_url = format!("{}://{}", protocol, site_domain);
-    
+
     let metadata = AuthorizationServerMetadata {
         issuer: base_url.clone(),
         authorization_endpoint: format!("{}/.oauth/authorize", base_url),
@@ -116,14 +121,8 @@ pub async fn oauth_authorization_server_metadata(
             "write".to_string(),
             "admin".to_string(),
         ],
-        response_types_supported: vec![
-            "code".to_string(),
-            "token".to_string(),
-        ],
-        response_modes_supported: vec![
-            "query".to_string(),
-            "fragment".to_string(),
-        ],
+        response_types_supported: vec!["code".to_string(), "token".to_string()],
+        response_modes_supported: vec!["query".to_string(), "fragment".to_string()],
         grant_types_supported: vec![
             "authorization_code".to_string(),
             "implicit".to_string(),
@@ -133,17 +132,14 @@ pub async fn oauth_authorization_server_metadata(
             "client_secret_basic".to_string(),
             "client_secret_post".to_string(),
         ],
-        code_challenge_methods_supported: vec![
-            "plain".to_string(),
-            "S256".to_string(),
-        ],
+        code_challenge_methods_supported: vec!["plain".to_string(), "S256".to_string()],
         service_documentation: Some(format!("{}/docs/oauth", base_url)),
     };
 
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-    
+
     (StatusCode::OK, headers, Json(metadata))
 }
 
@@ -164,15 +160,13 @@ pub async fn oauth_protected_resource_metadata(
             host.clone()
         }
     };
-    
+
     let protocol = determine_protocol(&headers, &site_domain);
     let base_url = format!("{}://{}", protocol, site_domain);
-    
+
     let metadata = ProtectedResourceMetadata {
         resource: base_url.clone(),
-        bearer_methods_supported: vec![
-            "header".to_string(),
-        ],
+        bearer_methods_supported: vec!["header".to_string()],
         resource_documentation: Some(format!("{}/docs/mcp", base_url)),
         resource_registration_endpoint: Some(format!("{}/.mcp/register", base_url)),
         scopes_supported: vec![
@@ -187,7 +181,7 @@ pub async fn oauth_protected_resource_metadata(
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-    
+
     (StatusCode::OK, headers, Json(metadata))
 }
 
@@ -206,22 +200,18 @@ pub async fn options_handler() -> impl IntoResponse {
 }
 
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        "*".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
         "GET, OPTIONS".parse().unwrap(),
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type, MCP-Protocol-Version".parse().unwrap(),
+        "Authorization, Content-Type, MCP-Protocol-Version"
+            .parse()
+            .unwrap(),
     );
-    headers.insert(
-        header::ACCESS_CONTROL_MAX_AGE,
-        "3600".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
 }
 
 #[cfg(test)]
@@ -240,14 +230,22 @@ mod tests {
         let response = oauth_authorization_server_metadata(
             State(state),
             Host("localhost:3000".to_string()),
-            headers
-        ).await.into_response();
-        
+            headers,
+        )
+        .await
+        .into_response();
+
         assert_eq!(response.status(), StatusCode::OK);
-        
+
         let headers = response.headers();
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*");
-        assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "application/json");
+        assert_eq!(
+            headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "*"
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
     }
 
     #[tokio::test]
@@ -260,25 +258,42 @@ mod tests {
         let response = oauth_protected_resource_metadata(
             State(state),
             Host("localhost:3000".to_string()),
-            headers
-        ).await.into_response();
-        
+            headers,
+        )
+        .await
+        .into_response();
+
         assert_eq!(response.status(), StatusCode::OK);
-        
+
         let headers = response.headers();
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*");
-        assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "application/json");
+        assert_eq!(
+            headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "*"
+        );
+        assert_eq!(
+            headers.get(header::CONTENT_TYPE).unwrap(),
+            "application/json"
+        );
     }
 
     #[tokio::test]
     async fn test_options_handler() {
         let response = options_handler().await.into_response();
-        
+
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
-        
+
         let headers = response.headers();
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(), "*");
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_METHODS).unwrap(), "GET, OPTIONS");
-        assert_eq!(headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap(), "Authorization, Content-Type, MCP-Protocol-Version");
+        assert_eq!(
+            headers.get(header::ACCESS_CONTROL_ALLOW_ORIGIN).unwrap(),
+            "*"
+        );
+        assert_eq!(
+            headers.get(header::ACCESS_CONTROL_ALLOW_METHODS).unwrap(),
+            "GET, OPTIONS"
+        );
+        assert_eq!(
+            headers.get(header::ACCESS_CONTROL_ALLOW_HEADERS).unwrap(),
+            "Authorization, Content-Type, MCP-Protocol-Version"
+        );
     }
 }

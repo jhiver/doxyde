@@ -135,7 +135,8 @@ fn process_markdown_placeholders(html: &str) -> String {
                 let div_content = &result[div_start..start];
                 let class_attr = div_content.find("class=\"").and_then(|class_start| {
                     let class_start = class_start + 7;
-                    div_content[class_start..].find('"')
+                    div_content[class_start..]
+                        .find('"')
                         .map(|class_end| &div_content[class_start..class_start + class_end])
                 });
 

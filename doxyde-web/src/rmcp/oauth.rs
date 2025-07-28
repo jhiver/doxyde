@@ -87,9 +87,9 @@ pub async fn create_token(
     let token_hash = format!("{:x}", hasher.finalize());
 
     // Calculate expiry
-    let expires_at = request.expires_in_days.map(|days| {
-        (Utc::now() + Duration::days(days)).to_rfc3339()
-    });
+    let expires_at = request
+        .expires_in_days
+        .map(|days| (Utc::now() + Duration::days(days)).to_rfc3339());
 
     // Insert token (use site_id 1 for now - TODO: implement proper multi-site support)
     let site_id = 1i64;
@@ -127,10 +127,7 @@ pub async fn create_token(
     .await
     .context("Failed to fetch created token")?;
 
-    Ok(Json(CreateTokenResponse {
-        token,
-        token_info,
-    }))
+    Ok(Json(CreateTokenResponse { token, token_info }))
 }
 
 pub async fn list_tokens(
@@ -248,7 +245,7 @@ pub struct TokenRequest {
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
     pub code_verifier: Option<String>,
-    pub resource: Option<String>, // Optional resource parameter
+    pub resource: Option<String>,      // Optional resource parameter
     pub refresh_token: Option<String>, // For refresh token grant
 }
 
@@ -262,22 +259,18 @@ pub struct TokenResponse {
 }
 
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-        "*".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_METHODS,
         "GET, POST, OPTIONS".parse().unwrap(),
     );
     headers.insert(
         header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type, MCP-Protocol-Version".parse().unwrap(),
+        "Authorization, Content-Type, MCP-Protocol-Version"
+            .parse()
+            .unwrap(),
     );
-    headers.insert(
-        header::ACCESS_CONTROL_MAX_AGE,
-        "3600".parse().unwrap(),
-    );
+    headers.insert(header::ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
 }
 
 pub async fn register_client(
@@ -286,24 +279,33 @@ pub async fn register_client(
 ) -> Result<impl IntoResponse, StatusCode> {
     // Generate client credentials
     let client_id = format!("mcp_{}", uuid::Uuid::new_v4());
-    let client_secret = base64::engine::general_purpose::STANDARD.encode(rand::random::<[u8; 32]>());
-    
+    let client_secret =
+        base64::engine::general_purpose::STANDARD.encode(rand::random::<[u8; 32]>());
+
     // Hash the client secret
     let mut hasher = Sha256::new();
     hasher.update(client_secret.as_bytes());
     let client_secret_hash = format!("{:x}", hasher.finalize());
-    
+
     // Default values
-    let grant_types = request.grant_types.unwrap_or_else(|| vec!["authorization_code".to_string()]);
-    let response_types = request.response_types.unwrap_or_else(|| vec!["code".to_string()]);
-    let scope = request.scope.unwrap_or_else(|| "mcp:read mcp:write".to_string());
-    let token_endpoint_auth_method = request.token_endpoint_auth_method.unwrap_or_else(|| "client_secret_basic".to_string());
-    
+    let grant_types = request
+        .grant_types
+        .unwrap_or_else(|| vec!["authorization_code".to_string()]);
+    let response_types = request
+        .response_types
+        .unwrap_or_else(|| vec!["code".to_string()]);
+    let scope = request
+        .scope
+        .unwrap_or_else(|| "mcp:read mcp:write".to_string());
+    let token_endpoint_auth_method = request
+        .token_endpoint_auth_method
+        .unwrap_or_else(|| "client_secret_basic".to_string());
+
     // Store in database
     let redirect_uris_json = serde_json::to_string(&request.redirect_uris).unwrap();
     let grant_types_json = serde_json::to_string(&grant_types).unwrap();
     let response_types_json = serde_json::to_string(&response_types).unwrap();
-    
+
     match sqlx::query!(
         r#"
         INSERT INTO oauth_clients 
@@ -364,22 +366,25 @@ pub async fn authorize(
     )
     .fetch_optional(&state.db)
     .await
-    .context("Failed to check client")? {
+    .context("Failed to check client")?
+    {
         Some(client) => client,
         None => {
-            let error_url = format!("{}?error=invalid_client&error_description=Unknown+client", 
-                request.redirect_uri);
+            let error_url = format!(
+                "{}?error=invalid_client&error_description=Unknown+client",
+                request.redirect_uri
+            );
             return Ok(Redirect::to(&error_url).into_response());
         }
     };
-    
+
     // Validate redirect_uri
-    let redirect_uris: Vec<String> = serde_json::from_str(&client.redirect_uris)
-        .context("Failed to parse redirect URIs")?;
+    let redirect_uris: Vec<String> =
+        serde_json::from_str(&client.redirect_uris).context("Failed to parse redirect URIs")?;
     if !redirect_uris.contains(&request.redirect_uri) {
         return Err(AppError::bad_request("Invalid redirect_uri"));
     }
-    
+
     // Check if user is authenticated
     let user = match get_current_user(&state.db, &session).await? {
         Some(user) => user,
@@ -387,19 +392,22 @@ pub async fn authorize(
             // Redirect to login, preserving OAuth parameters
             let oauth_params = serde_urlencoded::to_string(&request)
                 .context("Failed to serialize OAuth params")?;
-            let login_url = format!("/.login?return_to=/.oauth/authorize?{}", 
-                urlencoding::encode(&oauth_params));
+            let login_url = format!(
+                "/.login?return_to=/.oauth/authorize?{}",
+                urlencoding::encode(&oauth_params)
+            );
             return Ok(Redirect::to(&login_url).into_response());
         }
     };
-    
+
     // Parse requested scopes
-    let requested_scopes: Vec<&str> = request.scope
+    let requested_scopes: Vec<&str> = request
+        .scope
         .as_deref()
         .unwrap_or("mcp:read")
         .split(' ')
         .collect();
-    
+
     // Show consent screen
     let mut context = tera::Context::new();
     context.insert("client_name", &client.client_name);
@@ -409,27 +417,30 @@ pub async fn authorize(
     context.insert("scope", &request.scope.as_deref().unwrap_or("mcp:read"));
     context.insert("scopes", &requested_scopes);
     context.insert("user", &user);
-    
+
     if let Some(state_param) = &request.state {
         context.insert("state", state_param);
     }
     if let Some(challenge) = &request.code_challenge {
         context.insert("code_challenge", challenge);
-        context.insert("code_challenge_method", 
-            &request.code_challenge_method.as_deref().unwrap_or("S256"));
+        context.insert(
+            "code_challenge_method",
+            &request.code_challenge_method.as_deref().unwrap_or("S256"),
+        );
     }
-    
+
     // Add CSRF token
     let csrf_token = uuid::Uuid::new_v4().to_string();
     context.insert("csrf_token", &csrf_token);
-    
+
     // Store CSRF token in session for validation
     let session = session.add(Cookie::new("oauth_csrf", csrf_token));
-    
-    let html = state.templates
+
+    let html = state
+        .templates
         .render("oauth_consent.html", &context)
         .context("Failed to render OAuth consent template")?;
-    
+
     Ok((session, Html(html)).into_response())
 }
 
@@ -445,21 +456,17 @@ pub async fn token(
                 "error": "unsupported_grant_type",
                 "error_description": "Only authorization_code and refresh_token grant types are supported"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response()
         }
     }
 }
 
-async fn handle_authorization_code_grant(
-    state: AppState,
-    request: TokenRequest,
-) -> Response<Body> {
-    
+async fn handle_authorization_code_grant(state: AppState, request: TokenRequest) -> Response<Body> {
     let code = match &request.code {
         Some(code) => code,
         None => {
@@ -467,15 +474,15 @@ async fn handle_authorization_code_grant(
                 "error": "invalid_request",
                 "error_description": "Missing authorization code"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
     };
-    
+
     // Retrieve and validate authorization code
     let auth_code = match sqlx::query!(
         r#"
@@ -514,21 +521,21 @@ async fn handle_authorization_code_grant(
             return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
         }
     };
-    
+
     // Check if code was already used
     if auth_code.used_at.is_some() {
         let error_response = serde_json::json!({
             "error": "invalid_grant",
             "error_description": "Authorization code already used"
         });
-        
+
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
         headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-        
+
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
-    
+
     // Check if code expired
     let expires_at = chrono::DateTime::parse_from_rfc3339(&auth_code.expires_at)
         .unwrap()
@@ -538,14 +545,14 @@ async fn handle_authorization_code_grant(
             "error": "invalid_grant",
             "error_description": "Authorization code expired"
         });
-        
+
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
         headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-        
+
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
-    
+
     // Validate PKCE if present
     if let Some(challenge) = auth_code.code_challenge {
         let verifier = match &request.code_verifier {
@@ -555,15 +562,15 @@ async fn handle_authorization_code_grant(
                     "error": "invalid_request",
                     "error_description": "Missing code_verifier"
                 });
-                
+
                 let mut headers = HeaderMap::new();
                 add_cors_headers(&mut headers);
                 headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-                
+
                 return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
             }
         };
-        
+
         // Verify PKCE challenge
         let method = auth_code.code_challenge_method.as_deref().unwrap_or("S256");
         let computed_challenge = if method == "S256" {
@@ -573,21 +580,21 @@ async fn handle_authorization_code_grant(
         } else {
             verifier.clone()
         };
-        
+
         if computed_challenge != challenge {
             let error_response = serde_json::json!({
                 "error": "invalid_grant",
                 "error_description": "Invalid code_verifier"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
     }
-    
+
     // Mark code as used
     let _ = sqlx::query!(
         "UPDATE oauth_authorization_codes SET used_at = datetime('now') WHERE code = ?",
@@ -595,23 +602,23 @@ async fn handle_authorization_code_grant(
     )
     .execute(&state.db)
     .await;
-    
+
     // Generate access token
     let access_token = format!("mcp_token_{}", uuid::Uuid::new_v4());
     let mut hasher = Sha256::new();
     hasher.update(access_token.as_bytes());
     let token_hash = format!("{:x}", hasher.finalize());
-    
+
     let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
-    
+
     // Generate refresh token
     let refresh_token = format!("mcp_refresh_{}", uuid::Uuid::new_v4());
     let mut refresh_hasher = Sha256::new();
     refresh_hasher.update(refresh_token.as_bytes());
     let refresh_token_hash = format!("{:x}", refresh_hasher.finalize());
-    
+
     let refresh_expires_at = (Utc::now() + Duration::days(30)).to_rfc3339();
-    
+
     // Store access token
     match sqlx::query!(
         r#"
@@ -627,7 +634,8 @@ async fn handle_authorization_code_grant(
         expires_at
     )
     .execute(&state.db)
-    .await {
+    .await
+    {
         Ok(_) => {
             // Store refresh token
             match sqlx::query!(
@@ -644,7 +652,8 @@ async fn handle_authorization_code_grant(
                 refresh_expires_at
             )
             .execute(&state.db)
-            .await {
+            .await
+            {
                 Ok(_) => {
                     let response = TokenResponse {
                         access_token,
@@ -653,11 +662,11 @@ async fn handle_authorization_code_grant(
                         scope: auth_code.scope.unwrap_or_else(|| "mcp:read".to_string()),
                         refresh_token: Some(refresh_token),
                     };
-                    
+
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
                     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-                    
+
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
                 Err(e) => {
@@ -666,12 +675,17 @@ async fn handle_authorization_code_grant(
                         "error": "server_error",
                         "error_description": "Failed to create refresh token"
                     });
-                    
+
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
                     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-                    
-                    (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        headers,
+                        Json(error_response),
+                    )
+                        .into_response()
                 }
             }
         }
@@ -681,20 +695,22 @@ async fn handle_authorization_code_grant(
                 "error": "server_error",
                 "error_description": "Failed to create access token"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
-            (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                Json(error_response),
+            )
+                .into_response()
         }
     }
 }
 
-async fn handle_refresh_token_grant(
-    state: AppState,
-    request: TokenRequest,
-) -> Response<Body> {
+async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> Response<Body> {
     let refresh_token = match &request.refresh_token {
         Some(token) => token,
         None => {
@@ -702,20 +718,20 @@ async fn handle_refresh_token_grant(
                 "error": "invalid_request",
                 "error_description": "Missing refresh_token"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
     };
-    
+
     // Hash the refresh token to look it up
     let mut hasher = Sha256::new();
     hasher.update(refresh_token.as_bytes());
     let refresh_token_hash = format!("{:x}", hasher.finalize());
-    
+
     // Retrieve and validate refresh token
     let stored_refresh = match sqlx::query!(
         r#"
@@ -726,18 +742,19 @@ async fn handle_refresh_token_grant(
         refresh_token_hash
     )
     .fetch_optional(&state.db)
-    .await {
+    .await
+    {
         Ok(Some(row)) => row,
         Ok(None) => {
             let error_response = serde_json::json!({
                 "error": "invalid_grant",
                 "error_description": "Invalid refresh token"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
+
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
         Err(e) => {
@@ -746,15 +763,20 @@ async fn handle_refresh_token_grant(
                 "error": "server_error",
                 "error_description": "Internal server error"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
-            return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
+
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                Json(error_response),
+            )
+                .into_response();
         }
     };
-    
+
     // Check if refresh token is expired
     let expires_at = chrono::DateTime::parse_from_rfc3339(&stored_refresh.expires_at)
         .unwrap()
@@ -764,22 +786,22 @@ async fn handle_refresh_token_grant(
             "error": "invalid_grant",
             "error_description": "Refresh token expired"
         });
-        
+
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
         headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-        
+
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
-    
+
     // Generate new access token
     let access_token = format!("mcp_token_{}", uuid::Uuid::new_v4());
     let mut hasher = Sha256::new();
     hasher.update(access_token.as_bytes());
     let token_hash = format!("{:x}", hasher.finalize());
-    
+
     let expires_at = (Utc::now() + Duration::hours(1)).to_rfc3339();
-    
+
     // Store new access token
     match sqlx::query!(
         r#"
@@ -795,7 +817,8 @@ async fn handle_refresh_token_grant(
         expires_at
     )
     .execute(&state.db)
-    .await {
+    .await
+    {
         Ok(_) => {
             // Mark refresh token as used
             let _ = sqlx::query!(
@@ -804,15 +827,15 @@ async fn handle_refresh_token_grant(
             )
             .execute(&state.db)
             .await;
-            
+
             // Generate new refresh token (refresh token rotation)
             let new_refresh_token = format!("mcp_refresh_{}", uuid::Uuid::new_v4());
             let mut refresh_hasher = Sha256::new();
             refresh_hasher.update(new_refresh_token.as_bytes());
             let new_refresh_token_hash = format!("{:x}", refresh_hasher.finalize());
-            
+
             let refresh_expires_at = (Utc::now() + Duration::days(30)).to_rfc3339();
-            
+
             // Store new refresh token
             match sqlx::query!(
                 r#"
@@ -828,20 +851,23 @@ async fn handle_refresh_token_grant(
                 refresh_expires_at
             )
             .execute(&state.db)
-            .await {
+            .await
+            {
                 Ok(_) => {
                     let response = TokenResponse {
                         access_token,
                         token_type: "Bearer".to_string(),
                         expires_in: 3600,
-                        scope: stored_refresh.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                        scope: stored_refresh
+                            .scope
+                            .unwrap_or_else(|| "mcp:read".to_string()),
                         refresh_token: Some(new_refresh_token),
                     };
-                    
+
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
                     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-                    
+
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
                 Err(e) => {
@@ -851,14 +877,16 @@ async fn handle_refresh_token_grant(
                         access_token,
                         token_type: "Bearer".to_string(),
                         expires_in: 3600,
-                        scope: stored_refresh.scope.unwrap_or_else(|| "mcp:read".to_string()),
+                        scope: stored_refresh
+                            .scope
+                            .unwrap_or_else(|| "mcp:read".to_string()),
                         refresh_token: None,
                     };
-                    
+
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
                     headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-                    
+
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
             }
@@ -869,12 +897,17 @@ async fn handle_refresh_token_grant(
                 "error": "server_error",
                 "error_description": "Failed to create access token"
             });
-            
+
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
             headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
-            
-            (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response()
+
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                Json(error_response),
+            )
+                .into_response()
         }
     }
 }
@@ -899,13 +932,12 @@ pub async fn authorize_consent(
     Form(request): Form<AuthorizeConsentRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     // Validate CSRF token
-    let stored_csrf = session.get("oauth_csrf")
-        .map(|c| c.value().to_string());
-    
+    let stored_csrf = session.get("oauth_csrf").map(|c| c.value().to_string());
+
     if stored_csrf != Some(request.csrf_token.clone()) {
         return Err(AppError::bad_request("Invalid CSRF token"));
     }
-    
+
     // Check if user denied access
     if request.action == "deny" {
         let mut redirect_url = format!("{}?error=access_denied", request.redirect_uri);
@@ -914,20 +946,21 @@ pub async fn authorize_consent(
         }
         return Ok(Redirect::to(&redirect_url).into_response());
     }
-    
+
     // Get current user
-    let user = get_current_user(&state.db, &session).await?
+    let user = get_current_user(&state.db, &session)
+        .await?
         .ok_or_else(|| AppError::unauthorized("Not authenticated"))?;
-    
+
     // Generate authorization code
     let code = format!("code_{}", uuid::Uuid::new_v4());
     let expires_at = (Utc::now() + Duration::minutes(10)).to_rfc3339();
-    
+
     // Create an MCP token for this OAuth flow
     let user_id = user.id.unwrap_or(0);
     let token_hash = format!("oauth_{}", uuid::Uuid::new_v4());
     let token_name = format!("OAuth token for {}", request.client_id);
-    
+
     let mcp_token_id = match sqlx::query!(
         r#"
         INSERT INTO mcp_tokens (site_id, token_hash, name, created_by)
@@ -938,7 +971,8 @@ pub async fn authorize_consent(
         user_id
     )
     .execute(&state.db)
-    .await {
+    .await
+    {
         Ok(result) => result.last_insert_rowid(),
         Err(e) => {
             eprintln!("Failed to create MCP token: {}", e);
@@ -949,9 +983,9 @@ pub async fn authorize_consent(
             return Ok(Redirect::to(&redirect_url).into_response());
         }
     };
-    
+
     let mcp_token_id_str = mcp_token_id.to_string();
-    
+
     // Store authorization code
     match sqlx::query!(
         r#"

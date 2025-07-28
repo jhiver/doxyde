@@ -4,7 +4,6 @@ mod tests {
 
     #[test]
     fn test_all_templates_compile() {
-
         // Use Tera's built-in glob pattern to load all templates
         // This properly handles template inheritance
         let tera = match Tera::new("../templates/**/*.html") {

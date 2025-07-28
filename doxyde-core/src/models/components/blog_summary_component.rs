@@ -78,7 +78,8 @@ impl ComponentRenderer for BlogSummaryComponent {
         if self.pages.is_empty() {
             return r#"<div class="blog-summary empty">
                     <p>No articles to display</p>
-                </div>"#.to_string();
+                </div>"#
+                .to_string();
         }
 
         match template {
