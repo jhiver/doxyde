@@ -103,7 +103,9 @@ pub async fn show_page_handler(
 
                 // Sort pages based on order_by
                 match order_by {
-                    "created_at_desc" => child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+                    "created_at_desc" => {
+                        child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at))
+                    }
                     "created_at_asc" => child_pages.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
                     "title_asc" => child_pages.sort_by(|a, b| a.title.cmp(&b.title)),
                     "title_desc" => child_pages.sort_by(|a, b| b.title.cmp(&a.title)),

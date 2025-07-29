@@ -15,10 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-    auth::CurrentUser,
-    content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
-    handlers, rate_limit::login_rate_limit_middleware, request_logging::request_logging_middleware,
-    rmcp, security_headers::security_headers_middleware, session_activity::update_session_activity,
+    auth::CurrentUser, content, debug_middleware::debug_form_middleware,
+    error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware,
+    request_logging::request_logging_middleware, rmcp,
+    security_headers::security_headers_middleware, session_activity::update_session_activity,
     AppState,
 };
 use axum::extract::{DefaultBodyLimit, Host, Query, State};
@@ -126,14 +126,14 @@ async fn image_preview(
 ) -> Result<Response, StatusCode> {
     // Use the full host as domain (including port)
     let domain = &host;
-    
+
     tracing::debug!(
         "Image preview route - host: {}, domain: {}, component_id: {}",
         host,
         domain,
         params.component_id
     );
-    
+
     // Get the site
     let site_repo = SiteRepository::new(state.db.clone());
     let site = site_repo
@@ -147,9 +147,9 @@ async fn image_preview(
             tracing::warn!("Site not found for domain '{}'", domain);
             StatusCode::NOT_FOUND
         })?;
-    
+
     tracing::debug!("Site found: {:?}", site.id);
-    
+
     // Call the actual handler
     handlers::image_preview_handler(State(state), site, Query(params), user).await
 }

@@ -37,10 +37,29 @@
     </script>
     {% endif %}
 
+    <!-- Preload hints for performance -->
+    <link rel="dns-prefetch" href="https://fonts.googleapis.com">
+    <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+    
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <!-- Speculation Rules for instant navigation -->
+    <script type="speculationrules">
+    {
+      "prerender": [{
+        "where": {
+          "and": [
+            { "href_matches": "/*" },
+            { "not": {"href_matches": "/\\.(login|logout|admin|edit|new|delete)"}}
+          ]
+        },
+        "eagerness": "moderate"
+      }]
+    }
+    </script>
 
     <!-- Modern CSS -->
     <style>

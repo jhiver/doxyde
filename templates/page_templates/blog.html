@@ -20,7 +20,7 @@
             {% endif %}
 
             <header class="blog-header">
-                <h1 class="blog-title">{{ page.title }}</h1>
+                <h1 class="blog-title page-title">{{ page.title }}</h1>
                 <div class="blog-meta">
                     <time datetime="{{ page.created_at }}">{{ page.created_at | date(format="%B %d, %Y") }}</time>
                     {% if page.updated_at != page.created_at %}

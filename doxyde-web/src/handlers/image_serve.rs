@@ -20,7 +20,9 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use doxyde_core::models::{permission::SiteRole, site::Site};
-use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteUserRepository};
+use doxyde_db::repositories::{
+    ComponentRepository, PageRepository, PageVersionRepository, SiteUserRepository,
+};
 use serde::Deserialize;
 use std::fs;
 use std::path::PathBuf;
@@ -163,20 +165,20 @@ pub async fn image_preview_handler(
 
     // Get and validate the component
     let component = get_and_validate_component(&state, params.component_id).await?;
-    
+
     // Check permissions
     check_component_permissions(&state, &site, &component, &user).await?;
-    
+
     // Extract image data and serve
     let (file_path, format) = extract_image_data(&component)?;
-    
+
     tracing::debug!(
         "Serving image preview - file_path: {}, format: {}, uploads_dir: {}",
         file_path,
         format,
         state.config.uploads_dir
     );
-    
+
     serve_image_file(file_path, format, &state.config.uploads_dir).await
 }
 
@@ -186,7 +188,7 @@ async fn get_and_validate_component(
     component_id: i64,
 ) -> Result<doxyde_core::models::component::Component, StatusCode> {
     tracing::debug!("Fetching component with id: {}", component_id);
-    
+
     let component_repo = ComponentRepository::new(state.db.clone());
     let component = component_repo
         .find_by_id(component_id)
@@ -324,7 +326,7 @@ fn extract_image_data(
     component: &doxyde_core::models::component::Component,
 ) -> Result<(&str, &str), StatusCode> {
     tracing::debug!("Component content: {:?}", component.content);
-    
+
     let file_path = component
         .content
         .get("file_path")

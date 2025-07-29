@@ -229,6 +229,9 @@ impl ComponentRenderer for ImageComponent {
             "thumbnail",
             "responsive",
             "hidden",
+            "inline",
+            "float_left",
+            "float_right",
         ]
     }
 }
