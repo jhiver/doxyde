@@ -15,17 +15,21 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
+    auth::CurrentUser,
     content, debug_middleware::debug_form_middleware, error_middleware::error_enhancer_middleware,
     handlers, rate_limit::login_rate_limit_middleware, request_logging::request_logging_middleware,
     rmcp, security_headers::security_headers_middleware, session_activity::update_session_activity,
     AppState,
 };
-use axum::extract::DefaultBodyLimit;
+use axum::extract::{DefaultBodyLimit, Host, Query, State};
+use axum::http::StatusCode;
+use axum::response::Response;
 use axum::{
     middleware,
     routing::{delete, get, post},
     Router,
 };
+use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
@@ -50,6 +54,8 @@ pub fn create_router(state: AppState) -> Router {
                 )),
         )
         .route("/.logout", get(handlers::logout).post(handlers::logout))
+        // Image preview for draft components
+        .route("/.image-preview", get(image_preview))
         // MCP routes
         .route("/.mcp", post(rmcp::handle_http))
         // OAuth management (admin only)
@@ -111,6 +117,43 @@ async fn health() -> &'static str {
     "OK"
 }
 
+// Image preview handler wrapper
+async fn image_preview(
+    Host(host): Host,
+    State(state): State<AppState>,
+    Query(params): Query<handlers::image_serve::ImagePreviewQuery>,
+    user: CurrentUser,
+) -> Result<Response, StatusCode> {
+    // Use the full host as domain (including port)
+    let domain = &host;
+    
+    tracing::debug!(
+        "Image preview route - host: {}, domain: {}, component_id: {}",
+        host,
+        domain,
+        params.component_id
+    );
+    
+    // Get the site
+    let site_repo = SiteRepository::new(state.db.clone());
+    let site = site_repo
+        .find_by_domain(domain)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to lookup site for domain '{}': {}", domain, e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or_else(|| {
+            tracing::warn!("Site not found for domain '{}'", domain);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    tracing::debug!("Site found: {:?}", site.id);
+    
+    // Call the actual handler
+    handlers::image_preview_handler(State(state), site, Query(params), user).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,6 +179,23 @@ mod tests {
         // Test that /health does NOT work (should be 404)
         let response = server.get("/health").await;
         response.assert_status(StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_image_preview_endpoint_exists() {
+        // Create test app state
+        let state = crate::test_helpers::create_test_app_state()
+            .await
+            .expect("Failed to create test state");
+
+        // Create router and test server
+        let app = create_router(state);
+        let server = TestServer::new(app).expect("Failed to create test server");
+
+        // Test that /.image-preview without params returns BAD_REQUEST (missing component_id)
+        let response = server.get("/.image-preview").await;
+        // Should return 400 Bad Request because component_id is missing
+        response.assert_status(StatusCode::BAD_REQUEST);
     }
 
     #[tokio::test]
