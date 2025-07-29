@@ -252,6 +252,9 @@ impl ComponentHandler for ImageComponentHandler {
             "thumbnail",
             "responsive",
             "hidden",
+            "inline",
+            "float_left",
+            "float_right",
         ]
     }
 }

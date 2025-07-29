@@ -404,6 +404,43 @@
         margin-bottom: 10px;
         color: #343a40;
     }
+    
+    /* Drag and drop styles */
+    .image-upload-area {
+        position: relative;
+        transition: all 0.3s ease;
+    }
+    
+    .image-upload-area.drag-over {
+        background: #e3f2fd !important;
+        border-color: #2196f3 !important;
+        transform: scale(1.02);
+    }
+    
+    .image-upload-area.drag-over::after {
+        content: "Drop image here";
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #2196f3;
+        pointer-events: none;
+    }
+    
+    /* Image preview styles */
+    .image-preview img {
+        display: block;
+        object-fit: contain;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
+    }
+    
+    .image-preview img:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        transform: scale(1.02);
+    }
 </style>
 <script>
 function submitComponentsForm(action) {
@@ -524,64 +561,119 @@ function addNewComponent() {
     addNewComponentType(componentType);
 }
 
+// Common function to handle file upload
+function handleImageFileUpload(file, componentId) {
+    // Check file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!validTypes.includes(file.type)) {
+        alert('Invalid file type. Please upload JPG, PNG, GIF, WebP, or SVG images.');
+        return;
+    }
+    
+    // Check file size (10MB max)
+    if (file.size > 10 * 1024 * 1024) {
+        alert('File is too large. Maximum size is 10MB.');
+        return;
+    }
+    
+    // Generate slug from filename
+    const slug = file.name
+        .replace(/\.[^/.]+$/, '') // Remove extension
+        .toLowerCase()
+        .replace(/[^a-z0-9-_]/g, '-') // Replace invalid chars
+        .replace(/-+/g, '-') // Remove multiple dashes
+        .replace(/^-|-$/g, ''); // Remove leading/trailing dashes
+    
+    // Create form data
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('slug', slug);
+    formData.append('title', file.name);
+    formData.append('description', '');
+    formData.append('component_id', componentId);
+    
+    // Show loading state
+    const uploadArea = document.querySelector(`#component-${componentId} .image-upload-area`);
+    if (uploadArea) {
+        uploadArea.innerHTML = '<p style="color: #007bff;">Preparing upload...</p>';
+    }
+        
+        try {
+            // Create XMLHttpRequest for progress tracking
+            const xhr = new XMLHttpRequest();
+            
+            // Track upload progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = Math.round((e.loaded / e.total) * 100);
+                    const uploadArea = document.querySelector(`#component-${componentId} .image-upload-area`);
+                    if (uploadArea) {
+                        uploadArea.innerHTML = `
+                            <div style="text-align: center;">
+                                <p style="color: #007bff; margin-bottom: 10px;">Uploading image...</p>
+                                <div style="width: 100%; height: 8px; background-color: #e9ecef; border-radius: 4px; overflow: hidden;">
+                                    <div style="width: ${percentComplete}%; height: 100%; background-color: #007bff; transition: width 0.3s ease;"></div>
+                                </div>
+                                <p style="color: #6c757d; margin-top: 5px; font-size: 0.875rem;">${percentComplete}%</p>
+                            </div>
+                        `;
+                    }
+                }
+            });
+            
+            // Handle completion
+            xhr.onload = async function() {
+                if (xhr.status === 200) {
+                    try {
+                        const result = JSON.parse(xhr.responseText);
+                        if (result.success) {
+                            // Update the component content
+                            updateImageComponent(componentId, result);
+                        } else {
+                            throw new Error(result.error || 'Upload failed');
+                        }
+                    } catch (parseError) {
+                        console.error('Failed to parse response:', parseError);
+                        alert('Failed to process upload response. Please try again.');
+                        location.reload();
+                    }
+                } else {
+                    const errorMsg = xhr.status === 413 ? 'File is too large. Maximum size is 10MB.' :
+                                    xhr.status === 415 ? 'Invalid image format. Please upload JPG, PNG, GIF, WebP, or SVG.' :
+                                    'Failed to upload image. Please try again.';
+                    alert(errorMsg);
+                    location.reload();
+                }
+            };
+            
+            // Handle errors
+            xhr.onerror = function() {
+                console.error('Upload error');
+                alert('Network error during upload. Please check your connection and try again.');
+                location.reload();
+            };
+            
+            // Send the request
+            xhr.open('POST', './.upload-component-image');
+            xhr.send(formData);
+            
+        } catch (error) {
+            console.error('Upload error:', error);
+            alert('Failed to upload image. Please try again.');
+            location.reload();
+        }
+}
+
 function uploadImageForComponent(componentId) {
     // Create a hidden file input
     const fileInput = document.createElement('input');
     fileInput.type = 'file';
     fileInput.accept = 'image/*';
     
-    fileInput.onchange = async function(e) {
+    fileInput.onchange = function(e) {
         const file = e.target.files[0];
         if (!file) return;
-        
-        // Check file size (10MB max)
-        if (file.size > 10 * 1024 * 1024) {
-            alert('File is too large. Maximum size is 10MB.');
-            return;
-        }
-        
-        // Generate slug from filename
-        const slug = file.name
-            .replace(/\.[^/.]+$/, '') // Remove extension
-            .toLowerCase()
-            .replace(/[^a-z0-9-_]/g, '-') // Replace invalid chars
-            .replace(/-+/g, '-') // Remove multiple dashes
-            .replace(/^-|-$/g, ''); // Remove leading/trailing dashes
-        
-        // Create form data
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('slug', slug);
-        formData.append('title', file.name);
-        formData.append('description', '');
-        formData.append('component_id', componentId);
-        
-        // Show loading state
-        const uploadArea = document.querySelector(`#component-${componentId} .image-upload-area`);
-        if (uploadArea) {
-            uploadArea.innerHTML = '<p style="color: #007bff;">Uploading image...</p>';
-        }
-        
-        try {
-            // Upload the image
-            const response = await fetch('./.upload-component-image', {
-                method: 'POST',
-                body: formData
-            });
-            
-            if (response.ok) {
-                const result = await response.json();
-                // Update the component content
-                updateImageComponent(componentId, result);
-            } else {
-                alert('Failed to upload image. Please try again.');
-                location.reload();
-            }
-        } catch (error) {
-            console.error('Upload error:', error);
-            alert('Failed to upload image. Please try again.');
-            location.reload();
-        }
+        handleImageFileUpload(file, componentId);
     };
     
     // Trigger file selection
@@ -611,10 +703,11 @@ function updateImageSlug(componentId, newSlug) {
             content.slug = validSlug;
             contentInput.value = JSON.stringify(content);
             
-            // Update the image preview URL
+            // Update the image preview URL (keep using preview handler)
             const imgPreview = document.querySelector(`#component-${componentId} .image-preview img`);
             if (imgPreview) {
-                imgPreview.src = `/${validSlug}.${content.format}`;
+                // Keep using the preview handler - slug changes don't affect preview URL
+                // imgPreview.src = `/.image-preview?component_id=${componentId}`;
             }
         } catch (e) {
             console.error('Failed to update slug:', e);
@@ -659,87 +752,122 @@ function updateImageDisplaySize(componentId) {
 }
 
 function updateImageComponent(componentId, imageData) {
-    // Update the hidden input with new image data
-    const contentInput = document.getElementById(`content_${componentId}`);
-    if (contentInput) {
-        const newContent = {
-            slug: imageData.slug,
-            title: imageData.title || imageData.slug,
-            description: imageData.description || '',
-            format: imageData.format,
-            file_path: imageData.file_path,
-            original_name: imageData.original_name,
-            mime_type: imageData.mime_type,
-            size: imageData.size,
-            width: imageData.width,
-            height: imageData.height
-        };
-        contentInput.value = JSON.stringify(newContent);
-        
-        // Update the UI to show the uploaded image
-        const componentEditor = document.getElementById(`component-${componentId}`);
-        const contentGroup = componentEditor.querySelector('.form-group:last-child');
-        
-        contentGroup.innerHTML = `
-            <label for="content_${componentId}">Content</label>
-            <div class="image-preview" style="margin-bottom: 10px;">
-                <img src="/${imageData.slug}.${imageData.format}" 
-                     alt="${imageData.description || imageData.title}"
-                     style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
-            </div>
-            <input type="hidden" 
-                   id="content_${componentId}" 
-                   name="component_contents" 
-                   value='${JSON.stringify(newContent)}'>
-            <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
-                <div class="form-row" style="margin-bottom: 10px;">
-                    <div class="form-group" style="margin: 0;">
-                        <label for="slug_${componentId}" style="font-size: 0.75rem; margin-bottom: 4px;">Slug</label>
-                        <div style="display: flex; align-items: center; gap: 4px;">
-                            <input type="text" 
-                                   id="slug_${componentId}" 
-                                   value="${imageData.slug}" 
-                                   onchange="updateImageSlug(${componentId}, this.value)"
-                                   style="flex: 1; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
-                            <span style="color: #6c757d; font-size: 0.875rem;">.${imageData.format}</span>
-                        </div>
-                    </div>
-                    <div class="form-group" style="margin: 0;">
-                        <label style="font-size: 0.75rem; margin-bottom: 4px;">Display Size</label>
-                        <div style="display: flex; align-items: center; gap: 4px;">
-                            <input type="text" 
-                                   id="display_width_${componentId}" 
-                                   value="${newContent.display_width || ''}" 
-                                   placeholder="auto"
-                                   onchange="updateImageDisplaySize(${componentId})"
-                                   style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
-                            <span style="color: #6c757d;">×</span>
-                            <input type="text" 
-                                   id="display_height_${componentId}" 
-                                   value="${newContent.display_height || ''}" 
-                                   placeholder="auto"
-                                   onchange="updateImageDisplaySize(${componentId})"
-                                   style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
-                        </div>
-                    </div>
-                </div>
-                <div style="display: flex; gap: 20px; font-size: 0.75rem; color: #6c757d;">
-                    <span><strong>Format:</strong> ${imageData.format}</span>
-                    <span><strong>Size:</strong> ${(imageData.size / 1024).toFixed(2)} KB</span>
-                    ${imageData.width && imageData.height ? `<span><strong>Dimensions:</strong> ${imageData.width}×${imageData.height}</span>` : ''}
-                </div>
-            </div>
-            <button type="button" 
-                    class="button button-secondary button-small" 
-                    style="margin-top: 10px;"
-                    onclick="changeImage(${componentId})">
-                🔄 Change Image
-            </button>
-        `;
-        
-        // Auto-save the draft
-        submitComponentsForm('save_draft');
+    // Create the new content object
+    const newContent = {
+        slug: imageData.slug,
+        title: imageData.title || imageData.slug,
+        description: imageData.description || '',
+        format: imageData.format,
+        file_path: imageData.file_path,
+        original_name: imageData.original_name,
+        mime_type: imageData.mime_type,
+        size: imageData.size,
+        width: imageData.width,
+        height: imageData.height,
+        display_width: '',
+        display_height: ''
+    };
+    
+    // Update the UI to show the uploaded image
+    const componentEditor = document.getElementById(`component-${componentId}`);
+    const contentGroup = componentEditor.querySelector('.form-group.full-width');
+    
+    if (!contentGroup) {
+        console.error('Could not find content group for component', componentId);
+        alert('UI update failed. Please refresh the page.');
+        return;
     }
+    
+    // Add success message temporarily
+    const successMessage = `
+        <div style="background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 10px; border-radius: 4px; margin-bottom: 10px; text-align: center;">
+            ✅ Image uploaded successfully!
+        </div>
+    `;
+    
+    // Important: Use proper escaping for the JSON in the value attribute
+    const escapedContent = JSON.stringify(newContent).replace(/"/g, '&quot;');
+    
+    contentGroup.innerHTML = successMessage + `
+        <label for="content_${componentId}">Content</label>
+        <div class="image-preview" style="margin-bottom: 10px;">
+            <img src="/.image-preview?component_id=${componentId}" 
+                 alt="${imageData.description || imageData.title}"
+                 style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
+        </div>
+        <input type="hidden" 
+               id="content_${componentId}" 
+               name="component_contents" 
+               value="${escapedContent}">
+        <div class="image-info" style="background: #f8f9fa; padding: 10px; border-radius: 4px;">
+            <div class="form-row" style="margin-bottom: 10px;">
+                <div class="form-group" style="margin: 0;">
+                    <label for="slug_${componentId}" style="font-size: 0.75rem; margin-bottom: 4px;">Slug</label>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="text" 
+                               id="slug_${componentId}" 
+                               value="${imageData.slug}" 
+                               onchange="updateImageSlug(${componentId}, this.value)"
+                               style="flex: 1; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                        <span style="color: #6c757d; font-size: 0.875rem;">.${imageData.format}</span>
+                    </div>
+                </div>
+                <div class="form-group" style="margin: 0;">
+                    <label style="font-size: 0.75rem; margin-bottom: 4px;">Display Size</label>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <input type="text" 
+                               id="display_width_${componentId}" 
+                               value="" 
+                               placeholder="auto"
+                               onchange="updateImageDisplaySize(${componentId})"
+                               style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                        <span style="color: #6c757d;">×</span>
+                        <input type="text" 
+                               id="display_height_${componentId}" 
+                               value="" 
+                               placeholder="auto"
+                               onchange="updateImageDisplaySize(${componentId})"
+                               style="width: 60px; padding: 6px 10px; border: 1px solid var(--gray-300); border-radius: var(--border-radius-sm); font-size: 0.9375rem;">
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; gap: 20px; font-size: 0.75rem; color: #6c757d;">
+                <span><strong>Format:</strong> ${imageData.format}</span>
+                <span><strong>Size:</strong> ${(imageData.size / 1024).toFixed(2)} KB</span>
+                ${imageData.width && imageData.height ? `<span><strong>Dimensions:</strong> ${imageData.width}×${imageData.height}</span>` : ''}
+            </div>
+        </div>
+        <button type="button" 
+                class="button button-secondary button-small" 
+                style="margin-top: 10px;"
+                onclick="changeImage(${componentId})">
+            🔄 Change Image
+        </button>
+    `;
+    
+    // Remove success message after 3 seconds
+    setTimeout(() => {
+        const successDiv = contentGroup.querySelector('div[style*="background: #d4edda"]');
+        if (successDiv) {
+            successDiv.style.transition = 'opacity 0.5s ease';
+            successDiv.style.opacity = '0';
+            setTimeout(() => successDiv.remove(), 500);
+        }
+    }, 3000);
+    
+    // Add highlight animation to the component
+    componentEditor.classList.add('component-highlight');
+    setTimeout(() => {
+        componentEditor.classList.remove('component-highlight');
+    }, 2000);
+    
+    // Log for debugging
+    console.log('Image component updated:', componentId, newContent);
+    
+    // Auto-save the draft
+    setTimeout(() => {
+        submitComponentsForm('save_draft');
+    }, 500);
 }
 
 function moveComponent(componentId, direction) {
@@ -807,7 +935,82 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         }
     }
+    
+    // Set up drag and drop for all image upload areas
+    document.querySelectorAll('.image-upload-area').forEach(uploadArea => {
+        const componentId = uploadArea.closest('.component-editor').id.replace('component-', '');
+        
+        // Make the entire area clickable
+        uploadArea.addEventListener('click', function(e) {
+            // Don't trigger if clicking on a button
+            if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                uploadImageForComponent(componentId);
+            }
+        });
+        
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        // Highlight drop area when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.add('drag-over'), false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, () => uploadArea.classList.remove('drag-over'), false);
+        });
+        
+        // Handle dropped files
+        uploadArea.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            
+            if (files.length > 0) {
+                handleImageFileUpload(files[0], componentId);
+            }
+        }, false);
+    });
+    
+    // Set up paste functionality for the entire page
+    document.addEventListener('paste', function(e) {
+        // Check if we're in an editable element
+        const activeElement = document.activeElement;
+        if (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA') {
+            return; // Let normal paste behavior happen
+        }
+        
+        // Check if there are any image upload areas visible
+        const visibleUploadAreas = document.querySelectorAll('.image-upload-area');
+        if (visibleUploadAreas.length === 0) return;
+        
+        // Get clipboard data
+        const items = e.clipboardData.items;
+        for (let i = 0; i < items.length; i++) {
+            if (items[i].type.indexOf('image') !== -1) {
+                const file = items[i].getAsFile();
+                
+                // If there's only one upload area, use it
+                if (visibleUploadAreas.length === 1) {
+                    const componentId = visibleUploadAreas[0].closest('.component-editor').id.replace('component-', '');
+                    handleImageFileUpload(file, componentId);
+                    e.preventDefault();
+                } else {
+                    // Multiple upload areas - prompt user
+                    alert('Multiple image components found. Please click on the specific upload area where you want to paste the image.');
+                }
+                break;
+            }
+        }
+    });
 });
+
+function preventDefaults(e) {
+    e.preventDefault();
+    e.stopPropagation();
+}
 </script>
 {% endblock %}
 
@@ -944,7 +1147,7 @@ document.addEventListener('DOMContentLoaded', function() {
                             {% if component.content.slug %}
                                 <!-- New format with uploaded image -->
                                 <div class="image-preview" style="margin-bottom: 10px;">
-                                    <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
+                                    <img src="/.image-preview?component_id={{ component.id }}" 
                                          alt="{{ component.content.description|default(value=component.content.title) }}"
                                          style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
                                 </div>
@@ -1000,8 +1203,13 @@ document.addEventListener('DOMContentLoaded', function() {
                                 </button>
                             {% else %}
                                 <!-- No image uploaded yet -->
-                                <div class="image-upload-area" style="border: 2px dashed #007bff; border-radius: 8px; padding: 20px; text-align: center; background: #f8f9fa;">
-                                    <p style="margin: 0 0 10px 0; color: #6c757d;">No image uploaded yet</p>
+                                <div class="image-upload-area" style="border: 2px dashed #007bff; border-radius: 8px; padding: 30px 20px; text-align: center; background: #f8f9fa; cursor: pointer;">
+                                    <p style="margin: 0 0 15px 0; color: #495057; font-size: 1.125rem;">
+                                        <strong>Drop image here</strong>
+                                    </p>
+                                    <p style="margin: 0 0 15px 0; color: #6c757d;">
+                                        or
+                                    </p>
                                     <input type="hidden" 
                                            id="content_{{ component.id }}" 
                                            name="component_contents" 
@@ -1009,10 +1217,11 @@ document.addEventListener('DOMContentLoaded', function() {
                                     <button type="button" 
                                             class="button" 
                                             onclick="uploadImageForComponent({{ component.id }})">
-                                        📁 Upload Image
+                                        📁 Browse Files
                                     </button>
-                                    <div class="help-text" style="margin-top: 10px;">
-                                        Click to upload an image file (JPG, PNG, GIF, WebP, SVG)
+                                    <div class="help-text" style="margin-top: 15px; font-size: 0.875rem;">
+                                        <p style="margin: 5px 0;">Supports: JPG, PNG, GIF, WebP, SVG (max 10MB)</p>
+                                        <p style="margin: 5px 0;">💡 Tip: You can also paste images from clipboard!</p>
                                     </div>
                                 </div>
                             {% endif %}

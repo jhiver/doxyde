@@ -1,4 +1,4 @@
-<div class="image-component image-default">
+<div class="image-component image-float-right">
     {% if component.content.file_path %}
         <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
              alt="{{ component.content.description | default(value=component.content.title) }}"
@@ -6,7 +6,9 @@
              {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}
              loading="lazy">
     {% else %}
-        <img src="{{ component.content.src }}" alt="{{ component.content.alt | default(value='') }}" loading="lazy">
+        <img src="{{ component.content.src }}" 
+             alt="{{ component.content.alt | default(value='') }}"
+             loading="lazy">
     {% endif %}
     {% if component.title %}
         <p class="image-caption">{{ component.title }}</p>

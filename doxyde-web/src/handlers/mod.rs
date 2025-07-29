@@ -35,7 +35,7 @@ pub use edit::{
     edit_page_content_handler, move_component_handler, new_page_handler, publish_draft_handler,
     save_draft_handler, update_component_handler,
 };
-pub use image_serve::serve_image_handler;
+pub use image_serve::{image_preview_handler, serve_image_handler};
 pub use image_upload::{
     upload_component_image_handler, upload_image_ajax_handler, upload_image_handler,
 };

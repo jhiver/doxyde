@@ -46,6 +46,12 @@
     --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    
+    /* Transitions */
+    --transition-fast: 150ms;
+    --transition-base: 250ms;
+    --transition-slow: 350ms;
+    --transition-timing: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Base Styles */
@@ -656,6 +662,123 @@ pre code {
 
 figure {
     margin: var(--space-xl) 0;
+}
+
+/* Image Layout Variables */
+:root {
+    --image-default-width: 50%;
+    --image-inline-width: 33%;
+    --image-float-margin: var(--space-lg);
+    --image-grid-gap: var(--space-md);
+}
+
+/* Default Image Layout - 50% width */
+.image-default {
+    width: var(--image-default-width);
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Inline Image Layout */
+.image-inline {
+    display: inline-block;
+    width: var(--image-inline-width);
+    vertical-align: top;
+    margin: var(--space-md) 0;
+}
+
+/* Float Layouts */
+.image-float-left,
+.image-float-right {
+    width: var(--image-inline-width);
+    margin-top: var(--space-sm);
+    margin-bottom: var(--space-sm);
+    clear: both;
+}
+
+.image-float-left {
+    float: left;
+    margin-right: var(--image-float-margin);
+    margin-left: 0;
+}
+
+.image-float-right {
+    float: right;
+    margin-left: var(--image-float-margin);
+    margin-right: 0;
+}
+
+/* Clear floats after content */
+.page-content::after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+/* Image captions */
+.image-caption {
+    font-size: 0.875rem;
+    color: var(--gray-600);
+    text-align: center;
+    margin-top: var(--space-xs);
+    font-style: italic;
+}
+
+/* Adjacent Image Detection - Grid Layout */
+.image-component + .image-component {
+    margin-top: 0;
+}
+
+/* When multiple images are adjacent, create a grid */
+.page-content:has(.image-component + .image-component) {
+    --adjacent-images: true;
+}
+
+/* Grid container for consecutive images */
+.image-component:has(+ .image-component),
+.image-component + .image-component {
+    display: inline-block;
+    width: calc(50% - var(--image-grid-gap) / 2);
+    vertical-align: top;
+    margin-right: var(--image-grid-gap);
+}
+
+.image-component + .image-component {
+    margin-right: 0;
+}
+
+/* Reset for non-adjacent images after a pair */
+.image-component + .image-component + :not(.image-component) + .image-component {
+    display: block;
+    width: auto;
+    margin-right: 0;
+}
+
+/* Responsive Image Sizing */
+@media (max-width: 768px) {
+    :root {
+        --image-default-width: 100%;
+        --image-inline-width: 100%;
+    }
+    
+    .image-inline,
+    .image-float-left,
+    .image-float-right {
+        width: 100%;
+        float: none;
+        margin-left: 0;
+        margin-right: 0;
+        display: block;
+    }
+    
+    /* On mobile, stack adjacent images */
+    .image-component:has(+ .image-component),
+    .image-component + .image-component {
+        width: 100%;
+        display: block;
+        margin-right: 0;
+        margin-bottom: var(--space-md);
+    }
 }
 
 figcaption {
@@ -1746,4 +1869,193 @@ body.mobile-menu-open {
         padding: 1.5rem 1rem;
         font-size: 0.875rem;
     }
+}
+
+/* ===== View Transitions API ===== */
+
+/* Enable view transitions for same-origin navigations */
+@view-transition {
+    navigation: auto;
+}
+
+/* Root transition - smooth fade between pages */
+::view-transition-old(root),
+::view-transition-new(root) {
+    animation-duration: var(--transition-base);
+    animation-timing-function: var(--transition-timing);
+}
+
+::view-transition-old(root) {
+    animation-name: fade-out;
+}
+
+::view-transition-new(root) {
+    animation-name: fade-in;
+}
+
+/* Fade animations */
+@keyframes fade-out {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+/* Slide animations for navigation */
+@keyframes slide-out-left {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(-10%);
+        opacity: 0;
+    }
+}
+
+@keyframes slide-in-right {
+    from {
+        transform: translateX(10%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Shared element transitions */
+.page-title {
+    view-transition-name: page-title;
+}
+
+.site-logo {
+    view-transition-name: site-logo;
+}
+
+.header {
+    view-transition-name: header;
+}
+
+.sidebar {
+    view-transition-name: sidebar;
+}
+
+/* Hero images get special treatment */
+.hero-section img,
+.image-component.hero img {
+    view-transition-name: hero-image;
+}
+
+/* Smooth transitions for shared elements */
+::view-transition-old(page-title),
+::view-transition-new(page-title) {
+    animation-duration: var(--transition-slow);
+}
+
+::view-transition-old(hero-image),
+::view-transition-new(hero-image) {
+    animation-duration: var(--transition-slow);
+}
+
+/* Gallery images morph smoothly */
+.gallery-item img {
+    view-transition-name: gallery-image;
+}
+
+/* Content area slide transition */
+.page-content {
+    view-transition-name: content;
+}
+
+::view-transition-old(content) {
+    animation: slide-out-left var(--transition-base) var(--transition-timing);
+}
+
+::view-transition-new(content) {
+    animation: slide-in-right var(--transition-base) var(--transition-timing);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(*),
+    ::view-transition-new(*) {
+        animation-duration: 0.001ms !important;
+    }
+}
+
+/* Progressive enhancement - add smooth link transitions */
+a {
+    transition: color var(--transition-fast) var(--transition-timing);
+}
+
+button {
+    transition: all var(--transition-fast) var(--transition-timing);
+}
+
+.sidebar-nav a {
+    transition: all var(--transition-base) var(--transition-timing);
+}
+
+/* Hover states with smooth transitions */
+.image-component img {
+    transition: transform var(--transition-base) var(--transition-timing),
+                box-shadow var(--transition-base) var(--transition-timing);
+}
+
+.image-component:hover img {
+    transform: scale(1.02);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Card hover effects */
+.sidebar-card,
+.card,
+.blog-summary-card {
+    transition: all var(--transition-base) var(--transition-timing);
+}
+
+.sidebar-card:hover,
+.card:hover,
+.blog-summary-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* Form elements */
+input,
+textarea,
+select {
+    transition: all var(--transition-fast) var(--transition-timing);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    transform: scale(1.01);
+}
+
+/* Smooth loading states */
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+}
+
+.loading {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
