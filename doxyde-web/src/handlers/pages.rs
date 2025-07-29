@@ -76,7 +76,7 @@ pub async fn show_page_handler(
                 let parent_page_id = config.get("parent_page_id").and_then(|v| v.as_i64());
 
                 // Fetch pages based on parent_page_id
-                let child_pages = if let Some(parent_id) = parent_page_id {
+                let mut child_pages = if let Some(parent_id) = parent_page_id {
                     // Fetch children of specific parent
                     page_repo
                         .list_children_sorted(parent_id)
@@ -94,6 +94,21 @@ pub async fn show_page_handler(
                         .filter(|p| p.slug != "home")
                         .collect()
                 };
+
+                // Check order_by config and sort pages accordingly
+                let order_by = config
+                    .get("order_by")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("created_at_desc");
+
+                // Sort pages based on order_by
+                match order_by {
+                    "created_at_desc" => child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at)),
+                    "created_at_asc" => child_pages.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
+                    "title_asc" => child_pages.sort_by(|a, b| a.title.cmp(&b.title)),
+                    "title_desc" => child_pages.sort_by(|a, b| b.title.cmp(&a.title)),
+                    _ => child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at)), // Default to newest first
+                }
 
                 // Get item count
                 let item_count = config
