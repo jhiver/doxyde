@@ -2649,19 +2649,25 @@ impl DoxydeRmcpService {
         }
 
         // Create component content
-        let content = serde_json::json!({
+        let mut content = serde_json::json!({
             "slug": req.slug,
             "title": req.title.clone().unwrap_or_else(|| req.slug.clone()),
             "description": req.description.unwrap_or_default(),
-            "alt": req.alt_text.unwrap_or_default(),
+            "alt_text": req.alt_text.unwrap_or_default(),
             "format": metadata.format.extension(),
             "file_path": file_path.to_string_lossy(),
             "original_name": original_filename,
             "mime_type": metadata.format.mime_type(),
             "size": metadata.size,
-            "width": metadata.width,
-            "height": metadata.height,
         });
+        
+        // Add dimensions if available (not available for SVG)
+        if let Some(width) = metadata.width {
+            content["width"] = serde_json::json!(width);
+        }
+        if let Some(height) = metadata.height {
+            content["height"] = serde_json::json!(height);
+        }
 
         // Create the component
         let mut new_component = doxyde_core::models::Component::new(
@@ -2746,7 +2752,7 @@ impl DoxydeRmcpService {
         }
         
         if let Some(alt_text) = req.alt_text {
-            content["alt"] = serde_json::Value::String(alt_text);
+            content["alt_text"] = serde_json::Value::String(alt_text);
         }
 
         component.content = content;
@@ -6776,7 +6782,7 @@ mod tests {
         assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "test-image");
         assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Test Image");
         assert_eq!(content.get("description").unwrap().as_str().unwrap(), "A test image");
-        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Red pixel"); // It's "alt" not "alt_text" in content
+        assert_eq!(content.get("alt_text").unwrap().as_str().unwrap(), "Red pixel");
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "png");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 1);
         assert_eq!(content.get("height").unwrap().as_u64().unwrap(), 1);
@@ -6882,7 +6888,7 @@ mod tests {
         assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "updated-slug");
         assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Updated Title");
         assert_eq!(content.get("description").unwrap().as_str().unwrap(), "Updated Description");
-        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Updated Alt"); // It's "alt" not "alt_text" in content
+        assert_eq!(content.get("alt_text").unwrap().as_str().unwrap(), "Updated Alt");
         // Original file data should remain unchanged
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "jpg");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 100);
