@@ -32,10 +32,15 @@ pub struct DoxydeRmcpService {
     pool: SqlitePool,
     site_id: i64,
     tool_router: ToolRouter<Self>,
+    upload_dir: std::path::PathBuf,
 }
 
 impl DoxydeRmcpService {
     pub fn new(pool: SqlitePool, site_id: i64) -> Self {
+        Self::with_upload_dir(pool, site_id, std::path::PathBuf::from("/var/mkdoc/uploads"))
+    }
+
+    pub fn with_upload_dir(pool: SqlitePool, site_id: i64, upload_dir: std::path::PathBuf) -> Self {
         let router = Self::tool_router();
         info!(
             "Created DoxydeRmcpService with tool_router for site_id={}",
@@ -45,6 +50,7 @@ impl DoxydeRmcpService {
             pool,
             site_id,
             tool_router: router,
+            upload_dir,
         }
     }
 }
@@ -239,6 +245,175 @@ pub struct MoveComponentAfterRequest {
     pub after_component_id: i64,
 }
 
+// Text component structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateComponentTextRequest {
+    #[schemars(description = "ID of the page to add the component to")]
+    pub page_id: i64,
+
+    #[schemars(
+        description = "Position in the component list (0-based). If not provided, component is added at the end."
+    )]
+    pub position: Option<i32>,
+
+    #[schemars(description = "Component template (default, with_title, card, highlight, quote, hidden)")]
+    pub template: Option<String>,
+
+    #[schemars(description = "Optional title for the component")]
+    pub title: Option<String>,
+
+    #[schemars(description = "The text content")]
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateComponentTextRequest {
+    #[schemars(description = "ID of the component to update")]
+    pub component_id: i64,
+
+    #[schemars(description = "New text content (optional)")]
+    pub content: Option<String>,
+
+    #[schemars(description = "New component title (optional)")]
+    pub title: Option<String>,
+
+    #[schemars(description = "New template (optional)")]
+    pub template: Option<String>,
+}
+
+// Image component structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateComponentImageRequest {
+    #[schemars(description = "ID of the page to add the component to")]
+    pub page_id: i64,
+
+    #[schemars(
+        description = "Image URI - either an http(s):// URL to download from, or a data: URI with base64-encoded content"
+    )]
+    pub uri: String,
+
+    #[schemars(description = "URL-friendly identifier for the image")]
+    pub slug: String,
+
+    #[schemars(description = "Optional title for the image")]
+    pub title: Option<String>,
+
+    #[schemars(description = "Optional description of the image")]
+    pub description: Option<String>,
+
+    #[schemars(description = "Alt text for accessibility")]
+    pub alt_text: Option<String>,
+
+    #[schemars(
+        description = "Position in the component list (0-based). If not provided, component is added at the end."
+    )]
+    pub position: Option<i32>,
+
+    #[schemars(description = "Component template (default, card, hero, gallery)")]
+    pub template: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateComponentImageRequest {
+    #[schemars(description = "ID of the component to update")]
+    pub component_id: i64,
+
+    #[schemars(description = "New slug (optional)")]
+    pub slug: Option<String>,
+
+    #[schemars(description = "New title (optional)")]
+    pub title: Option<String>,
+
+    #[schemars(description = "New description (optional)")]
+    pub description: Option<String>,
+
+    #[schemars(description = "New alt text (optional)")]
+    pub alt_text: Option<String>,
+
+    #[schemars(description = "New template (optional)")]
+    pub template: Option<String>,
+}
+
+// Code component structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateComponentCodeRequest {
+    #[schemars(description = "ID of the page to add the component to")]
+    pub page_id: i64,
+
+    #[schemars(description = "The code content")]
+    pub code: String,
+
+    #[schemars(
+        description = "Programming language for syntax highlighting (e.g., rust, javascript, python)"
+    )]
+    pub language: String,
+
+    #[schemars(
+        description = "Position in the component list (0-based). If not provided, component is added at the end."
+    )]
+    pub position: Option<i32>,
+
+    #[schemars(description = "Component template (default, with_title, dark, minimal)")]
+    pub template: Option<String>,
+
+    #[schemars(description = "Optional title for the code block")]
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateComponentCodeRequest {
+    #[schemars(description = "ID of the component to update")]
+    pub component_id: i64,
+
+    #[schemars(description = "New code content (optional)")]
+    pub code: Option<String>,
+
+    #[schemars(description = "New programming language (optional)")]
+    pub language: Option<String>,
+
+    #[schemars(description = "New component title (optional)")]
+    pub title: Option<String>,
+
+    #[schemars(description = "New template (optional)")]
+    pub template: Option<String>,
+}
+
+// HTML component structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateComponentHtmlRequest {
+    #[schemars(description = "ID of the page to add the component to")]
+    pub page_id: i64,
+
+    #[schemars(description = "The HTML content")]
+    pub html: String,
+
+    #[schemars(
+        description = "Position in the component list (0-based). If not provided, component is added at the end."
+    )]
+    pub position: Option<i32>,
+
+    #[schemars(description = "Component template (default)")]
+    pub template: Option<String>,
+
+    #[schemars(description = "Optional title for the HTML component")]
+    pub title: Option<String>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateComponentHtmlRequest {
+    #[schemars(description = "ID of the component to update")]
+    pub component_id: i64,
+
+    #[schemars(description = "New HTML content (optional)")]
+    pub html: Option<String>,
+
+    #[schemars(description = "New component title (optional)")]
+    pub title: Option<String>,
+
+    #[schemars(description = "New template (optional)")]
+    pub template: Option<String>,
+}
+
 #[tool_router]
 impl DoxydeRmcpService {
     #[tool(description = "Get all pages in the site with hierarchy")]
@@ -351,6 +526,146 @@ impl DoxydeRmcpService {
         Parameters(req): Parameters<UpdateComponentMarkdownRequest>,
     ) -> String {
         match self.internal_update_component_markdown(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // Text component tools
+    #[tool(
+        description = "Create a new text component in a page's draft version. Automatically creates a draft if none exists."
+    )]
+    pub async fn create_component_text(
+        &self,
+        Parameters(req): Parameters<CreateComponentTextRequest>,
+    ) -> String {
+        match self.internal_create_component_text(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Update the content, title, or template of a text component. Component must be in a draft version."
+    )]
+    pub async fn update_component_text(
+        &self,
+        Parameters(req): Parameters<UpdateComponentTextRequest>,
+    ) -> String {
+        match self.internal_update_component_text(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // Image component tools
+    #[tool(
+        description = "Create a new image component. Supports downloading from URLs or base64-encoded data URIs. Automatically creates a draft if none exists."
+    )]
+    pub async fn create_component_image(
+        &self,
+        Parameters(req): Parameters<CreateComponentImageRequest>,
+    ) -> String {
+        match self.internal_create_component_image(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Update the metadata of an image component (slug, title, description, alt text, template). Cannot change the image file itself. Component must be in a draft version."
+    )]
+    pub async fn update_component_image(
+        &self,
+        Parameters(req): Parameters<UpdateComponentImageRequest>,
+    ) -> String {
+        match self.internal_update_component_image(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // Code component tools
+    #[tool(
+        description = "Create a new code component with syntax highlighting. Automatically creates a draft if none exists."
+    )]
+    pub async fn create_component_code(
+        &self,
+        Parameters(req): Parameters<CreateComponentCodeRequest>,
+    ) -> String {
+        match self.internal_create_component_code(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Update the code, language, title, or template of a code component. Component must be in a draft version."
+    )]
+    pub async fn update_component_code(
+        &self,
+        Parameters(req): Parameters<UpdateComponentCodeRequest>,
+    ) -> String {
+        match self.internal_update_component_code(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // HTML component tools
+    #[tool(
+        description = "Create a new HTML component for custom markup. Automatically creates a draft if none exists."
+    )]
+    pub async fn create_component_html(
+        &self,
+        Parameters(req): Parameters<CreateComponentHtmlRequest>,
+    ) -> String {
+        match self.internal_create_component_html(req).await {
+            Ok(component_info) => {
+                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+                })
+            }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Update the HTML content, title, or template of an HTML component. Component must be in a draft version."
+    )]
+    pub async fn update_component_html(
+        &self,
+        Parameters(req): Parameters<UpdateComponentHtmlRequest>,
+    ) -> String {
+        match self.internal_update_component_html(req).await {
             Ok(component_info) => {
                 serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
                     format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
@@ -1984,6 +2299,667 @@ impl DoxydeRmcpService {
             None
         }
     }
+
+    // Text component internal methods
+    async fn internal_create_component_text(
+        &self,
+        req: CreateComponentTextRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository};
+
+        // Verify page exists and belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(req.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Get or create draft version
+        let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
+        let draft_info = draft_result
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("Invalid draft response format"))?;
+        let draft = draft_info
+            .get("draft")
+            .ok_or_else(|| anyhow::anyhow!("Missing draft info"))?;
+        let version_id = draft
+            .get("version_id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid version_id"))?;
+
+        // Determine position
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let existing_components = component_repo.list_by_page_version(version_id).await?;
+
+        let target_position = req
+            .position
+            .unwrap_or(existing_components.len() as i32)
+            .clamp(0, existing_components.len() as i32);
+
+        // Shift existing components if needed
+        if target_position < existing_components.len() as i32 {
+            for mut comp in existing_components {
+                if comp.position >= target_position {
+                    comp.position += 1;
+                    component_repo.update(&comp).await?;
+                }
+            }
+        }
+
+        // Create component data
+        let component_data = serde_json::json!({
+            "text": req.content
+        });
+
+        // Create the component
+        let mut new_component = doxyde_core::models::Component::new(
+            version_id,
+            "text".to_string(),
+            target_position,
+            component_data,
+        );
+        new_component.template = req.template.unwrap_or_else(|| "default".to_string());
+        new_component.title = req.title;
+
+        let component_id = component_repo.create(&new_component).await?;
+
+        // Get the created component
+        let created_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
+
+        Ok(self.component_to_info(created_component))
+    }
+
+    async fn internal_update_component_text(
+        &self,
+        req: UpdateComponentTextRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
+
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component
+        let mut component = component_repo
+            .find_by_id(req.component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify it's a text component
+        if component.component_type != "text" {
+            return Err(anyhow::anyhow!(
+                "Component is not a text component (type: {})",
+                component.component_type
+            ));
+        }
+
+        // Get the page version to verify it's a draft
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot update component in published version. Create or edit a draft first."
+            ));
+        }
+
+        // Verify the page belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(version.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Update component fields
+        if let Some(content) = req.content {
+            component.content = serde_json::json!({
+                "text": content
+            });
+        }
+
+        if let Some(title) = req.title {
+            component.title = if title.is_empty() { None } else { Some(title) };
+        }
+
+        if let Some(template) = req.template {
+            component.template = template;
+        }
+
+        component.updated_at = chrono::Utc::now();
+
+        // Save the updated component
+        component_repo.update(&component).await?;
+
+        Ok(self.component_to_info(component))
+    }
+
+    // Image component internal methods
+    async fn internal_create_component_image(
+        &self,
+        req: CreateComponentImageRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository};
+
+        // Verify page exists and belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(req.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Get or create draft version
+        let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
+        let draft_info = draft_result
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("Invalid draft response format"))?;
+        let draft = draft_info
+            .get("draft")
+            .ok_or_else(|| anyhow::anyhow!("Missing draft info"))?;
+        let version_id = draft
+            .get("version_id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid version_id"))?;
+
+        // Process the image URI
+        let image_data = if req.uri.starts_with("data:") {
+            // Parse data URI and extract base64 content
+            let parts: Vec<&str> = req.uri.splitn(2, ',').collect();
+            if parts.len() != 2 {
+                return Err(anyhow::anyhow!("Invalid data URI format"));
+            }
+
+            // Decode base64
+            use base64::Engine;
+            base64::engine::general_purpose::STANDARD.decode(parts[1])
+                .map_err(|e| anyhow::anyhow!("Failed to decode base64 data: {}", e))?
+        } else if req.uri.starts_with("http://") || req.uri.starts_with("https://") {
+            // Download from URL
+            let response = reqwest::get(&req.uri)
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to download image: {}", e))?;
+
+            if !response.status().is_success() {
+                return Err(anyhow::anyhow!("Failed to download image: HTTP {}", response.status()));
+            }
+
+            response.bytes()
+                .await
+                .map_err(|e| anyhow::anyhow!("Failed to read image data: {}", e))?
+                .to_vec()
+        } else {
+            return Err(anyhow::anyhow!("URI must be either http(s):// URL or data: URI"));
+        };
+
+        // Extract image metadata
+        use crate::uploads::{extract_image_metadata, ImageFormatExt};
+        let metadata = extract_image_metadata(&image_data)
+            .map_err(|e| anyhow::anyhow!("Invalid image format: {}", e))?;
+
+        // Create upload directory
+        use chrono::Utc;
+        use crate::uploads::{create_upload_directory, generate_unique_filename, save_upload};
+        
+        let now = Utc::now();
+        let upload_dir = create_upload_directory(&self.upload_dir, now)?;
+
+        // Generate filename based on slug or URI
+        let original_filename = if req.uri.starts_with("data:") {
+            format!("{}.{}", req.slug, metadata.format.extension())
+        } else {
+            req.uri.split('/').last().unwrap_or("image").to_string()
+        };
+        let filename = generate_unique_filename(&original_filename);
+
+        // Save file to disk
+        let file_path = save_upload(&image_data, &upload_dir, &filename)?;
+
+        // Determine position
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let existing_components = component_repo.list_by_page_version(version_id).await?;
+
+        let target_position = req
+            .position
+            .unwrap_or(existing_components.len() as i32)
+            .clamp(0, existing_components.len() as i32);
+
+        // Shift existing components if needed
+        if target_position < existing_components.len() as i32 {
+            for mut comp in existing_components {
+                if comp.position >= target_position {
+                    comp.position += 1;
+                    component_repo.update(&comp).await?;
+                }
+            }
+        }
+
+        // Create component content
+        let content = serde_json::json!({
+            "slug": req.slug,
+            "title": req.title.clone().unwrap_or_else(|| req.slug.clone()),
+            "description": req.description.unwrap_or_default(),
+            "alt": req.alt_text.unwrap_or_default(),
+            "format": metadata.format.extension(),
+            "file_path": file_path.to_string_lossy(),
+            "original_name": original_filename,
+            "mime_type": metadata.format.mime_type(),
+            "size": metadata.size,
+            "width": metadata.width,
+            "height": metadata.height,
+        });
+
+        // Create the component
+        let mut new_component = doxyde_core::models::Component::new(
+            version_id,
+            "image".to_string(),
+            target_position,
+            content,
+        );
+        new_component.template = req.template.unwrap_or_else(|| "default".to_string());
+        new_component.title = req.title;
+
+        let component_id = component_repo.create(&new_component).await?;
+
+        // Get the created component
+        let created_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
+
+        Ok(self.component_to_info(created_component))
+    }
+
+    async fn internal_update_component_image(
+        &self,
+        req: UpdateComponentImageRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
+
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component
+        let mut component = component_repo
+            .find_by_id(req.component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify it's an image component
+        if component.component_type != "image" {
+            return Err(anyhow::anyhow!(
+                "Component is not an image component (type: {})",
+                component.component_type
+            ));
+        }
+
+        // Get the page version to verify it's a draft
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot update component in published version. Create or edit a draft first."
+            ));
+        }
+
+        // Verify the page belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(version.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Update component metadata (not the image file itself)
+        let mut content = component.content.clone();
+        
+        if let Some(slug) = req.slug {
+            content["slug"] = serde_json::Value::String(slug);
+        }
+        
+        if let Some(title) = req.title.clone() {
+            content["title"] = serde_json::Value::String(title);
+        }
+        
+        if let Some(description) = req.description {
+            content["description"] = serde_json::Value::String(description);
+        }
+        
+        if let Some(alt_text) = req.alt_text {
+            content["alt"] = serde_json::Value::String(alt_text);
+        }
+
+        component.content = content;
+        component.title = req.title;
+
+        if let Some(template) = req.template {
+            component.template = template;
+        }
+
+        component.updated_at = chrono::Utc::now();
+
+        // Save the updated component
+        component_repo.update(&component).await?;
+
+        Ok(self.component_to_info(component))
+    }
+
+    // Code component internal methods
+    async fn internal_create_component_code(
+        &self,
+        req: CreateComponentCodeRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository};
+
+        // Verify page exists and belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(req.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Get or create draft version
+        let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
+        let draft_info = draft_result
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("Invalid draft response format"))?;
+        let draft = draft_info
+            .get("draft")
+            .ok_or_else(|| anyhow::anyhow!("Missing draft info"))?;
+        let version_id = draft
+            .get("version_id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid version_id"))?;
+
+        // Determine position
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let existing_components = component_repo.list_by_page_version(version_id).await?;
+
+        let target_position = req
+            .position
+            .unwrap_or(existing_components.len() as i32)
+            .clamp(0, existing_components.len() as i32);
+
+        // Shift existing components if needed
+        if target_position < existing_components.len() as i32 {
+            for mut comp in existing_components {
+                if comp.position >= target_position {
+                    comp.position += 1;
+                    component_repo.update(&comp).await?;
+                }
+            }
+        }
+
+        // Create component data
+        let component_data = serde_json::json!({
+            "code": req.code,
+            "language": req.language
+        });
+
+        // Create the component
+        let mut new_component = doxyde_core::models::Component::new(
+            version_id,
+            "code".to_string(),
+            target_position,
+            component_data,
+        );
+        new_component.template = req.template.unwrap_or_else(|| "default".to_string());
+        new_component.title = req.title;
+
+        let component_id = component_repo.create(&new_component).await?;
+
+        // Get the created component
+        let created_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
+
+        Ok(self.component_to_info(created_component))
+    }
+
+    async fn internal_update_component_code(
+        &self,
+        req: UpdateComponentCodeRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
+
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component
+        let mut component = component_repo
+            .find_by_id(req.component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify it's a code component
+        if component.component_type != "code" {
+            return Err(anyhow::anyhow!(
+                "Component is not a code component (type: {})",
+                component.component_type
+            ));
+        }
+
+        // Get the page version to verify it's a draft
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot update component in published version. Create or edit a draft first."
+            ));
+        }
+
+        // Verify the page belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(version.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Update component fields
+        let mut content = component.content.clone();
+        
+        if let Some(code) = req.code {
+            content["code"] = serde_json::Value::String(code);
+        }
+        
+        if let Some(language) = req.language {
+            content["language"] = serde_json::Value::String(language);
+        }
+
+        component.content = content;
+
+        if let Some(title) = req.title {
+            component.title = if title.is_empty() { None } else { Some(title) };
+        }
+
+        if let Some(template) = req.template {
+            component.template = template;
+        }
+
+        component.updated_at = chrono::Utc::now();
+
+        // Save the updated component
+        component_repo.update(&component).await?;
+
+        Ok(self.component_to_info(component))
+    }
+
+    // HTML component internal methods
+    async fn internal_create_component_html(
+        &self,
+        req: CreateComponentHtmlRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository};
+
+        // Verify page exists and belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(req.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Get or create draft version
+        let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
+        let draft_info = draft_result
+            .as_object()
+            .ok_or_else(|| anyhow::anyhow!("Invalid draft response format"))?;
+        let draft = draft_info
+            .get("draft")
+            .ok_or_else(|| anyhow::anyhow!("Missing draft info"))?;
+        let version_id = draft
+            .get("version_id")
+            .and_then(|v| v.as_i64())
+            .ok_or_else(|| anyhow::anyhow!("Missing or invalid version_id"))?;
+
+        // Determine position
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        let existing_components = component_repo.list_by_page_version(version_id).await?;
+
+        let target_position = req
+            .position
+            .unwrap_or(existing_components.len() as i32)
+            .clamp(0, existing_components.len() as i32);
+
+        // Shift existing components if needed
+        if target_position < existing_components.len() as i32 {
+            for mut comp in existing_components {
+                if comp.position >= target_position {
+                    comp.position += 1;
+                    component_repo.update(&comp).await?;
+                }
+            }
+        }
+
+        // Create component data
+        let component_data = serde_json::json!({
+            "html": req.html
+        });
+
+        // Create the component
+        let mut new_component = doxyde_core::models::Component::new(
+            version_id,
+            "html".to_string(),
+            target_position,
+            component_data,
+        );
+        new_component.template = req.template.unwrap_or_else(|| "default".to_string());
+        new_component.title = req.title;
+
+        let component_id = component_repo.create(&new_component).await?;
+
+        // Get the created component
+        let created_component = component_repo
+            .find_by_id(component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
+
+        Ok(self.component_to_info(created_component))
+    }
+
+    async fn internal_update_component_html(
+        &self,
+        req: UpdateComponentHtmlRequest,
+    ) -> Result<ComponentInfo> {
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
+
+        let component_repo = ComponentRepository::new(self.pool.clone());
+
+        // Get the component
+        let mut component = component_repo
+            .find_by_id(req.component_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
+
+        // Verify it's an html component
+        if component.component_type != "html" {
+            return Err(anyhow::anyhow!(
+                "Component is not an HTML component (type: {})",
+                component.component_type
+            ));
+        }
+
+        // Get the page version to verify it's a draft
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let version = version_repo
+            .find_by_id(component.page_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page version not found"))?;
+
+        if version.is_published {
+            return Err(anyhow::anyhow!(
+                "Cannot update component in published version. Create or edit a draft first."
+            ));
+        }
+
+        // Verify the page belongs to this site
+        let page_repo = PageRepository::new(self.pool.clone());
+        let page = page_repo
+            .find_by_id(version.page_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
+
+        if page.site_id != self.site_id {
+            return Err(anyhow::anyhow!("Page does not belong to this site"));
+        }
+
+        // Update component fields
+        if let Some(html) = req.html {
+            component.content = serde_json::json!({
+                "html": html
+            });
+        }
+
+        if let Some(title) = req.title {
+            component.title = if title.is_empty() { None } else { Some(title) };
+        }
+
+        if let Some(template) = req.template {
+            component.template = template;
+        }
+
+        component.updated_at = chrono::Utc::now();
+
+        // Save the updated component
+        component_repo.update(&component).await?;
+
+        Ok(self.component_to_info(component))
+    }
 }
 
 #[cfg(test)]
@@ -1999,6 +2975,16 @@ mod tests {
             .await
             .context("Failed to run migrations")?;
         Ok(())
+    }
+
+    fn create_test_service(pool: SqlitePool, site_id: i64) -> (DoxydeRmcpService, tempfile::TempDir) {
+        let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
+        let service = DoxydeRmcpService::with_upload_dir(
+            pool,
+            site_id,
+            temp_dir.path().to_path_buf(),
+        );
+        (service, temp_dir)
     }
 
     #[sqlx::test]
@@ -5387,6 +6373,768 @@ mod tests {
             component_repo.find_by_id(comp0_id).await?.unwrap().position,
             2
         );
+        Ok(())
+    }
+
+    // Tests for text components
+    #[sqlx::test]
+    async fn test_create_component_text(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{PageRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        let service = DoxydeRmcpService::new(pool, site_id);
+
+        let req = CreateComponentTextRequest {
+            page_id: root.id.unwrap(),
+            position: Some(0),
+            template: Some("card".to_string()),
+            title: Some("Test Text Component".to_string()),
+            content: "This is a test text component.".to_string(),
+        };
+
+        let result = service.create_component_text(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let component: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(component.component_type, "text");
+        assert_eq!(component.position, 0);
+        assert_eq!(component.template, "card");
+        assert_eq!(component.title, Some("Test Text Component".to_string()));
+
+        let content = component.content.get("text").unwrap().as_str().unwrap();
+        assert_eq!(content, "This is a test text component.");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_component_text(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with a text component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let mut component = doxyde_core::models::Component::new(
+            version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Original text"}),
+        );
+        component.title = Some("Original Title".to_string());
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentTextRequest {
+            component_id,
+            content: Some("Updated text content".to_string()),
+            title: Some("Updated Title".to_string()),
+            template: Some("highlight".to_string()),
+        };
+
+        let result = service.update_component_text(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let updated: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(updated.component_type, "text");
+        assert_eq!(updated.title, Some("Updated Title".to_string()));
+        assert_eq!(updated.template, "highlight");
+
+        let content = updated.content.get("text").unwrap().as_str().unwrap();
+        assert_eq!(content, "Updated text content");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_non_text_component_fails(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with a markdown component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let component = doxyde_core::models::Component::new(
+            version_id,
+            "markdown".to_string(),
+            0,
+            serde_json::json!({"text": "# Markdown"}),
+        );
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentTextRequest {
+            component_id,
+            content: Some("Updated text".to_string()),
+            title: None,
+            template: None,
+        };
+
+        let result = service.update_component_text(Parameters(req)).await;
+
+        assert!(result.contains("error"));
+        assert!(result.contains("not a text component"));
+        Ok(())
+    }
+
+    // Tests for image components
+    #[sqlx::test] 
+    async fn test_create_component_image_with_base64(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{PageRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        let (service, _temp_dir) = create_test_service(pool, site_id);
+
+        // Create a simple 1x1 red PNG image in base64
+        let base64_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
+        
+        let req = CreateComponentImageRequest {
+            page_id: root.id.unwrap(),
+            uri: format!("data:image/png;base64,{}", base64_png),
+            slug: "test-image".to_string(),
+            title: Some("Test Image".to_string()),
+            description: Some("A test image".to_string()),
+            alt_text: Some("Red pixel".to_string()),
+            position: Some(0),
+            template: Some("figure".to_string()),
+        };
+
+        let result = service.create_component_image(Parameters(req)).await;
+
+        assert!(!result.contains("error"), "Result: {}", result);
+        let component: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(component.component_type, "image");
+        assert_eq!(component.position, 0);
+        assert_eq!(component.template, "figure");
+        assert_eq!(component.title, Some("Test Image".to_string()));
+
+        let content = &component.content;
+        assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "test-image");
+        assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Test Image");
+        assert_eq!(content.get("description").unwrap().as_str().unwrap(), "A test image");
+        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Red pixel");
+        assert_eq!(content.get("format").unwrap().as_str().unwrap(), "png");
+        assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 1);
+        assert_eq!(content.get("height").unwrap().as_u64().unwrap(), 1);
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_create_component_image_invalid_base64(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{PageRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        let service = DoxydeRmcpService::new(pool, site_id);
+
+        let req = CreateComponentImageRequest {
+            page_id: root.id.unwrap(),
+            uri: "data:image/png;base64,invalid_base64_data!!!".to_string(),
+            slug: "test-image".to_string(),
+            title: None,
+            description: None,
+            alt_text: None,
+            position: None,
+            template: None,
+        };
+
+        let result = service.create_component_image(Parameters(req)).await;
+
+        assert!(result.contains("error"));
+        assert!(result.contains("Failed to decode base64"));
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_component_image(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with an image component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let mut component = doxyde_core::models::Component::new(
+            version_id,
+            "image".to_string(),
+            0,
+            serde_json::json!({
+                "slug": "original-slug",
+                "title": "Original Title",
+                "description": "Original Description",
+                "alt": "Original Alt",
+                "format": "jpg",
+                "file_path": "/var/mkdoc/uploads/2025/01/01/test.jpg",
+                "width": 100,
+                "height": 100
+            }),
+        );
+        component.title = Some("Original Title".to_string());
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentImageRequest {
+            component_id,
+            slug: Some("updated-slug".to_string()),
+            title: Some("Updated Title".to_string()),
+            description: Some("Updated Description".to_string()),
+            alt_text: Some("Updated Alt".to_string()),
+            template: Some("hero".to_string()),
+        };
+
+        let result = service.update_component_image(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let updated: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(updated.component_type, "image");
+        assert_eq!(updated.title, Some("Updated Title".to_string()));
+        assert_eq!(updated.template, "hero");
+
+        let content = &updated.content;
+        assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "updated-slug");
+        assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Updated Title");
+        assert_eq!(content.get("description").unwrap().as_str().unwrap(), "Updated Description");
+        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Updated Alt");
+        // Original file data should remain unchanged
+        assert_eq!(content.get("format").unwrap().as_str().unwrap(), "jpg");
+        assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 100);
+        assert_eq!(content.get("height").unwrap().as_u64().unwrap(), 100);
+        Ok(())
+    }
+
+    // Tests for code components
+    #[sqlx::test]
+    async fn test_create_component_code(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{PageRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        let service = DoxydeRmcpService::new(pool, site_id);
+
+        let req = CreateComponentCodeRequest {
+            page_id: root.id.unwrap(),
+            code: "fn main() {\n    println!(\"Hello, world!\");\n}".to_string(),
+            language: "rust".to_string(),
+            position: Some(0),
+            template: Some("with_title".to_string()),
+            title: Some("Rust Example".to_string()),
+        };
+
+        let result = service.create_component_code(Parameters(req)).await;
+
+        if result.contains("error") {
+            eprintln!("Result: {}", result);
+        }
+        assert!(!result.contains("error"));
+        let component: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(component.component_type, "code");
+        assert_eq!(component.position, 0);
+        assert_eq!(component.template, "with_title");
+        assert_eq!(component.title, Some("Rust Example".to_string()));
+
+        let content = &component.content;
+        assert_eq!(
+            content.get("code").unwrap().as_str().unwrap(),
+            "fn main() {\n    println!(\"Hello, world!\");\n}"
+        );
+        assert_eq!(content.get("language").unwrap().as_str().unwrap(), "rust");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_component_code(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with a code component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let mut component = doxyde_core::models::Component::new(
+            version_id,
+            "code".to_string(),
+            0,
+            serde_json::json!({
+                "code": "console.log('original');",
+                "language": "javascript"
+            }),
+        );
+        component.title = Some("Original Code".to_string());
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentCodeRequest {
+            component_id,
+            code: Some("print('updated')".to_string()),
+            language: Some("python".to_string()),
+            title: Some("Updated Code".to_string()),
+            template: Some("default".to_string()),
+        };
+
+        let result = service.update_component_code(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let updated: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(updated.component_type, "code");
+        assert_eq!(updated.title, Some("Updated Code".to_string()));
+        assert_eq!(updated.template, "default");
+
+        let content = &updated.content;
+        assert_eq!(content.get("code").unwrap().as_str().unwrap(), "print('updated')");
+        assert_eq!(content.get("language").unwrap().as_str().unwrap(), "python");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_non_code_component_fails(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with a text component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let component = doxyde_core::models::Component::new(
+            version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Just text"}),
+        );
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentCodeRequest {
+            component_id,
+            code: Some("print('hello')".to_string()),
+            language: Some("python".to_string()),
+            title: None,
+            template: None,
+        };
+
+        let result = service.update_component_code(Parameters(req)).await;
+
+        assert!(result.contains("error"));
+        assert!(result.contains("not a code component"));
+        Ok(())
+    }
+
+    // Tests for HTML components
+    #[sqlx::test]
+    async fn test_create_component_html(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{PageRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        let service = DoxydeRmcpService::new(pool, site_id);
+
+        let req = CreateComponentHtmlRequest {
+            page_id: root.id.unwrap(),
+            html: r#"<div class="custom"><h2>Custom HTML</h2><p>This is custom HTML content.</p></div>"#.to_string(),
+            position: Some(0),
+            template: Some("default".to_string()),
+            title: Some("Custom HTML Section".to_string()),
+        };
+
+        let result = service.create_component_html(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let component: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(component.component_type, "html");
+        assert_eq!(component.position, 0);
+        assert_eq!(component.template, "default");
+        assert_eq!(component.title, Some("Custom HTML Section".to_string()));
+
+        let content = component.content.get("html").unwrap().as_str().unwrap();
+        assert!(content.contains("Custom HTML"));
+        assert!(content.contains("custom HTML content"));
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_component_html(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with an HTML component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let mut component = doxyde_core::models::Component::new(
+            version_id,
+            "html".to_string(),
+            0,
+            serde_json::json!({
+                "html": "<p>Original HTML</p>"
+            }),
+        );
+        component.title = Some("Original HTML".to_string());
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentHtmlRequest {
+            component_id,
+            html: Some("<div>Updated HTML content</div>".to_string()),
+            title: Some("Updated HTML".to_string()),
+            template: None,
+        };
+
+        let result = service.update_component_html(Parameters(req)).await;
+
+        assert!(!result.contains("error"));
+        let updated: ComponentInfo = serde_json::from_str(&result)?;
+        assert_eq!(updated.component_type, "html");
+        assert_eq!(updated.title, Some("Updated HTML".to_string()));
+
+        let content = updated.content.get("html").unwrap().as_str().unwrap();
+        assert_eq!(content, "<div>Updated HTML content</div>");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_update_non_html_component_fails(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with a markdown component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        let component = doxyde_core::models::Component::new(
+            version_id,
+            "markdown".to_string(),
+            0,
+            serde_json::json!({"text": "# Markdown"}),
+        );
+        let component_id = component_repo.create(&component).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        let req = UpdateComponentHtmlRequest {
+            component_id,
+            html: Some("<p>HTML</p>".to_string()),
+            title: None,
+            template: None,
+        };
+
+        let result = service.update_component_html(Parameters(req)).await;
+
+        assert!(result.contains("error"));
+        assert!(result.contains("not an HTML component"));
+        Ok(())
+    }
+
+    // Test position shifting for all component types
+    #[sqlx::test]
+    async fn test_create_components_position_shift(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create draft with some existing components
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        
+        // Add 3 components at positions 0, 1, 2
+        let comp0 = doxyde_core::models::Component::new(
+            version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Component 0"}),
+        );
+        let comp0_id = component_repo.create(&comp0).await?;
+        
+        let comp1 = doxyde_core::models::Component::new(
+            version_id,
+            "code".to_string(),
+            1,
+            serde_json::json!({"code": "// Component 1", "language": "rust"}),
+        );
+        let comp1_id = component_repo.create(&comp1).await?;
+        
+        let comp2 = doxyde_core::models::Component::new(
+            version_id,
+            "html".to_string(),
+            2,
+            serde_json::json!({"html": "<p>Component 2</p>"}),
+        );
+        let comp2_id = component_repo.create(&comp2).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        // Insert new text component at position 1
+        let req = CreateComponentTextRequest {
+            page_id: root.id.unwrap(),
+            position: Some(1),
+            template: None,
+            title: Some("Inserted Component".to_string()),
+            content: "This was inserted at position 1".to_string(),
+        };
+
+        service.create_component_text(Parameters(req)).await;
+
+        // Verify positions were shifted
+        let components = component_repo.list_by_page_version(version_id).await?;
+        
+        assert_eq!(components.len(), 4);
+        assert_eq!(components[0].id, Some(comp0_id));
+        assert_eq!(components[0].position, 0); // Should remain at 0
+        assert_eq!(components[1].title, Some("Inserted Component".to_string()));
+        assert_eq!(components[1].position, 1); // New component at position 1
+        assert_eq!(components[2].id, Some(comp1_id));
+        assert_eq!(components[2].position, 2); // Shifted from 1 to 2
+        assert_eq!(components[3].id, Some(comp2_id));
+        assert_eq!(components[3].position, 3); // Shifted from 2 to 3
+        Ok(())
+    }
+
+    // Test that update operations require draft versions
+    #[sqlx::test]
+    async fn test_update_component_published_version_fails(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Create published version with components
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let mut version = doxyde_core::models::PageVersion::new(root.id.unwrap(), 1, None);
+        version.is_published = true;
+        let version_id = version_repo.create(&version).await?;
+
+        let component_repo = ComponentRepository::new(pool.clone());
+        
+        // Create one component of each type
+        let text_comp = doxyde_core::models::Component::new(
+            version_id,
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Published text"}),
+        );
+        let text_id = component_repo.create(&text_comp).await?;
+        
+        let code_comp = doxyde_core::models::Component::new(
+            version_id,
+            "code".to_string(),
+            1,
+            serde_json::json!({"code": "published();", "language": "js"}),
+        );
+        let code_id = component_repo.create(&code_comp).await?;
+        
+        let html_comp = doxyde_core::models::Component::new(
+            version_id,
+            "html".to_string(),
+            2,
+            serde_json::json!({"html": "<p>Published</p>"}),
+        );
+        let html_id = component_repo.create(&html_comp).await?;
+
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+
+        // Try to update text component
+        let text_req = UpdateComponentTextRequest {
+            component_id: text_id,
+            content: Some("New text".to_string()),
+            title: None,
+            template: None,
+        };
+        let text_result = service.update_component_text(Parameters(text_req)).await;
+        assert!(text_result.contains("error"));
+        assert!(text_result.contains("Cannot update component in published version"));
+
+        // Try to update code component
+        let code_req = UpdateComponentCodeRequest {
+            component_id: code_id,
+            code: Some("new();".to_string()),
+            language: None,
+            title: None,
+            template: None,
+        };
+        let code_result = service.update_component_code(Parameters(code_req)).await;
+        assert!(code_result.contains("error"));
+        assert!(code_result.contains("Cannot update component in published version"));
+
+        // Try to update HTML component
+        let html_req = UpdateComponentHtmlRequest {
+            component_id: html_id,
+            html: Some("<div>New</div>".to_string()),
+            title: None,
+            template: None,
+        };
+        let html_result = service.update_component_html(Parameters(html_req)).await;
+        assert!(html_result.contains("error"));
+        assert!(html_result.contains("Cannot update component in published version"));
+
         Ok(())
     }
 }

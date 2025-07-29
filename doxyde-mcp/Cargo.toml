@@ -25,6 +25,15 @@ rmcp = { version = "0.3", features = ["server", "macros"] }
 sha2 = "0.10"
 base64 = "0.22"
 
+# HTTP client for downloading images
+reqwest = { version = "0.12", features = ["json"] }
+
+# Image processing
+image = "0.25"
+
+# Utilities
+rand = "0.8"
+
 # Async
 tokio.workspace = true
 
