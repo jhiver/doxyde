@@ -60,7 +60,7 @@ pub struct ListTokensQuery {
     pub site_id: Option<i64>,
 }
 
-pub use doxyde_shared::oauth::{validate_token, TokenInfo};
+pub use doxyde_mcp::oauth::{validate_token, TokenInfo};
 
 pub async fn create_token(
     State(state): State<AppState>,

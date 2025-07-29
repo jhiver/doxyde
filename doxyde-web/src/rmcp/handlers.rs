@@ -32,7 +32,7 @@ use tracing::{debug, error, info};
 
 use super::oauth::validate_token;
 use crate::AppState;
-use doxyde_shared::mcp::DoxydeRmcpService;
+use doxyde_mcp::mcp::DoxydeRmcpService;
 
 fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
     headers

@@ -32,7 +32,7 @@ use axum::{
     Json, Router,
 };
 use config::Config;
-use doxyde_shared::{mcp::DoxydeRmcpService, oauth::validate_token};
+use doxyde_mcp::{mcp::DoxydeRmcpService, oauth::validate_token};
 use rmcp::transport::sse_server::{SseServer, SseServerConfig};
 use serde::{Deserialize, Serialize};
 use sqlx::SqlitePool;

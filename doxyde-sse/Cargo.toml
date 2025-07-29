@@ -32,7 +32,7 @@ tokio-util = { version = "0.7", features = ["rt"] }
 rmcp = { version = "0.3", features = ["server", "transport-sse-server", "macros"] }
 
 # Shared code
-doxyde-shared = { path = "../doxyde-shared" }
+doxyde-mcp = { path = "../doxyde-mcp" }
 
 # Configuration
 figment = { version = "0.10", features = ["toml", "env"] }

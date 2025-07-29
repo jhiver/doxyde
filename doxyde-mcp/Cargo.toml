@@ -1,5 +1,5 @@
 [package]
-name = "doxyde-shared"
+name = "doxyde-mcp"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
