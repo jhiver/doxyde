@@ -178,7 +178,9 @@ fn create_default_templates(templates_dir: &str) -> Result<()> {
                 </div>
             {% elif component.component_type == "image" %}
                 <div class="image-component">
-                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
+                    <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
+                         alt="{{ component.content.alt_text | default(value='') }}" 
+                         style="max-width: 100%;">
                 </div>
             {% elif component.component_type == "code" %}
                 <pre><code>{{ component.content.code }}</code></pre>

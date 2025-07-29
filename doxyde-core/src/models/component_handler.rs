@@ -39,6 +39,13 @@ pub trait ComponentHandler: Send + Sync {
     fn available_templates(&self) -> Vec<&'static str> {
         vec!["default"]
     }
+
+    /// Compare content of two components for equality
+    /// This should ignore metadata and focus on actual content
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // Default implementation does full comparison
+        content1 == content2
+    }
 }
 
 /// Registry for component handlers
@@ -88,6 +95,21 @@ impl ComponentRegistry {
             })
         }
     }
+
+    /// Compare content of two components
+    pub fn content_equals(
+        &self,
+        component_type: &str,
+        content1: &Value,
+        content2: &Value,
+    ) -> bool {
+        if let Some(handler) = self.get_handler(component_type) {
+            handler.content_equals(content1, content2)
+        } else {
+            // Fallback for unknown types
+            content1 == content2
+        }
+    }
 }
 
 impl Default for ComponentRegistry {
@@ -128,6 +150,11 @@ impl ComponentHandler for TextComponentHandler {
             "hidden",
         ]
     }
+
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // For text components, only compare the text field
+        content1.get("text") == content2.get("text")
+    }
 }
 
 /// Handler for markdown components
@@ -161,6 +188,11 @@ impl ComponentHandler for MarkdownComponentHandler {
             "hidden",
         ]
     }
+
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // For markdown components, only compare the text field
+        content1.get("text") == content2.get("text")
+    }
 }
 
 /// Handler for HTML components
@@ -185,6 +217,11 @@ impl ComponentHandler for HtmlComponentHandler {
 
     fn available_templates(&self) -> Vec<&'static str> {
         vec!["default"]
+    }
+
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // For HTML components, only compare the html field
+        content1.get("html") == content2.get("html")
     }
 }
 
@@ -213,6 +250,12 @@ impl ComponentHandler for CodeComponentHandler {
     fn available_templates(&self) -> Vec<&'static str> {
         vec!["default", "with_title"]
     }
+
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // For code components, compare both code and language fields
+        content1.get("code") == content2.get("code")
+            && content1.get("language") == content2.get("language")
+    }
 }
 
 /// Handler for image components
@@ -224,22 +267,19 @@ impl ComponentHandler for ImageComponentHandler {
     }
 
     fn parse_content(&self, raw_content: &str) -> Result<Value, String> {
-        // Try to parse as JSON first (in case it's already JSON)
-        if let Ok(json_content) = serde_json::from_str::<Value>(raw_content) {
-            Ok(json_content)
-        } else {
-            // Fallback to old format
-            Ok(json!({
-                "src": raw_content,
-                "alt": ""
-            }))
-        }
+        // Parse as JSON (must be new format)
+        serde_json::from_str::<Value>(raw_content)
+            .map_err(|e| format!("Failed to parse image content as JSON: {}", e))
     }
 
     fn default_content(&self) -> Value {
         json!({
-            "src": "",
-            "alt": ""
+            "slug": "",
+            "format": "",
+            "file_path": "",
+            "title": "",
+            "description": "",
+            "alt_text": ""
         })
     }
 
@@ -256,6 +296,15 @@ impl ComponentHandler for ImageComponentHandler {
             "float_left",
             "float_right",
         ]
+    }
+
+    fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
+        // Compare essential fields for image components
+        content1.get("slug") == content2.get("slug")
+            && content1.get("format") == content2.get("format")
+            && content1.get("title") == content2.get("title")
+            && content1.get("description") == content2.get("description")
+            && content1.get("alt_text") == content2.get("alt_text")
     }
 }
 

@@ -113,7 +113,7 @@
                 {% if component.component_type == "text" %}
                     {{ component.content.text|safe }}
                 {% elif component.component_type == "image" %}
-                    <img src="{{ component.content.src }}" alt="{{ component.content.alt }}" style="max-width: 100%;">
+                    <img src="{{ component.content.slug ~ "." ~ component.content.format }}" alt="{{ component.content.alt_text }}" style="max-width: 100%;">
                 {% elif component.component_type == "code" %}
                     <pre><code>{{ component.content.code }}</code></pre>
                 {% else %}

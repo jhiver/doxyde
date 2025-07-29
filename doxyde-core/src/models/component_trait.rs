@@ -30,6 +30,13 @@ pub trait ComponentRenderer {
     }
 }
 
+/// Trait for comparing component content equality
+pub trait ComponentEq {
+    /// Compare the content of two components, ignoring metadata like IDs and timestamps
+    /// Returns true if the components have equivalent content
+    fn content_equals(&self, other: &Self) -> bool;
+}
+
 /// Helper function to safely extract text from JSON value
 pub fn extract_text(value: &Value, field: &str) -> String {
     value

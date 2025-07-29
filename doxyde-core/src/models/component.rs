@@ -17,6 +17,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use crate::models::component_trait::ComponentEq;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Component {
@@ -101,39 +102,36 @@ impl Component {
                 if !self.content.is_object() {
                     return Err("Image component content must be an object".to_string());
                 }
-                // Support both old format (src/alt) and new format (slug/title/description/etc)
-                let has_old_format = self.content.get("src").is_some();
-                let has_new_format = self.content.get("slug").is_some()
-                    && self.content.get("format").is_some()
-                    && self.content.get("file_path").is_some();
-
-                if !has_old_format && !has_new_format {
-                    return Err("Image component must have either 'src' field (old format) or 'slug', 'format', and 'file_path' fields (new format)".to_string());
+                
+                // Validate required fields for new format
+                if self.content.get("slug").is_none()
+                    || self.content.get("format").is_none()
+                    || self.content.get("file_path").is_none() {
+                    return Err("Image component must have 'slug', 'format', and 'file_path' fields".to_string());
                 }
 
-                // Validate new format fields if present
-                if has_new_format {
-                    if let Some(slug) = self.content.get("slug").and_then(|s| s.as_str()) {
-                        if slug.is_empty() {
-                            return Err("Image slug cannot be empty".to_string());
-                        }
-                        if !slug
-                            .chars()
-                            .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
-                        {
-                            return Err("Image slug can only contain letters, numbers, hyphens, and underscores".to_string());
-                        }
+                // Validate slug
+                if let Some(slug) = self.content.get("slug").and_then(|s| s.as_str()) {
+                    if slug.is_empty() {
+                        return Err("Image slug cannot be empty".to_string());
                     }
+                    if !slug
+                        .chars()
+                        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+                    {
+                        return Err("Image slug can only contain letters, numbers, hyphens, and underscores".to_string());
+                    }
+                }
 
-                    if let Some(format) = self.content.get("format").and_then(|f| f.as_str()) {
-                        let valid_formats = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
-                        if !valid_formats.contains(&format) {
-                            return Err(format!(
-                                "Invalid image format '{}'. Must be one of: {}",
-                                format,
-                                valid_formats.join(", ")
-                            ));
-                        }
+                // Validate format
+                if let Some(format) = self.content.get("format").and_then(|f| f.as_str()) {
+                    let valid_formats = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+                    if !valid_formats.contains(&format) {
+                        return Err(format!(
+                            "Invalid image format '{}'. Must be one of: {}",
+                            format,
+                            valid_formats.join(", ")
+                        ));
                     }
                 }
             }
@@ -203,6 +201,24 @@ impl Component {
     }
 }
 
+impl ComponentEq for Component {
+    fn content_equals(&self, other: &Self) -> bool {
+        // First check basic fields
+        if self.component_type != other.component_type
+            || self.position != other.position
+            || self.title != other.title
+            || self.template != other.template
+        {
+            return false;
+        }
+
+        // Use the component registry to compare content based on component type
+        use crate::models::component_handler::create_default_registry;
+        let registry = create_default_registry();
+        registry.content_equals(&self.component_type, &self.content, &other.content)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -232,7 +248,12 @@ mod tests {
         assert_eq!(text_component.component_type, "text");
         assert_eq!(text_component.content, text_content);
 
-        let image_content = json!({"src": "/images/photo.jpg", "alt": "A photo"});
+        let image_content = json!({
+            "slug": "photo",
+            "format": "jpg",
+            "file_path": "/images/photo.jpg",
+            "alt_text": "A photo"
+        });
         let image_component = Component::new(2, "image".to_string(), 1, image_content.clone());
         assert_eq!(image_component.component_type, "image");
         assert_eq!(image_component.content, image_content);
@@ -371,12 +392,7 @@ mod tests {
 
     #[test]
     fn test_validate_content_image_component() {
-        // Test old format
-        let valid_content = json!({"src": "/images/photo.jpg", "alt": "A photo"});
-        let component = Component::new(1, "image".to_string(), 0, valid_content);
-        assert!(component.validate_content().is_ok());
-
-        // Test new format
+        // Test valid new format
         let new_format_content = json!({
             "slug": "hero-image",
             "title": "Hero Image",
@@ -392,12 +408,12 @@ mod tests {
         let component = Component::new(1, "image".to_string(), 0, new_format_content);
         assert!(component.validate_content().is_ok());
 
-        // Test missing both formats
-        let missing_both = json!({"alt": "A photo"});
-        let component = Component::new(1, "image".to_string(), 0, missing_both);
+        // Test missing required fields
+        let missing_fields = json!({"alt": "A photo"});
+        let component = Component::new(1, "image".to_string(), 0, missing_fields);
         let result = component.validate_content();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("must have either 'src' field"));
+        assert!(result.unwrap_err().contains("must have 'slug', 'format', and 'file_path' fields"));
 
         // Test invalid slug
         let invalid_slug = json!({
@@ -497,7 +513,11 @@ mod tests {
     fn test_is_valid_success() {
         let valid_components = vec![
             Component::new(1, "text".to_string(), 0, json!({"text": "Hello"})),
-            Component::new(10, "image".to_string(), 5, json!({"src": "/img.jpg"})),
+            Component::new(10, "image".to_string(), 5, json!({
+                "slug": "img",
+                "format": "jpg",
+                "file_path": "/img.jpg"
+            })),
             Component::new(100, "code".to_string(), 10, json!({"code": "print()"})),
             Component::new(1, "custom".to_string(), 0, json!({"any": "data"})),
         ];

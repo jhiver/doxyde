@@ -1,14 +1,10 @@
 <div class="image-component gallery-item">
-    {% if component.content.file_path %}
-        <a href="/{{ component.content.slug }}.{{ component.content.format }}" class="gallery-link">
-            <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
-                 alt="{{ component.content.description | default(value=component.content.title) }}"
-                 {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
-                 {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}>
-        </a>
-    {% else %}
-        <img src="{{ component.content.src }}" alt="{{ component.content.alt | default(value='') }}">
-    {% endif %}
+    
+    <img src="/{{ component.content.slug }}.{{ component.content.format }}" 
+         alt="{{ component.content.alt_text | default(value=component.content.title) | default(value='') }}"
+         {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
+         {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}
+         loading="lazy">
     {% if component.title %}
         <p class="gallery-caption">{{ component.title }}</p>
     {% endif %}

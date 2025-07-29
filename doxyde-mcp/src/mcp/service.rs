@@ -509,9 +509,9 @@ impl DoxydeRmcpService {
         Parameters(req): Parameters<CreateComponentMarkdownRequest>,
     ) -> String {
         match self.internal_create_component_markdown(req).await {
-            Ok(component_info) => {
-                serde_json::to_string_pretty(&component_info).unwrap_or_else(|e| {
-                    format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
+            Ok(response) => {
+                serde_json::to_string_pretty(&response).unwrap_or_else(|e| {
+                    format!("{{\"error\": \"Failed to serialize response: {}\"}}", e)
                 })
             }
             Err(e) => format!("{{\"error\": \"{}\"}}", e),
@@ -862,6 +862,20 @@ pub struct ComponentInfo {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct WorkflowGuidance {
+    pub message: String,
+    pub warning: Option<String>,
+    pub next_steps: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ComponentCreateResponse {
+    pub component: ComponentInfo,
+    pub draft_status: serde_json::Value,
+    pub workflow_guidance: WorkflowGuidance,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DraftInfo {
     pub page_id: i64,
     pub version_id: i64,
@@ -1197,6 +1211,13 @@ impl DoxydeRmcpService {
             .map(|c| self.component_to_info(c))
             .collect();
 
+        // Check if draft is identical to published
+        let is_identical_to_published = if !is_new {
+            self.compare_draft_and_published(page_id).await.unwrap_or(false)
+        } else {
+            false
+        };
+        
         // Build response
 
         Ok(json!({
@@ -1205,6 +1226,7 @@ impl DoxydeRmcpService {
                 "version_number": draft.version_number,
                 "is_published": draft.is_published,
                 "is_new": is_new,
+                "is_identical_to_published": is_identical_to_published,
                 "created_by": draft.created_by,
                 "created_at": draft.created_at.to_rfc3339(),
             },
@@ -1222,7 +1244,7 @@ impl DoxydeRmcpService {
     async fn internal_create_component_markdown(
         &self,
         req: CreateComponentMarkdownRequest,
-    ) -> Result<ComponentInfo> {
+    ) -> Result<ComponentCreateResponse> {
         use doxyde_db::repositories::{ComponentRepository, PageRepository};
 
         // Verify page exists and belongs to this site
@@ -1291,7 +1313,47 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
 
-        Ok(self.component_to_info(created_component))
+        // Build workflow guidance based on draft status
+        let is_new_draft = draft.get("is_new").and_then(|v| v.as_bool()).unwrap_or(false);
+        let is_identical = draft.get("is_identical_to_published").and_then(|v| v.as_bool()).unwrap_or(false);
+        let component_count = draft_info.get("component_count").and_then(|v| v.as_u64()).unwrap_or(0);
+        
+        let workflow_guidance = if is_new_draft {
+            WorkflowGuidance {
+                message: format!("Component created in new draft version. This is the first component in the draft."),
+                warning: None,
+                next_steps: vec![
+                    "Add more components as needed".to_string(),
+                    format!("When ready, use publish_draft with page_id: {} to make changes live", req.page_id),
+                    "Or use discard_draft to abandon changes".to_string(),
+                ],
+            }
+        } else if is_identical {
+            WorkflowGuidance {
+                message: format!("Component added to existing draft (now has {} components). Draft was identical to published version before this change.", component_count + 1),
+                warning: None,
+                next_steps: vec![
+                    "Continue editing the draft".to_string(),
+                    format!("When ready, use publish_draft with page_id: {} to make changes live", req.page_id),
+                ],
+            }
+        } else {
+            WorkflowGuidance {
+                message: format!("Component added to existing draft with {} other components.", component_count),
+                warning: Some("This page already has an unpublished draft with changes. Your component has been added to the existing draft.".to_string()),
+                next_steps: vec![
+                    "Review all draft components with list_components".to_string(),
+                    format!("Continue editing or publish with publish_draft (page_id: {})", req.page_id),
+                    "To start fresh, first use discard_draft then create new components".to_string(),
+                ],
+            }
+        };
+        
+        Ok(ComponentCreateResponse {
+            component: self.component_to_info(created_component),
+            draft_status: draft.clone(),
+            workflow_guidance,
+        })
     }
 
     async fn internal_update_component_markdown(
@@ -2219,6 +2281,44 @@ impl DoxydeRmcpService {
             created_at: component.created_at.to_rfc3339(),
             updated_at: component.updated_at.to_rfc3339(),
         }
+    }
+
+    /// Compare draft and published versions to check if they're identical
+    async fn compare_draft_and_published(&self, page_id: i64) -> Result<bool> {
+        use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
+        use doxyde_core::models::component_trait::ComponentEq;
+        
+        let version_repo = PageVersionRepository::new(self.pool.clone());
+        let component_repo = ComponentRepository::new(self.pool.clone());
+        
+        // Get both draft and published versions
+        let draft = match version_repo.get_draft(page_id).await? {
+            Some(d) => d,
+            None => return Ok(false), // No draft means not identical
+        };
+        
+        let published = match version_repo.get_published(page_id).await? {
+            Some(p) => p,
+            None => return Ok(false), // No published means not identical
+        };
+        
+        // Get components for both versions
+        let draft_components = component_repo.list_by_page_version(draft.id.unwrap()).await?;
+        let published_components = component_repo.list_by_page_version(published.id.unwrap()).await?;
+        
+        // Quick check: different number of components
+        if draft_components.len() != published_components.len() {
+            return Ok(false);
+        }
+        
+        // Compare each component
+        for (draft_comp, pub_comp) in draft_components.iter().zip(published_components.iter()) {
+            if !draft_comp.content_equals(pub_comp) {
+                return Ok(false);
+            }
+        }
+        
+        Ok(true)
     }
 
     async fn page_to_info(
@@ -3861,13 +3961,13 @@ mod tests {
         let result = service.create_component_markdown(Parameters(req)).await;
 
         assert!(!result.contains("error"));
-        let component: ComponentInfo = serde_json::from_str(&result)?;
-        assert_eq!(component.component_type, "markdown");
-        assert_eq!(component.position, 0);
-        assert_eq!(component.template, "card");
-        assert_eq!(component.title, Some("Test Component".to_string()));
+        let response: ComponentCreateResponse = serde_json::from_str(&result)?;
+        assert_eq!(response.component.component_type, "markdown");
+        assert_eq!(response.component.position, 0);
+        assert_eq!(response.component.template, "card");
+        assert_eq!(response.component.title, Some("Test Component".to_string()));
 
-        let content = component.content.get("text").unwrap().as_str().unwrap();
+        let content = response.component.content.get("text").unwrap().as_str().unwrap();
         assert!(content.contains("# Test Content"));
         Ok(())
     }
@@ -3967,6 +4067,120 @@ mod tests {
         // Verify content
         let comp1_text = components[1].content.get("text").unwrap().as_str().unwrap();
         assert_eq!(comp1_text, "Inserted content");
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_create_component_workflow_guidance(pool: SqlitePool) -> Result<()> {
+        setup_test_db(&pool).await?;
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
+
+        // Create test site and page
+        let site_repo = SiteRepository::new(pool.clone());
+        let site = doxyde_core::models::Site::new("test.com".to_string(), "Test Site".to_string());
+        let site_id = site_repo.create(&site).await?;
+
+        let page_repo = PageRepository::new(pool.clone());
+        let root = page_repo
+            .get_root_page(site_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+
+        // Scenario 1: Creating component when no draft exists (new draft)
+        let service = DoxydeRmcpService::new(pool.clone(), site_id);
+        let req = CreateComponentMarkdownRequest {
+            page_id: root.id.unwrap(),
+            position: None,
+            template: None,
+            title: None,
+            content: "New content".to_string(),
+        };
+
+        let result = service.create_component_markdown(Parameters(req)).await;
+        assert!(!result.contains("error"));
+        
+        let response: ComponentCreateResponse = serde_json::from_str(&result)?;
+        assert_eq!(response.workflow_guidance.message, "Component created in new draft version. This is the first component in the draft.");
+        assert!(response.workflow_guidance.warning.is_none());
+        assert_eq!(response.workflow_guidance.next_steps.len(), 3);
+        assert!(response.workflow_guidance.next_steps[0].contains("Add more components"));
+        assert!(response.workflow_guidance.next_steps[1].contains("publish_draft"));
+        assert!(response.workflow_guidance.next_steps[2].contains("discard_draft"));
+
+        // Scenario 2: Creating component when draft exists but is identical to published
+        // First, publish the current draft with a component
+        let version_repo = PageVersionRepository::new(pool.clone());
+        let draft = version_repo.get_draft(root.id.unwrap()).await?.unwrap();
+        version_repo.publish(draft.id.unwrap()).await?;
+
+        // Create a new page for scenario 2 that has no versions yet
+        let mut page2 = doxyde_core::models::Page::new(
+            site_id,
+            "test-page-2".to_string(),
+            "Test Page 2".to_string(),
+        );
+        page2.parent_page_id = root.id;
+        let page2_id = page_repo.create(&page2).await?;
+        
+        // Create and publish an empty version (no components)
+        let empty_version = doxyde_core::models::PageVersion::new(page2_id, 1, None);
+        let empty_version_id = version_repo.create(&empty_version).await?;
+        version_repo.publish(empty_version_id).await?;
+        
+        // Create a new draft that's identical to published (both have no components)
+        let new_draft = doxyde_core::models::PageVersion::new(page2_id, 2, None);
+        version_repo.create(&new_draft).await?;
+
+        // Now create a component
+        let req2 = CreateComponentMarkdownRequest {
+            page_id: page2_id,
+            position: None,
+            template: None,
+            title: None,
+            content: "Another content".to_string(),
+        };
+
+        let result2 = service.create_component_markdown(Parameters(req2)).await;
+        assert!(!result2.contains("error"));
+        
+        let response2: ComponentCreateResponse = serde_json::from_str(&result2)?;
+        // Should say "Component added to existing draft (now has 1 components)..."
+        assert!(response2.workflow_guidance.message.contains("Component added to existing draft"));
+        assert!(response2.workflow_guidance.message.contains("was identical to published version before this change"));
+        assert!(response2.workflow_guidance.warning.is_none());
+
+        // Scenario 3: Creating component when draft has existing changes
+        // Add another component to make the draft different
+        let component_repo = ComponentRepository::new(pool.clone());
+        let existing_comp = doxyde_core::models::Component::new(
+            response2.draft_status["version_id"].as_i64().unwrap(),
+            "text".to_string(),
+            0,
+            serde_json::json!({"text": "Existing draft content"}),
+        );
+        component_repo.create(&existing_comp).await?;
+
+        // Now try to add another component
+        let req3 = CreateComponentMarkdownRequest {
+            page_id: page2_id,
+            position: None,
+            template: None,
+            title: None,
+            content: "Third content".to_string(),
+        };
+
+        let result3 = service.create_component_markdown(Parameters(req3)).await;
+        assert!(!result3.contains("error"));
+        
+        let response3: ComponentCreateResponse = serde_json::from_str(&result3)?;
+        // Should say "Component added to existing draft with X other components"
+        assert!(response3.workflow_guidance.message.contains("Component added to existing draft with"));
+        assert!(response3.workflow_guidance.message.contains("other components"));
+        assert!(response3.workflow_guidance.warning.is_some());
+        assert!(response3.workflow_guidance.warning.unwrap().contains("already has an unpublished draft with changes"));
+
         Ok(())
     }
 
@@ -6562,7 +6776,7 @@ mod tests {
         assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "test-image");
         assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Test Image");
         assert_eq!(content.get("description").unwrap().as_str().unwrap(), "A test image");
-        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Red pixel");
+        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Red pixel"); // It's "alt" not "alt_text" in content
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "png");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 1);
         assert_eq!(content.get("height").unwrap().as_u64().unwrap(), 1);
@@ -6668,7 +6882,7 @@ mod tests {
         assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "updated-slug");
         assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Updated Title");
         assert_eq!(content.get("description").unwrap().as_str().unwrap(), "Updated Description");
-        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Updated Alt");
+        assert_eq!(content.get("alt").unwrap().as_str().unwrap(), "Updated Alt"); // It's "alt" not "alt_text" in content
         // Original file data should remain unchanged
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "jpg");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 100);

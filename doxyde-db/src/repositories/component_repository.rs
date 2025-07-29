@@ -894,7 +894,7 @@ mod tests {
             ("text", serde_json::json!({"text": "Hello"})),
             (
                 "image",
-                serde_json::json!({"src": "/img.jpg", "alt": "Image"}),
+                serde_json::json!({"slug": "test-image", "format": "jpg", "file_path": "/images/test.jpg"}),
             ),
             (
                 "code",
@@ -1191,7 +1191,7 @@ mod tests {
 
         // Create components in random order
         let components_data = vec![
-            (2, "image", json!({"src": "/img2.jpg"})),
+            (2, "image", json!({"slug": "test-image2", "format": "jpg", "file_path": "/images/test2.jpg"})),
             (0, "text", json!({"text": "First"})),
             (1, "code", json!({"code": "println!()"})),
         ];
@@ -1259,7 +1259,7 @@ mod tests {
             version2_id,
             "image".to_string(),
             1,
-            json!({"src": "/img.jpg"}),
+            json!({"slug": "test-image", "format": "jpg", "file_path": "/images/test.jpg"}),
         );
 
         repo.create(&comp1).await?;
@@ -1406,7 +1406,7 @@ mod tests {
             version_id,
             "image".to_string(),
             1,
-            json!({"src": "/img.jpg"}),
+            json!({"slug": "test-image", "format": "jpg", "file_path": "/images/test.jpg"}),
         );
         let comp3 = Component::new(
             version_id,

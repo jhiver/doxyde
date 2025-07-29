@@ -15,7 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::models::component::Component;
-use crate::models::component_trait::{escape_html, extract_text, ComponentRenderer};
+use crate::models::component_trait::{escape_html, ComponentRenderer};
 
 pub struct ImageComponent {
     pub id: Option<i64>,
@@ -30,78 +30,58 @@ pub struct ImageComponent {
 
 impl ImageComponent {
     pub fn from_component(component: &Component) -> Self {
-        // Check if this is the new format with slug
-        if let Some(slug) = component.content.get("slug").and_then(|s| s.as_str()) {
-            let format = component
-                .content
-                .get("format")
-                .and_then(|f| f.as_str())
-                .unwrap_or("jpg");
-            let src = format!("/{}.{}", slug, format);
-            let alt = component
-                .content
-                .get("description")
-                .and_then(|d| d.as_str())
-                .unwrap_or_else(|| {
-                    component
-                        .content
-                        .get("title")
-                        .and_then(|t| t.as_str())
-                        .unwrap_or("")
-                })
-                .to_string();
-            let width = component
-                .content
-                .get("width")
-                .and_then(|w| w.as_u64())
-                .map(|w| w as u32);
-            let height = component
-                .content
-                .get("height")
-                .and_then(|h| h.as_u64())
-                .map(|h| h as u32);
+        // Only support new format
+        let slug = component.content.get("slug")
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+        let format = component.content.get("format")
+            .and_then(|f| f.as_str())
+            .unwrap_or("jpg");
+        let src = format!("/{}.{}", slug, format);
+        
+        // Use alt_text field, fallback to title or description
+        let alt = component.content.get("alt_text")
+            .and_then(|a| a.as_str())
+            .unwrap_or_else(|| {
+                component.content.get("title")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or_else(|| {
+                        component.content.get("description")
+                            .and_then(|d| d.as_str())
+                            .unwrap_or("")
+                    })
+            })
+            .to_string();
+            
+        let width = component.content.get("width")
+            .and_then(|w| w.as_u64())
+            .map(|w| w as u32);
+        let height = component.content.get("height")
+            .and_then(|h| h.as_u64())
+            .map(|h| h as u32);
 
-            let display_width = component
-                .content
-                .get("display_width")
-                .and_then(|w| w.as_str())
-                .filter(|w| !w.is_empty())
-                .map(|w| w.to_string());
-            let display_height = component
-                .content
-                .get("display_height")
-                .and_then(|h| h.as_str())
-                .filter(|h| !h.is_empty())
-                .map(|h| h.to_string());
+        let display_width = component.content.get("display_width")
+            .and_then(|w| w.as_str())
+            .filter(|w| !w.is_empty())
+            .map(|w| w.to_string());
+        let display_height = component.content.get("display_height")
+            .and_then(|h| h.as_str())
+            .filter(|h| !h.is_empty())
+            .map(|h| h.to_string());
 
-            Self {
-                id: component.id,
-                src,
-                alt,
-                title: component.title.clone().or_else(|| {
-                    component
-                        .content
-                        .get("title")
-                        .and_then(|t| t.as_str())
-                        .map(|s| s.to_string())
-                }),
-                width,
-                height,
-                display_width,
-                display_height,
-            }
-        } else {
-            // Old format
-            Self {
-                id: component.id,
-                src: extract_text(&component.content, "src"),
-                alt: extract_text(&component.content, "alt"),
-                title: component.title.clone(),
-                width: None,
-                height: None,
-                display_width: None,
-                display_height: None,
-            }
+        Self {
+            id: component.id,
+            src,
+            alt,
+            title: component.title.clone().or_else(|| {
+                component.content.get("title")
+                    .and_then(|t| t.as_str())
+                    .map(|s| s.to_string())
+            }),
+            width,
+            height,
+            display_width,
+            display_height,
         }
     }
 }
