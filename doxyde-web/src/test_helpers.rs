@@ -174,7 +174,7 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         templates_dir: "templates".to_string(),
         session_secret: "test-secret".to_string(),
         development_mode: false,
-        uploads_dir: "/tmp/mkdoc-test-uploads".to_string(),
+        uploads_dir: "/tmp/doxyde-test-uploads".to_string(),
         max_upload_size: 1048576,      // 1MB for tests
         secure_cookies: false,         // Disable for tests
         session_timeout_minutes: 1440, // 24 hours

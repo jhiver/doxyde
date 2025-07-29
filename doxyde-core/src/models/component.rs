@@ -398,7 +398,7 @@ mod tests {
             "title": "Hero Image",
             "description": "Main hero image",
             "format": "jpg",
-            "file_path": "/var/mkdoc/uploads/2025/01/12/abc123.jpg",
+            "file_path": "/home/doxyde/.doxyde/uploads/2025/01/12/abc123.jpg",
             "original_name": "photo.jpg",
             "mime_type": "image/jpeg",
             "size": 245678,

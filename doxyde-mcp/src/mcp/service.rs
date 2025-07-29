@@ -37,7 +37,13 @@ pub struct DoxydeRmcpService {
 
 impl DoxydeRmcpService {
     pub fn new(pool: SqlitePool, site_id: i64) -> Self {
-        Self::with_upload_dir(pool, site_id, std::path::PathBuf::from("/var/mkdoc/uploads"))
+        // Use the standard Doxyde upload directory
+        let upload_dir = std::env::var("DOXYDE_UPLOADS_DIR")
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| "/home/doxyde".to_string());
+                format!("{}/.doxyde/uploads", home)
+            });
+        Self::with_upload_dir(pool, site_id, std::path::PathBuf::from(upload_dir))
     }
 
     pub fn with_upload_dir(pool: SqlitePool, site_id: i64, upload_dir: std::path::PathBuf) -> Self {
@@ -6857,7 +6863,7 @@ mod tests {
                 "description": "Original Description",
                 "alt": "Original Alt",
                 "format": "jpg",
-                "file_path": "/var/mkdoc/uploads/2025/01/01/test.jpg",
+                "file_path": "/home/doxyde/.doxyde/uploads/2025/01/01/test.jpg",
                 "width": 100,
                 "height": 100
             }),
