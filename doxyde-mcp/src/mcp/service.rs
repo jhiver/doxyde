@@ -905,8 +905,10 @@ impl DoxydeRmcpService {
 
         // First pass: create PageInfo for all pages
         for page in &pages {
-            let info = self.page_to_info(&pages, page).await?;
-            page_map.insert(page.id.unwrap(), (info, Vec::new()));
+            if let Some(page_id) = page.id {
+                let info = self.page_to_info(&pages, page).await?;
+                page_map.insert(page_id, (info, Vec::new()));
+            }
         }
 
         // Second pass: build hierarchy
@@ -1090,8 +1092,11 @@ impl DoxydeRmcpService {
 
         // Get components
         let component_repo = ComponentRepository::new(self.pool.clone());
+        let version_id = version
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await?;
 
         // Convert to ComponentInfo
@@ -1126,8 +1131,11 @@ impl DoxydeRmcpService {
 
         // Get components
         let component_repo = ComponentRepository::new(self.pool.clone());
+        let version_id = version
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await?;
 
         // Convert to ComponentInfo
@@ -1164,8 +1172,11 @@ impl DoxydeRmcpService {
             // First, check if there's a published version to copy from
             if let Some(published) = version_repo.get_published(page_id).await? {
                 // Copy components from published version
+                let published_id = published
+                    .id
+                    .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
                 let published_components = component_repo
-                    .list_by_page_version(published.id.unwrap())
+                    .list_by_page_version(published_id)
                     .await?;
 
                 // Create new draft version
@@ -1208,8 +1219,11 @@ impl DoxydeRmcpService {
         };
 
         // Get all components in the draft
+        let draft_id = draft
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
         let components = component_repo
-            .list_by_page_version(draft.id.unwrap())
+            .list_by_page_version(draft_id)
             .await?;
 
         let component_infos: Vec<ComponentInfo> = components

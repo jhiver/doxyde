@@ -935,7 +935,7 @@ impl PageRepository {
             created_at: chrono::DateTime::parse_from_rfc3339(&page.14)
                 .unwrap_or_else(|_| {
                     chrono::NaiveDateTime::parse_from_str(&page.14, "%Y-%m-%d %H:%M:%S")
-                        .unwrap()
+                        .unwrap_or_else(|_| chrono::Utc::now().naive_utc())
                         .and_utc()
                         .fixed_offset()
                 })
@@ -943,7 +943,7 @@ impl PageRepository {
             updated_at: chrono::DateTime::parse_from_rfc3339(&page.15)
                 .unwrap_or_else(|_| {
                     chrono::NaiveDateTime::parse_from_str(&page.15, "%Y-%m-%d %H:%M:%S")
-                        .unwrap()
+                        .unwrap_or_else(|_| chrono::Utc::now().naive_utc())
                         .and_utc()
                         .fixed_offset()
                 })
@@ -1263,7 +1263,9 @@ mod tests {
             .get_root_page(site_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found for site {}", site_id))?;
-        Ok(root_page.id.unwrap())
+        root_page
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Root page has no ID"))
     }
 
     async fn setup_test_db(pool: &SqlitePool) -> Result<i64> {
