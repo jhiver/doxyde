@@ -45,8 +45,13 @@ pub async fn serve_image_handler(
     let page_version_repo = PageVersionRepository::new(state.db.clone());
 
     // Find all published page versions for this site
+    let site_id = site.id.ok_or_else(|| {
+        tracing::error!("Site has no ID");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    
     let published_versions = page_version_repo
-        .find_published_by_site(site.id.unwrap())
+        .find_published_by_site(site_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to find published versions: {}", e);
@@ -55,8 +60,13 @@ pub async fn serve_image_handler(
 
     // Search through all published versions for an image with this slug
     for version in published_versions {
+        let version_id = version.id.ok_or_else(|| {
+            tracing::error!("Version has no ID");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await
             .map_err(|e| {
                 tracing::error!("Failed to list components: {}", e);
@@ -274,20 +284,30 @@ async fn check_component_permissions(
     );
 
     // Verify the page belongs to the current site
-    if page.site_id != site.id.unwrap() {
+    let site_id = site.id.ok_or_else(|| {
+        tracing::error!("Site has no ID");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    
+    if page.site_id != site_id {
         tracing::warn!(
-            "Page site_id {} doesn't match current site_id {:?}",
+            "Page site_id {} doesn't match current site_id {}",
             page.site_id,
-            site.id
+            site_id
         );
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Check if user can edit the page
     if !user.user.is_admin {
+        let user_id = user.user.id.ok_or_else(|| {
+            tracing::error!("User has no ID");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        
         let site_user_repo = SiteUserRepository::new(state.db.clone());
         let site_user = site_user_repo
-            .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+            .find_by_site_and_user(site_id, user_id)
             .await
             .map_err(|e| {
                 tracing::error!("Failed to check site user permissions: {}", e);

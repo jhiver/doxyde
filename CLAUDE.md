@@ -249,6 +249,23 @@ Pages contain versioned components:
 3. Use error codes: `-32602` (invalid params), `-32603` (internal error)
 4. Draft-first editing required
 
+**Available MCP Tools:**
+- `list_pages` - List all pages in a site
+- `get_page` - Get page details and components
+- `create_page` - Create a new page
+- `update_page` - Update page properties
+- `publish_page` - Publish page changes
+- `create_text_component` - Add text/markdown content
+- `update_text_component` - Modify text content
+- `create_image_component` - Add images (URL or base64)
+- `update_image_component` - Update image properties
+- `create_code_component` - Add syntax-highlighted code
+- `update_code_component` - Modify code content
+- `create_html_component` - Add raw HTML content
+- `update_html_component` - Modify HTML content
+- `delete_component` - Remove any component
+- `reorder_components` - Change component order
+
 ## Testing Strategy
 
 ### Running Tests
@@ -326,11 +343,21 @@ git push origin feature/user-avatars
 - Draft-first workflow enforcement
 - Better error messages for AI agents
 - Comprehensive test coverage
+- Added create/update tools for all component types (text, image, code, html)
+- Image upload support via URL download and Base64 data URIs
+- SVG support added to image uploads
+
+**Component System Enhancements:**
+- Added `code` component type with syntax highlighting
+- Added `html` component type for raw HTML content
+- Enhanced image component templates and layouts
+- Improved image upload and preview functionality
 
 **Code Quality:**
 - Refactored large functions into small, focused ones
 - Consistent error handling patterns
 - Improved test coverage
+- Renamed `doxyde-shared` crate to `doxyde-mcp`
 
 ## 0.1 Release Plan (2-4 weeks remaining)
 

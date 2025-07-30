@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use doxyde_core::models::{site::Site, user::User};
 use doxyde_db::repositories::{SiteRepository, SiteUserRepository, UserRepository};
@@ -244,9 +244,11 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
 
             // Create site-user relationship
             let site_user_repo = SiteUserRepository::new(pool);
+            let site_id = found_site.id.ok_or_else(|| anyhow!("Site has no ID"))?;
+            let user_id = found_user.id.ok_or_else(|| anyhow!("User has no ID"))?;
             let site_user = doxyde_core::models::permission::SiteUser::new(
-                found_site.id.unwrap(),
-                found_user.id.unwrap(),
+                site_id,
+                user_id,
                 site_role,
             );
 

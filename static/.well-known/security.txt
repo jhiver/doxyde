@@ -1,0 +1,22 @@
+# Doxyde Security Information
+
+Contact: security@doxyde.com
+Expires: 2026-01-01T00:00:00.000Z
+Preferred-Languages: en
+
+# Our security acknowledgments page
+Acknowledgments: https://doxyde.com/security/thanks
+
+# Our PGP key (if you prefer encrypted communication)
+# Encryption: https://doxyde.com/.well-known/pgp-key.txt
+
+# Bug Bounty Program (when applicable)
+# Policy: https://doxyde.com/security/policy
+
+# Canonical URL for this file
+Canonical: https://doxyde.com/.well-known/security.txt
+
+# Additional Information
+# Please report security vulnerabilities responsibly. We appreciate your efforts
+# to improve the security of Doxyde. We'll acknowledge your contribution on our
+# security acknowledgments page (with your permission).

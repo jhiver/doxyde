@@ -232,7 +232,9 @@ TEMPLATES_DIR=templates cargo run --bin doxyde-web
 
 Pages are built from components:
 - **Text**: Markdown content with multiple display templates (default, card, highlight, quote)
-- **Image**: Upload and display images with dimension control and templates
+- **Image**: Upload and display images with dimension control and templates (supports JPG, PNG, GIF, WebP, SVG)
+- **Code**: Syntax-highlighted code blocks with language support
+- **HTML**: Raw HTML content for custom layouts and embedded content
 
 ### AI Integration (MCP)
 

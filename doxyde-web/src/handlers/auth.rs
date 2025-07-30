@@ -206,15 +206,21 @@ pub async fn login(
         }
     }
 
+    // Get user ID
+    let user_id = user.id.ok_or_else(|| {
+        tracing::error!("User has no ID");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    
     // Delete any existing sessions for this user (session rotation)
     let session_repo = SessionRepository::new(state.db.clone());
-    if let Err(e) = session_repo.delete_user_sessions(user.id.unwrap()).await {
+    if let Err(e) = session_repo.delete_user_sessions(user_id).await {
         tracing::warn!("Failed to delete old sessions during rotation: {:?}", e);
     }
 
     // Create new session with configured timeout
     let session = Session::new_with_expiry(
-        user.id.unwrap(),
+        user_id,
         Duration::minutes(state.config.session_timeout_minutes),
     );
     let session_id = session.id.clone();

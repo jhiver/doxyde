@@ -77,16 +77,19 @@ async fn health_handler() -> &'static str {
 
 // Helper function to add CORS headers
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
-    headers.insert(
-        ACCESS_CONTROL_ALLOW_METHODS,
-        "GET, POST, OPTIONS".parse().unwrap(),
-    );
-    headers.insert(
-        ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type".parse().unwrap(),
-    );
-    headers.insert(ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
+    // These header values are constants and should always parse correctly
+    if let Ok(value) = "*".parse() {
+        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, value);
+    }
+    if let Ok(value) = "GET, POST, OPTIONS".parse() {
+        headers.insert(ACCESS_CONTROL_ALLOW_METHODS, value);
+    }
+    if let Ok(value) = "Authorization, Content-Type".parse() {
+        headers.insert(ACCESS_CONTROL_ALLOW_HEADERS, value);
+    }
+    if let Ok(value) = "3600".parse() {
+        headers.insert(ACCESS_CONTROL_MAX_AGE, value);
+    }
 }
 
 // OAuth discovery endpoints that point to main doxyde.com server
@@ -296,17 +299,21 @@ async fn main() -> Result<()> {
 
 async fn shutdown_signal(ct: CancellationToken) {
     let ctrl_c = async {
-        tokio::signal::ctrl_c()
-            .await
-            .expect("failed to install Ctrl+C handler");
+        if let Err(e) = tokio::signal::ctrl_c().await {
+            tracing::error!("Failed to install Ctrl+C handler: {}", e);
+        }
     };
 
     #[cfg(unix)]
     let terminate = async {
-        tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-            .expect("failed to install signal handler")
-            .recv()
-            .await;
+        match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+            Ok(mut signal) => {
+                signal.recv().await;
+            }
+            Err(e) => {
+                tracing::error!("Failed to install terminate signal handler: {}", e);
+            }
+        }
     };
 
     #[cfg(not(unix))]

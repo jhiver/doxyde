@@ -33,7 +33,7 @@ use crate::{
     state::AppState,
     uploads::{
         create_upload_directory, extract_image_metadata, generate_unique_filename, sanitize_slug,
-        save_upload,
+        save_upload, validate_upload_filename,
     },
 };
 
@@ -163,6 +163,9 @@ pub async fn upload_image_handler(
     // Validate we have image data
     let image_data = image_data.ok_or(StatusCode::BAD_REQUEST)?;
     let original_filename = original_filename.ok_or(StatusCode::BAD_REQUEST)?;
+
+    // Validate filename for security
+    validate_upload_filename(&original_filename).map_err(|_| StatusCode::BAD_REQUEST)?;
 
     // Validate and sanitize slug
     if form_data.slug.is_empty() {
