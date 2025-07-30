@@ -50,15 +50,17 @@ pub async fn show_page_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get the published version of the page
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let published_version = version_repo
-        .get_published(page.id.unwrap())
+        .get_published(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get components if we have a published version
     let mut components = if let Some(version) = &published_version {
+        let version_id = version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
     } else {
@@ -86,13 +88,17 @@ pub async fn show_page_handler(
                     // When parent_page_id is null or not present, fetch all pages from the site
                     // TODO: This should ideally fetch all blog posts or pages marked as blog posts
                     // For now, fetch all pages except the home page
-                    page_repo
-                        .list_by_site_id(site.id.unwrap())
-                        .await
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|p| p.slug != "home")
-                        .collect()
+                    if let Some(site_id) = site.id {
+                        page_repo
+                            .list_by_site_id(site_id)
+                            .await
+                            .unwrap_or_default()
+                            .into_iter()
+                            .filter(|p| p.slug != "home")
+                            .collect()
+                    } else {
+                        Vec::new()
+                    }
                 };
 
                 // Check order_by config and sort pages accordingly
@@ -122,10 +128,14 @@ pub async fn show_page_handler(
                 let mut pages_data = Vec::new();
                 for child in child_pages.iter().take(item_count) {
                     // Build URL for child page
-                    let child_breadcrumb = page_repo
-                        .get_breadcrumb_trail(child.id.unwrap())
-                        .await
-                        .unwrap_or_default();
+                    let child_breadcrumb = if let Some(child_id) = child.id {
+                        page_repo
+                            .get_breadcrumb_trail(child_id)
+                            .await
+                            .unwrap_or_default()
+                    } else {
+                        Vec::new()
+                    };
 
                     let child_url = if child_breadcrumb.len() <= 1 {
                         "/".to_string()
@@ -156,13 +166,13 @@ pub async fn show_page_handler(
 
     // Get child pages using sorted method
     let children = page_repo
-        .list_children_sorted(page.id.unwrap())
+        .list_children_sorted(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get breadcrumb trail
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(page.id.unwrap())
+        .get_breadcrumb_trail(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -198,8 +208,9 @@ pub async fn show_page_handler(
     // Build navigation from current page up to root, showing children of each
     for (i, nav_page) in breadcrumb.iter().enumerate().rev() {
         // Get children of this page
+        let nav_page_id = nav_page.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         let page_children = page_repo
-            .list_children_sorted(nav_page.id.unwrap())
+            .list_children_sorted(nav_page_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -293,12 +304,14 @@ pub async fn show_page_handler(
         } else {
             // Check site permissions
             let site_user_repo = SiteUserRepository::new(state.db.clone());
-            if let Ok(Some(site_user)) = site_user_repo
-                .find_by_site_and_user(site.id.unwrap(), current_user.user.id.unwrap())
-                .await
-            {
-                use doxyde_core::models::permission::SiteRole;
-                can_edit = site_user.role == SiteRole::Editor || site_user.role == SiteRole::Owner;
+            if let (Some(site_id), Some(user_id)) = (site.id, current_user.user.id) {
+                if let Ok(Some(site_user)) = site_user_repo
+                    .find_by_site_and_user(site_id, user_id)
+                    .await
+                {
+                    use doxyde_core::models::permission::SiteRole;
+                    can_edit = site_user.role == SiteRole::Editor || site_user.role == SiteRole::Owner;
+                }
             }
         }
     }

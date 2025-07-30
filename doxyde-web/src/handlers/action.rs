@@ -477,10 +477,11 @@ async fn resolve_page(
 ) -> Result<Page, StatusCode> {
     let page_repo = PageRepository::new(state.db.clone());
 
+    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
     if content_path.path == "/" {
-        get_root_page(&page_repo, site.id.unwrap()).await
+        get_root_page(&page_repo, site_id).await
     } else {
-        navigate_to_page(&page_repo, site.id.unwrap(), &content_path.path).await
+        navigate_to_page(&page_repo, site_id, &content_path.path).await
     }
 }
 
@@ -503,7 +504,8 @@ async fn navigate_to_page(
     let mut current_page = get_root_page(page_repo, site_id).await?;
 
     for segment in segments {
-        current_page = find_child_by_slug(page_repo, current_page.id.unwrap(), segment).await?;
+        let current_page_id = current_page.id.ok_or(StatusCode::NOT_FOUND)?;
+        current_page = find_child_by_slug(page_repo, current_page_id, segment).await?;
     }
 
     Ok(current_page)

@@ -43,8 +43,10 @@ pub async fn move_page_handler(
     // Check permissions
     if !user.user.is_admin {
         let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+        let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+            .find_by_site_and_user(site_id, user_id)
             .await
         {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {
@@ -79,7 +81,10 @@ pub async fn move_page_handler(
     // Build target pages with full paths
     let mut target_data = Vec::new();
     for target in valid_targets {
-        let target_id = target.id.unwrap();
+        let target_id = match target.id {
+            Some(id) => id,
+            None => continue, // Skip targets without ID
+        };
 
         // Get breadcrumb for this target to build full path
         let breadcrumb = page_repo
@@ -165,8 +170,10 @@ pub async fn do_move_page_handler(
     // Check permissions
     if !user.user.is_admin {
         let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+        let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+            .find_by_site_and_user(site_id, user_id)
             .await
         {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {

@@ -124,9 +124,10 @@ pub async fn edit_page_content_handler(
     tracing::info!("User: {}", user.user.username);
 
     // Get or create a draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = match get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -146,8 +147,9 @@ pub async fn edit_page_content_handler(
     };
 
     // Get components from the draft version
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let components = match component_repo
-        .list_by_page_version(draft_version.id.unwrap())
+        .list_by_page_version(draft_version_id)
         .await
     {
         Ok(comps) => {
@@ -174,7 +176,7 @@ pub async fn edit_page_content_handler(
     };
 
     // Get breadcrumb for navigation
-    let breadcrumb = match page_repo.get_breadcrumb_trail(page.id.unwrap()).await {
+    let breadcrumb = match page_repo.get_breadcrumb_trail(page_id).await {
         Ok(crumbs) => crumbs,
         Err(e) => {
             tracing::error!(
@@ -286,7 +288,8 @@ pub async fn edit_page_content_handler(
     context.insert("ordered_component_types", &ordered_component_types);
 
     // Get all pages for blog summary parent page dropdown
-    let all_pages = match page_repo.list_by_site_id(site.id.unwrap()).await {
+    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+    let all_pages = match page_repo.list_by_site_id(site_id).await {
         Ok(pages) => pages,
         Err(e) => {
             tracing::error!(
@@ -341,9 +344,10 @@ pub async fn add_component_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create a draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -353,8 +357,9 @@ pub async fn add_component_handler(
     })?;
 
     // Get current components to determine position
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let components = component_repo
-        .list_by_page_version(draft_version.id.unwrap())
+        .list_by_page_version(draft_version_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to list components: {:?}", e);
@@ -386,7 +391,7 @@ pub async fn add_component_handler(
 
     // Create new component
     let mut component = Component::new(
-        draft_version.id.unwrap(),
+        draft_version_id,
         form.component_type.clone(),
         next_position,
         content,
@@ -406,7 +411,7 @@ pub async fn add_component_handler(
 
     // Normalize positions after adding component
     component_repo
-        .normalize_positions(draft_version.id.unwrap())
+        .normalize_positions(draft_version_id)
         .await
         .map_err(|e| {
             tracing::error!("Failed to normalize positions: {:?}", e);
@@ -436,8 +441,10 @@ pub async fn can_edit_page(
 
     // Check site permissions
     let site_user_repo = SiteUserRepository::new(state.db.clone());
+    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+    let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
     let site_user = site_user_repo
-        .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+        .find_by_site_and_user(site_id, user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -455,8 +462,9 @@ async fn build_page_path(state: &AppState, page: &Page) -> Result<String, Status
     }
 
     let page_repo = PageRepository::new(state.db.clone());
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(page.id.unwrap())
+        .get_breadcrumb_trail(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -478,10 +486,11 @@ pub async fn new_page_handler(
     }
 
     let page_repo = PageRepository::new(state.db.clone());
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
 
     // Get breadcrumb for navigation
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(page.id.unwrap())
+        .get_breadcrumb_trail(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -547,16 +556,18 @@ pub async fn create_page_handler(
     }
 
     // Create the new page
+    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+    let parent_page_id = parent_page.id.ok_or(StatusCode::NOT_FOUND)?;
     let mut new_page = if form.slug.is_empty() {
         Page::new_with_parent_and_title(
-            site.id.unwrap(),
-            parent_page.id.unwrap(),
+            site_id,
+            parent_page_id,
             form.title.clone(),
         )
     } else {
         Page::new_with_parent(
-            site.id.unwrap(),
-            parent_page.id.unwrap(),
+            site_id,
+            parent_page_id,
             form.slug.clone(),
             form.title.clone(),
         )
@@ -580,7 +591,7 @@ pub async fn create_page_handler(
 
     // Calculate the position for the new page
     let siblings = page_repo
-        .list_children(parent_page.id.unwrap())
+        .list_children(parent_page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -681,7 +692,8 @@ pub async fn publish_draft_handler(
     }
 
     // Publish the draft
-    crate::draft::publish_draft(&state.db, page.id.unwrap())
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
+    crate::draft::publish_draft(&state.db, page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -703,7 +715,8 @@ pub async fn discard_draft_handler(
     }
 
     // Delete the draft
-    crate::draft::delete_draft_if_exists(&state.db, page.id.unwrap())
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
+    crate::draft::delete_draft_if_exists(&state.db, page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -736,9 +749,10 @@ pub async fn save_draft_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create a draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -747,8 +761,9 @@ pub async fn save_draft_handler(
     tracing::info!("Draft version ID: {:?}", draft_version.id);
 
     // Get all existing components in the draft
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let existing_components = component_repo
-        .list_by_page_version(draft_version.id.unwrap())
+        .list_by_page_version(draft_version_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -859,7 +874,7 @@ pub async fn save_draft_handler(
 
     // Normalize positions after all updates and deletions
     component_repo
-        .normalize_positions(draft_version.id.unwrap())
+        .normalize_positions(draft_version_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -894,9 +909,10 @@ pub async fn delete_component_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create a draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -909,7 +925,8 @@ pub async fn delete_component_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    if component.page_version_id != draft_version.id.unwrap() {
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    if component.page_version_id != draft_version_id {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -946,9 +963,10 @@ pub async fn move_component_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create a draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -961,7 +979,8 @@ pub async fn move_component_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    if component.page_version_id != draft_version.id.unwrap() {
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    if component.page_version_id != draft_version_id {
         return Err(StatusCode::FORBIDDEN);
     }
 

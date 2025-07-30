@@ -1240,9 +1240,10 @@ impl DoxydeRmcpService {
         
         // Build response
 
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
         Ok(json!({
             "draft": {
-                "version_id": draft.id.unwrap(),
+                "version_id": draft_id,
                 "version_number": draft.version_number,
                 "is_published": draft.is_published,
                 "is_new": is_new,
@@ -1251,7 +1252,7 @@ impl DoxydeRmcpService {
                 "created_at": draft.created_at.to_rfc3339(),
             },
             "page": {
-                "id": page.id.unwrap(),
+                "id": page.id.ok_or_else(|| anyhow::anyhow!("Page has no ID"))?,
                 "title": page.title,
                 "slug": page.slug,
                 "template": page.template,
@@ -1462,7 +1463,8 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?.unwrap();
+        let updated_component = component_repo.find_by_id(req.component_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
     }
@@ -1498,25 +1500,26 @@ impl DoxydeRmcpService {
                 WHERE id = ?
                 "#,
             )
-            .bind(current_published.id.unwrap())
+            .bind(current_published.id.ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?)
             .execute(&self.pool)
             .await
             .context("Failed to unpublish current version")?;
         }
 
         // Publish the draft
-        version_repo.publish(draft.id.unwrap()).await?;
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
+        version_repo.publish(draft_id).await?;
 
         // Get component count for the draft
         use doxyde_db::repositories::ComponentRepository;
         let component_repo = ComponentRepository::new(self.pool.clone());
         let components = component_repo
-            .list_by_page_version(draft.id.unwrap())
+            .list_by_page_version(draft_id)
             .await?;
 
         Ok(DraftInfo {
             page_id,
-            version_id: draft.id.unwrap(),
+            version_id: draft_id,
             version_number: draft.version_number,
             created_by: draft.created_by,
             is_published: true,
@@ -1615,7 +1618,8 @@ impl DoxydeRmcpService {
 
         // Get all pages to build path
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let created_page = page_repo.find_by_id(page_id).await?.unwrap();
+        let created_page = page_repo.find_by_id(page_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Created page not found"))?;
 
         self.page_to_info(&all_pages, &created_page).await
     }
@@ -1708,7 +1712,8 @@ impl DoxydeRmcpService {
 
         // Get all pages to build path
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let updated_page = page_repo.find_by_id(req.page_id).await?.unwrap();
+        let updated_page = page_repo.find_by_id(req.page_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         self.page_to_info(&all_pages, &updated_page).await
     }
@@ -1798,7 +1803,8 @@ impl DoxydeRmcpService {
             ))?;
 
         // Delete the draft version
-        version_repo.delete_draft(draft.id.unwrap()).await?;
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
+        version_repo.delete_draft(draft_id).await?;
 
         Ok(())
     }
@@ -1831,8 +1837,9 @@ impl DoxydeRmcpService {
         };
 
         // Get components
+        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await?;
 
         // Convert to ComponentInfo
@@ -2050,7 +2057,8 @@ impl DoxydeRmcpService {
 
         // Get updated page info
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let moved_page = page_repo.find_by_id(req.page_id).await?.unwrap();
+        let moved_page = page_repo.find_by_id(req.page_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         self.page_to_info(&all_pages, &moved_page).await
     }
@@ -2183,7 +2191,8 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?.unwrap();
+        let updated_component = component_repo.find_by_id(req.component_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
     }
@@ -2285,14 +2294,15 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?.unwrap();
+        let updated_component = component_repo.find_by_id(req.component_id).await?
+            .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
     }
 
     fn component_to_info(&self, component: doxyde_core::models::Component) -> ComponentInfo {
         ComponentInfo {
-            id: component.id.unwrap(),
+            id: component.id.unwrap_or(0),
             component_type: component.component_type,
             position: component.position,
             template: component.template,
@@ -2323,8 +2333,10 @@ impl DoxydeRmcpService {
         };
         
         // Get components for both versions
-        let draft_components = component_repo.list_by_page_version(draft.id.unwrap()).await?;
-        let published_components = component_repo.list_by_page_version(published.id.unwrap()).await?;
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
+        let published_id = published.id.ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
+        let draft_components = component_repo.list_by_page_version(draft_id).await?;
+        let published_components = component_repo.list_by_page_version(published_id).await?;
         
         // Quick check: different number of components
         if draft_components.len() != published_components.len() {
@@ -2349,7 +2361,7 @@ impl DoxydeRmcpService {
         let has_children = all_pages.iter().any(|p| p.parent_page_id == page.id);
 
         Ok(PageInfo {
-            id: page.id.unwrap(),
+            id: page.id.ok_or_else(|| anyhow::anyhow!("Page has no ID"))?,
             slug: page.slug.clone(),
             title: page.title.clone(),
             path: self.build_page_path(all_pages, page).await?,

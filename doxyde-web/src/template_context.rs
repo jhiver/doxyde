@@ -34,15 +34,20 @@ pub async fn add_base_context(
 
     // Get root page and its children for navigation
     let page_repo = PageRepository::new(state.db.clone());
+    let site_id = site.id.ok_or_else(|| anyhow::anyhow!("Site has no ID"))?;
     let (root_page_title, root_children) =
-        if let Ok(Some(root_page)) = page_repo.get_root_page(site.id.unwrap()).await {
+        if let Ok(Some(root_page)) = page_repo.get_root_page(site_id).await {
             let title = root_page.title.clone();
 
             // Get children of root page for top navigation
-            let children = page_repo
-                .list_children(root_page.id.unwrap())
-                .await
-                .unwrap_or_default();
+            let children = if let Some(root_id) = root_page.id {
+                page_repo
+                    .list_children(root_id)
+                    .await
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
 
             (title, children)
         } else {
@@ -64,11 +69,13 @@ pub async fn add_base_context(
             is_current = true;
         } else if let Some(current) = current_page {
             // Check if current page is a descendant of this child
-            if let Ok(is_desc) = page_repo
-                .is_descendant_of(current.id.unwrap(), child.id.unwrap())
-                .await
-            {
-                is_current = is_desc;
+            if let (Some(current_id), Some(child_id)) = (current.id, child.id) {
+                if let Ok(is_desc) = page_repo
+                    .is_descendant_of(current_id, child_id)
+                    .await
+                {
+                    is_current = is_desc;
+                }
             }
         }
 
@@ -83,7 +90,7 @@ pub async fn add_base_context(
 
     // Get logo data
     if let Ok(Some((logo_url, logo_width, logo_height))) =
-        get_logo_data(&state.db, site.id.unwrap()).await
+        get_logo_data(&state.db, site_id).await
     {
         context.insert("logo_url", &logo_url);
         context.insert("logo_width", &logo_width);

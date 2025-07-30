@@ -26,6 +26,7 @@ use axum_extra::extract::cookie::Cookie;
 use base64::Engine;
 use chrono::{Duration, Utc};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use sha2::{Digest, Sha256};
 
 use crate::{error::AppError, session::get_current_user, AppState};
@@ -259,18 +260,20 @@ pub struct TokenResponse {
 }
 
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_METHODS,
-        "GET, POST, OPTIONS".parse().unwrap(),
-    );
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type, MCP-Protocol-Version"
-            .parse()
-            .unwrap(),
-    );
-    headers.insert(header::ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
+    // These are all static values that should always parse correctly
+    // Using unwrap_or_else to avoid unwrap() in production
+    if let Ok(value) = "*".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, value);
+    }
+    if let Ok(value) = "GET, POST, OPTIONS".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_METHODS, value);
+    }
+    if let Ok(value) = "Authorization, Content-Type, MCP-Protocol-Version".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value);
+    }
+    if let Ok(value) = "3600".parse() {
+        headers.insert(header::ACCESS_CONTROL_MAX_AGE, value);
+    }
 }
 
 pub async fn register_client(
@@ -302,9 +305,12 @@ pub async fn register_client(
         .unwrap_or_else(|| "client_secret_basic".to_string());
 
     // Store in database
-    let redirect_uris_json = serde_json::to_string(&request.redirect_uris).unwrap();
-    let grant_types_json = serde_json::to_string(&grant_types).unwrap();
-    let response_types_json = serde_json::to_string(&response_types).unwrap();
+    let redirect_uris_json = serde_json::to_string(&request.redirect_uris)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let grant_types_json = serde_json::to_string(&grant_types)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let response_types_json = serde_json::to_string(&response_types)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     match sqlx::query!(
         r#"
@@ -339,7 +345,9 @@ pub async fn register_client(
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             Ok((StatusCode::CREATED, headers, Json(response)))
         }
@@ -459,7 +467,9 @@ pub async fn token(
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response()
         }
@@ -477,7 +487,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
@@ -503,7 +515,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
@@ -516,7 +530,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::INTERNAL_SERVER_ERROR, headers, Json(error_response)).into_response();
         }
@@ -531,15 +547,32 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
-        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
 
     // Check if code expired
-    let expires_at = chrono::DateTime::parse_from_rfc3339(&auth_code.expires_at)
-        .unwrap()
-        .with_timezone(&Utc);
+    let expires_at = match chrono::DateTime::parse_from_rfc3339(&auth_code.expires_at) {
+        Ok(dt) => dt.with_timezone(&Utc),
+        Err(_) => {
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
+            return (
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(json!({
+                    "error": "invalid_grant",
+                    "error_description": "Invalid expiration date"
+                })),
+            ).into_response();
+        }
+    };
     if Utc::now() > expires_at {
         let error_response = serde_json::json!({
             "error": "invalid_grant",
@@ -548,7 +581,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
-        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
@@ -565,7 +600,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
                 let mut headers = HeaderMap::new();
                 add_cors_headers(&mut headers);
-                headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
                 return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
             }
@@ -589,7 +626,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
@@ -665,7 +704,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
-                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
@@ -678,7 +719,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
-                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -698,7 +741,9 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -721,7 +766,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
@@ -753,7 +800,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
         }
@@ -766,7 +815,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -778,9 +829,24 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
     };
 
     // Check if refresh token is expired
-    let expires_at = chrono::DateTime::parse_from_rfc3339(&stored_refresh.expires_at)
-        .unwrap()
-        .with_timezone(&Utc);
+    let expires_at = match chrono::DateTime::parse_from_rfc3339(&stored_refresh.expires_at) {
+        Ok(dt) => dt.with_timezone(&Utc),
+        Err(_) => {
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers);
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
+            return (
+                StatusCode::BAD_REQUEST,
+                headers,
+                Json(json!({
+                    "error": "invalid_grant",
+                    "error_description": "Invalid expiration date"
+                })),
+            ).into_response();
+        }
+    };
     if Utc::now() > expires_at {
         let error_response = serde_json::json!({
             "error": "invalid_grant",
@@ -789,7 +855,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
         let mut headers = HeaderMap::new();
         add_cors_headers(&mut headers);
-        headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+        if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
         return (StatusCode::BAD_REQUEST, headers, Json(error_response)).into_response();
     }
@@ -866,7 +934,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
-                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
@@ -885,7 +955,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
                     let mut headers = HeaderMap::new();
                     add_cors_headers(&mut headers);
-                    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+                    if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
                     (StatusCode::OK, headers, Json(response)).into_response()
                 }
@@ -900,7 +972,9 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
 
             let mut headers = HeaderMap::new();
             add_cors_headers(&mut headers);
-            headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
 
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

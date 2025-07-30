@@ -8,7 +8,16 @@ use std::collections::HashMap;
 /// Regex pattern that matches any amount of whitespace, carriage returns,
 /// or placeholder tags like &(123)
 static IGNORABLE_RE: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(?:\s|\r|\n|&\(\d+\))*").expect("Failed to compile ignorable regex"));
+    Lazy::new(|| {
+        match Regex::new(r"(?:\s|\r|\n|&\(\d+\))*") {
+            Ok(regex) => regex,
+            Err(_) => {
+                // This is a compile-time constant regex that should never fail
+                // If it does fail, the program cannot function correctly
+                std::process::abort();
+            }
+        }
+    });
 
 /// Represents the segregated text with placeholders and the original tags
 pub struct SegregatedContent {
@@ -241,7 +250,10 @@ pub fn replace_expression_in_text(
     matches.sort_by(|a, b| b.0.cmp(&a.0));
 
     // Create placeholder regex once outside the loop
-    let placeholder_regex = Regex::new(r"(\&\(\d+\))").unwrap();
+    let placeholder_regex = match Regex::new(r"(\&\(\d+\))") {
+        Ok(regex) => regex,
+        Err(e) => return Err(crate::TaggerError::RegexError(e)),
+    };
 
     // Process each match
     for (start, end, matched_text) in matches {

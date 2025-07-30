@@ -271,7 +271,11 @@ impl ComponentRepository {
         .bind(&component.title)
         .bind(&component.template)
         .bind(component.updated_at)
-        .bind(component.id.unwrap())
+        .bind(
+            component
+                .id
+                .ok_or_else(|| anyhow::anyhow!("Component has no ID"))?,
+        )
         .execute(&self.pool)
         .await
         .context("Failed to update component")?

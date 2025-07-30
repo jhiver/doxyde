@@ -53,8 +53,10 @@ async fn can_edit_page(
 
     // Check site permissions
     let site_user_repo = SiteUserRepository::new(state.db.clone());
+    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+    let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
     let site_user = site_user_repo
-        .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+        .find_by_site_and_user(site_id, user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -75,8 +77,9 @@ async fn build_page_path(
     }
 
     let page_repo = PageRepository::new(state.db.clone());
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(page.id.unwrap())
+        .get_breadcrumb_trail(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -191,9 +194,10 @@ pub async fn upload_image_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get or create draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -201,8 +205,9 @@ pub async fn upload_image_handler(
 
     // Get current components to determine position
     let component_repo = ComponentRepository::new(state.db.clone());
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let components = component_repo
-        .list_by_page_version(draft_version.id.unwrap())
+        .list_by_page_version(draft_version_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -224,7 +229,7 @@ pub async fn upload_image_handler(
 
     // Create new component
     let mut component = Component::new(
-        draft_version.id.unwrap(),
+        draft_version_id,
         "image".to_string(),
         next_position,
         content,
@@ -270,7 +275,8 @@ pub async fn upload_image_ajax_handler(
         .await
         .map_err(|_| StatusCode::BAD_REQUEST)?
     {
-        if field.name().unwrap_or("") == "image" {
+        let field_name = field.name().unwrap_or("");
+        if field_name == "image" {
             // Get filename
             original_filename = field.file_name().map(|f| f.to_string());
 
@@ -486,9 +492,10 @@ pub async fn upload_component_image_handler(
     let component_repo = ComponentRepository::new(state.db.clone());
 
     // Get or create draft version
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version = get_or_create_draft(
         &state.db,
-        page.id.unwrap(),
+        page_id,
         Some(user.user.username.clone()),
     )
     .await
@@ -501,7 +508,8 @@ pub async fn upload_component_image_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
         .ok_or(StatusCode::NOT_FOUND)?;
 
-    if component.page_version_id != draft_version.id.unwrap() {
+    let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+    if component.page_version_id != draft_version_id {
         return Err(StatusCode::FORBIDDEN);
     }
 

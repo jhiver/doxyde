@@ -43,8 +43,10 @@ pub async fn delete_page_handler(
     // Check permissions
     if !user.user.is_admin {
         let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+        let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+            .find_by_site_and_user(site_id, user_id)
             .await
         {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {
@@ -127,8 +129,10 @@ pub async fn do_delete_page_handler(
     // Check permissions again
     if !user.user.is_admin {
         let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+        let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site.id.unwrap(), user.user.id.unwrap())
+            .find_by_site_and_user(site_id, user_id)
             .await
         {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {
@@ -170,8 +174,9 @@ pub async fn do_delete_page_handler(
     };
 
     // Build parent URL for redirect
+    let parent_page_id = parent_page.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(parent_page.id.unwrap())
+        .get_breadcrumb_trail(parent_page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

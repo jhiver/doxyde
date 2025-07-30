@@ -16,13 +16,21 @@ pub type SharedRateLimiter = Arc<RateLimiter<NotKeyed, InMemoryState, DefaultClo
 
 /// Create a rate limiter for login attempts
 pub fn create_login_rate_limiter() -> SharedRateLimiter {
-    let quota = Quota::per_minute(NonZeroU32::new(5).unwrap()); // 5 attempts per minute
+    // NonZeroU32::new(5) is safe because 5 is not zero
+    let quota = match NonZeroU32::new(5) {
+        Some(n) => Quota::per_minute(n), // 5 attempts per minute
+        None => unreachable!("5 is not zero"),
+    };
     Arc::new(RateLimiter::direct(quota))
 }
 
 /// Create a rate limiter for API endpoints
 pub fn create_api_rate_limiter() -> SharedRateLimiter {
-    let quota = Quota::per_minute(NonZeroU32::new(60).unwrap()); // 60 requests per minute
+    // NonZeroU32::new(60) is safe because 60 is not zero
+    let quota = match NonZeroU32::new(60) {
+        Some(n) => Quota::per_minute(n), // 60 requests per minute
+        None => unreachable!("60 is not zero"),
+    };
     Arc::new(RateLimiter::direct(quota))
 }
 

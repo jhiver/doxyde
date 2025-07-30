@@ -117,12 +117,17 @@ async fn enhance_error_response(
     // Try to render the error template
     match state.templates.render(template_name, &context) {
         Ok(html) => {
-            let response = Response::builder()
+            match Response::builder()
                 .status(status)
                 .header("content-type", "text/html; charset=utf-8")
                 .body(Body::from(html))
-                .unwrap();
-            Ok(response)
+            {
+                Ok(response) => Ok(response),
+                Err(e) => {
+                    tracing::error!("Failed to build error response: {:?}", e);
+                    Err(())
+                }
+            }
         }
         Err(e) => {
             tracing::error!("Failed to render error template: {:?}", e);

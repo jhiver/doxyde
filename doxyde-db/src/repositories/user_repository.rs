@@ -254,7 +254,7 @@ impl UserRepository {
         .bind(user.is_active)
         .bind(user.is_admin)
         .bind(user.updated_at)
-        .bind(user.id.unwrap())
+        .bind(user.id.ok_or_else(|| anyhow::anyhow!("User has no ID"))?)
         .execute(&self.pool)
         .await
         .context("Failed to update user")?

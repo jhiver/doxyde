@@ -111,14 +111,18 @@ impl TemplateEngine {
                             *write_guard = new_tera;
                         }
                         // Use the updated instance
-                        let read_guard = cached.read().unwrap();
-                        Ok(read_guard.render(template_name, context)?)
+                        match cached.read() {
+                            Ok(read_guard) => Ok(read_guard.render(template_name, context)?),
+                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock"))
+                        }
                     }
                     Err(e) => {
                         // If reload fails, use the cached version and log the error
                         tracing::warn!("Failed to reload templates: {}. Using cached version.", e);
-                        let read_guard = cached.read().unwrap();
-                        Ok(read_guard.render(template_name, context)?)
+                        match cached.read() {
+                            Ok(read_guard) => Ok(read_guard.render(template_name, context)?),
+                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock"))
+                        }
                     }
                 }
             }
@@ -130,9 +134,16 @@ impl TemplateEngine {
         match self {
             Self::Static(tera) => Arc::clone(tera),
             Self::Reloadable { cached, .. } => {
-                let read_guard = cached.read().unwrap();
-                // This is a bit inefficient but maintains compatibility
-                Arc::new(read_guard.clone())
+                match cached.read() {
+                    Ok(read_guard) => {
+                        // This is a bit inefficient but maintains compatibility
+                        Arc::new(read_guard.clone())
+                    }
+                    Err(_) => {
+                        // Return a new empty Tera instance as fallback
+                        Arc::new(Tera::default())
+                    }
+                }
             }
         }
     }
@@ -146,8 +157,10 @@ impl TemplateEngine {
         match self {
             Self::Static(tera) => tera.render(template_name, context),
             Self::Reloadable { cached, .. } => {
-                let read_guard = cached.read().unwrap();
-                read_guard.render(template_name, context)
+                match cached.read() {
+                    Ok(read_guard) => read_guard.render(template_name, context),
+                    Err(_) => Err(tera::Error::msg("Failed to acquire read lock"))
+                }
             }
         }
     }

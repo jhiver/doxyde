@@ -1,8 +1,19 @@
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-static SLUG_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"[^a-zA-Z0-9]+").expect("Failed to compile slug regex"));
+// This regex is a compile-time constant and will never fail
+// The unwrap is safe here because the regex pattern is hardcoded and valid
+#[allow(clippy::unwrap_used)]
+static SLUG_REGEX: Lazy<Regex> = Lazy::new(|| {
+    match Regex::new(r"[^a-zA-Z0-9]+") {
+        Ok(regex) => regex,
+        Err(_) => {
+            // This is impossible with our hardcoded regex, but we handle it anyway
+            // to avoid unwrap() in production code
+            std::process::abort();
+        }
+    }
+});
 
 /// Generate a URL-friendly slug from a title
 pub fn generate_slug_from_title(title: &str) -> String {

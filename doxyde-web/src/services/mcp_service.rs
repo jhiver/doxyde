@@ -67,8 +67,10 @@ impl McpService {
 
         // First pass: create PageInfo for all pages
         for page in &pages {
-            let info = self.page_to_info(&pages, page).await?;
-            page_map.insert(page.id.unwrap(), (info, Vec::new()));
+            if let Some(page_id) = page.id {
+                let info = self.page_to_info(&pages, page).await?;
+                page_map.insert(page_id, (info, Vec::new()));
+            }
         }
 
         // Second pass: build hierarchy
@@ -175,8 +177,9 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("No published version found"))?;
 
         // Get components
+        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await?;
 
         Ok(self.components_to_info(components))
@@ -197,8 +200,9 @@ impl McpService {
         };
 
         // Get components
+        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
         let components = component_repo
-            .list_by_page_version(version.id.unwrap())
+            .list_by_page_version(version_id)
             .await?;
 
         Ok(Some(self.components_to_info(components)))
@@ -256,25 +260,31 @@ impl McpService {
         let mut found_pages = std::collections::HashSet::new();
 
         for page in pages.iter() {
+            // Skip pages without ID
+            let page_id = match page.id {
+                Some(id) => id,
+                None => continue,
+            };
+
             // Skip if already found
-            if found_pages.contains(&page.id.unwrap()) {
+            if found_pages.contains(&page_id) {
                 continue;
             }
 
             // Search in title
             if page.title.to_lowercase().contains(&query_lower) {
                 results.push(self.page_to_info(&pages, page).await?);
-                found_pages.insert(page.id.unwrap());
+                found_pages.insert(page_id);
                 continue;
             }
 
             // Search in content
             if self
-                .page_content_matches(page.id.unwrap(), &query_lower)
+                .page_content_matches(page_id, &query_lower)
                 .await?
             {
                 results.push(self.page_to_info(&pages, page).await?);
-                found_pages.insert(page.id.unwrap());
+                found_pages.insert(page_id);
             }
         }
 
@@ -344,7 +354,7 @@ impl McpService {
 
         // Return page info
         Ok(PageInfo {
-            id: created_page.id.unwrap(),
+            id: page_id,
             slug: created_page.slug.clone(),
             title: created_page.title.clone(),
             path: self.build_page_path(&all_pages, &created_page).await?,
@@ -951,8 +961,9 @@ impl McpService {
     }
 
     async fn page_to_info(&self, all_pages: &[Page], page: &Page) -> Result<PageInfo> {
+        let page_id = page.id.ok_or_else(|| anyhow::anyhow!("Page has no ID"))?;
         Ok(PageInfo {
-            id: page.id.unwrap(),
+            id: page_id,
             slug: page.slug.clone(),
             title: page.title.clone(),
             path: self.build_page_path(all_pages, page).await?,
@@ -989,15 +1000,17 @@ impl McpService {
     ) -> Vec<ComponentInfo> {
         components
             .into_iter()
-            .map(|component| ComponentInfo {
-                id: component.id.unwrap(),
-                component_type: component.component_type,
-                position: component.position,
-                template: component.template,
-                title: component.title,
-                content: component.content,
-                created_at: component.created_at.to_rfc3339(),
-                updated_at: component.updated_at.to_rfc3339(),
+            .filter_map(|component| {
+                component.id.map(|id| ComponentInfo {
+                    id,
+                    component_type: component.component_type,
+                    position: component.position,
+                    template: component.template,
+                    title: component.title,
+                    content: component.content,
+                    created_at: component.created_at.to_rfc3339(),
+                    updated_at: component.updated_at.to_rfc3339(),
+                })
             })
             .collect()
     }

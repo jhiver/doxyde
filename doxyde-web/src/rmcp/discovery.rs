@@ -138,7 +138,9 @@ pub async fn oauth_authorization_server_metadata(
 
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
-    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    if let Ok(value) = "application/json".parse() {
+        headers.insert(header::CONTENT_TYPE, value);
+    }
 
     (StatusCode::OK, headers, Json(metadata))
 }
@@ -180,7 +182,9 @@ pub async fn oauth_protected_resource_metadata(
 
     let mut headers = HeaderMap::new();
     add_cors_headers(&mut headers);
-    headers.insert(header::CONTENT_TYPE, "application/json".parse().unwrap());
+    if let Ok(value) = "application/json".parse() {
+        headers.insert(header::CONTENT_TYPE, value);
+    }
 
     (StatusCode::OK, headers, Json(metadata))
 }
@@ -200,18 +204,18 @@ pub async fn options_handler() -> impl IntoResponse {
 }
 
 fn add_cors_headers(headers: &mut HeaderMap) {
-    headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*".parse().unwrap());
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_METHODS,
-        "GET, OPTIONS".parse().unwrap(),
-    );
-    headers.insert(
-        header::ACCESS_CONTROL_ALLOW_HEADERS,
-        "Authorization, Content-Type, MCP-Protocol-Version"
-            .parse()
-            .unwrap(),
-    );
-    headers.insert(header::ACCESS_CONTROL_MAX_AGE, "3600".parse().unwrap());
+    if let Ok(value) = "*".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, value);
+    }
+    if let Ok(value) = "GET, OPTIONS".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_METHODS, value);
+    }
+    if let Ok(value) = "Authorization, Content-Type, MCP-Protocol-Version".parse() {
+        headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value);
+    }
+    if let Ok(value) = "3600".parse() {
+        headers.insert(header::ACCESS_CONTROL_MAX_AGE, value);
+    }
 }
 
 #[cfg(test)]

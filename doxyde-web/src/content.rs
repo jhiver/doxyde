@@ -157,7 +157,10 @@ async fn navigate_to_page(
 
         // Navigate through each segment
         for segment in segments {
-            let children = match page_repo.list_children(current_page.id.unwrap()).await {
+            let current_page_id = current_page
+                .id
+                .ok_or_else(|| AppError::internal_server_error("Page has no ID"))?;
+            let children = match page_repo.list_children(current_page_id).await {
                 Ok(children) => children,
                 Err(e) => {
                     tracing::error!(
@@ -168,7 +171,7 @@ async fn navigate_to_page(
                     return Err(AppError::internal_server_error("Failed to list children")
                         .with_details(format!(
                             "Failed to list children for page {}: {:?}",
-                            current_page.id.unwrap(),
+                            current_page_id,
                             e
                         ))
                         .with_templates(templates.clone()));
@@ -252,9 +255,12 @@ pub async fn content_handler(
 
     // Navigate to the requested page
     let page_repo = PageRepository::new(state.db.clone());
+    let site_id = site
+        .id
+        .ok_or_else(|| AppError::internal_server_error("Site has no ID"))?;
     let page = navigate_to_page(
         &page_repo,
-        site.id.unwrap(),
+        site_id,
         &content_path.path,
         &state.templates,
     )
@@ -392,7 +398,10 @@ pub async fn content_post_handler(
 
         // Find the page
         let page_repo = PageRepository::new(state.db.clone());
-        let page = match resolve_page(&page_repo, site.id.unwrap(), &content_path.path).await {
+        let site_id = site
+            .id
+            .ok_or_else(|| AppError::internal_server_error("Site has no ID"))?;
+        let page = match resolve_page(&page_repo, site_id, &content_path.path).await {
             Ok(page) => page,
             Err(e) => return Err(e),
         };
@@ -488,8 +497,11 @@ async fn resolve_page(
             .ok_or_else(|| AppError::not_found("Root page not found"))?;
 
         for slug in segments {
+            let current_page_id = current_page
+                .id
+                .ok_or_else(|| AppError::internal_server_error("Page has no ID"))?;
             let children = page_repo
-                .list_children(current_page.id.unwrap())
+                .list_children(current_page_id)
                 .await
                 .map_err(|_| AppError::internal_server_error("Failed to list children"))?;
 

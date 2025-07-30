@@ -54,8 +54,9 @@ pub async fn reorder_page_handler(
 ) -> Result<Response, StatusCode> {
     // Get child pages using the sorted method
     let page_repo = PageRepository::new(state.db.clone());
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let children = page_repo
-        .list_children_sorted(page.id.unwrap())
+        .list_children_sorted(page_id)
         .await
         .map_err(|e| {
             tracing::error!(error = ?e, "Failed to list children");
@@ -96,7 +97,10 @@ pub async fn reorder_page_handler(
     // Convert to template-friendly format
     let child_pages: Vec<ChildPage> = children
         .iter()
-        .map(|child| {
+        .filter_map(|child| {
+            // Skip children without ID
+            let child_id = child.id?;
+            
             // Build child URL
             let child_url = if current_path == "/" {
                 format!("/{}", child.slug)
@@ -104,13 +108,13 @@ pub async fn reorder_page_handler(
                 format!("{}/{}", current_path, child.slug)
             };
 
-            ChildPage {
-                id: child.id.unwrap(),
+            Some(ChildPage {
+                id: child_id,
                 title: child.title.clone(),
                 position: child.position,
                 created_at: child.created_at.format("%Y-%m-%d").to_string(),
                 url: child_url,
-            }
+            })
         })
         .collect();
 

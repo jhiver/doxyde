@@ -114,11 +114,14 @@ pub async fn csrf_protection_middleware(
     // 1. GET, HEAD, OPTIONS requests (safe methods)
     // 2. Unauthenticated requests (no session to protect)
     let method = request.method();
-    if matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS) || session_user.is_none() {
+    if matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS) {
         return Ok(next.run(request).await);
     }
-
-    let session_user = session_user.unwrap();
+    
+    let session_user = match session_user {
+        Some(user) => user,
+        None => return Ok(next.run(request).await), // No session to protect
+    };
 
     // Get the expected CSRF token from session
     let expected_token = get_or_create_csrf_token(&state, &session_user.session_id)

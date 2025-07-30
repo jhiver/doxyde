@@ -60,10 +60,11 @@ pub async fn page_properties_handler(
     }
 
     let page_repo = PageRepository::new(state.db.clone());
+    let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
 
     // Get breadcrumb for navigation
     let breadcrumb = page_repo
-        .get_breadcrumb_trail(page.id.unwrap())
+        .get_breadcrumb_trail(page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -232,8 +233,9 @@ pub async fn update_page_properties_handler(
         "/".to_string()
     } else {
         // Get the updated breadcrumb trail (which includes the new slug)
+        let page_id = page.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
         let breadcrumb = page_repo
-            .get_breadcrumb_trail(page.id.unwrap())
+            .get_breadcrumb_trail(page_id)
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
