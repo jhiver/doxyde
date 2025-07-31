@@ -51,7 +51,9 @@ impl Default for ActionRegistry {
 impl ActionRegistry {
     /// Create a new action registry
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            handlers: std::collections::HashMap::new(),
+        }
     }
 
     /// Register an action handler
@@ -300,7 +302,7 @@ fn handle_add_component(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(_)) = user {
-            // For now, this isn't implemented as GET
+            // Note: This action handles POST requests only
             Err(AppError::new(
                 StatusCode::METHOD_NOT_ALLOWED,
                 "Use POST to add components",

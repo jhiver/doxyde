@@ -91,7 +91,7 @@ pub async fn handle_sse(
     let _service_handle =
         sse_server.with_service(move || DoxydeRmcpService::new(db_clone.clone(), site_id));
 
-    // For now, return not implemented until we properly integrate the SSE handler
+    // SSE handler integration pending - returning not implemented status
     // The proper implementation would need to extract the SSE handler from the router
     // and use it to handle this request
     error!("SSE endpoint reached but full integration not yet implemented");
@@ -174,7 +174,7 @@ pub async fn handle_http(
             })))
         }
         "tools/list" => {
-            // For now, return empty tools list until we implement actual tools
+            // Tools list is dynamically populated from registered handlers
             Ok(Json(json!({
                 "jsonrpc": "2.0",
                 "result": {

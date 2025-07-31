@@ -33,7 +33,7 @@ impl MarkdownComponent {
     }
 
     /// Convert markdown to HTML - this will be handled by the web layer
-    /// For now, we'll just return the markdown wrapped in a data attribute
+    /// Returns the markdown content wrapped in a data attribute for client-side rendering
     fn markdown_placeholder(&self) -> String {
         format!(
             r#"<div data-markdown="{}">{}</div>"#,

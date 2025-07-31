@@ -66,7 +66,10 @@ pub async fn page_properties_handler(
     let breadcrumb = page_repo
         .get_breadcrumb_trail(page_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Build breadcrumb data
     let mut breadcrumb_data = Vec::new();
@@ -98,7 +101,10 @@ pub async fn page_properties_handler(
     // Add base context (site_title, root_page_title, logo data, navigation)
     add_base_context(&mut context, &state, &site, Some(&page))
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to add base context");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     context.insert("page", &page);
     context.insert("breadcrumbs", &breadcrumb_data);
     context.insert("current_path", &current_path);
@@ -138,7 +144,10 @@ pub async fn page_properties_handler(
     let html = state
         .templates
         .render("page_properties.html", &context)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to render page properties template");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     Ok(Html(html).into_response())
 }
@@ -226,7 +235,10 @@ pub async fn update_page_properties_handler(
     page_repo
         .update(&page)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to update page in database");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Build redirect path using the updated page
     let redirect_path = if page.parent_page_id.is_none() {
@@ -237,7 +249,10 @@ pub async fn update_page_properties_handler(
         let breadcrumb = page_repo
             .get_breadcrumb_trail(page_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail after update");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))

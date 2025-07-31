@@ -306,11 +306,20 @@ pub async fn register_client(
 
     // Store in database
     let redirect_uris_json = serde_json::to_string(&request.redirect_uris)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to serialize redirect URIs");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     let grant_types_json = serde_json::to_string(&grant_types)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to serialize grant types");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     let response_types_json = serde_json::to_string(&response_types)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to serialize response types");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     match sqlx::query!(
         r#"

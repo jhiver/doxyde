@@ -54,7 +54,10 @@ pub async fn show_page_handler(
     let published_version = version_repo
         .get_published(page_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to get published version");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Get components if we have a published version
     let mut components = if let Some(version) = &published_version {
@@ -62,7 +65,10 @@ pub async fn show_page_handler(
         component_repo
             .list_by_page_version(version_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map_err(|e| {
+                tracing::error!(error = %e, version_id = version_id, "Failed to list components by page version");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
     } else {
         Vec::new()
     };
@@ -83,16 +89,22 @@ pub async fn show_page_handler(
                     page_repo
                         .list_children_sorted(parent_id)
                         .await
-                        .unwrap_or_default()
+                        .unwrap_or_else(|e| {
+                            tracing::warn!(error = %e, parent_id = parent_id, "Failed to list children sorted, using empty list");
+                            Vec::new()
+                        })
                 } else {
                     // When parent_page_id is null or not present, fetch all pages from the site
-                    // TODO: This should ideally fetch all blog posts or pages marked as blog posts
-                    // For now, fetch all pages except the home page
+                    // Future enhancement: Add a 'blog_post' flag to pages and filter by that
+                    // Currently fetching all pages except the home page
                     if let Some(site_id) = site.id {
                         page_repo
                             .list_by_site_id(site_id)
                             .await
-                            .unwrap_or_default()
+                            .unwrap_or_else(|e| {
+                                tracing::warn!(error = %e, site_id = site_id, "Failed to list pages by site, using empty list");
+                                Vec::new()
+                            })
                             .into_iter()
                             .filter(|p| p.slug != "home")
                             .collect()
@@ -132,7 +144,10 @@ pub async fn show_page_handler(
                         page_repo
                             .get_breadcrumb_trail(child_id)
                             .await
-                            .unwrap_or_default()
+                            .unwrap_or_else(|e| {
+                                tracing::warn!(error = %e, child_id = child_id, "Failed to get breadcrumb trail for child, using empty list");
+                                Vec::new()
+                            })
                     } else {
                         Vec::new()
                     };
@@ -168,13 +183,19 @@ pub async fn show_page_handler(
     let children = page_repo
         .list_children_sorted(page_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, page_id = page_id, "Failed to list children pages");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Get breadcrumb trail
     let breadcrumb = page_repo
         .get_breadcrumb_trail(page_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Build breadcrumb data for template
     let mut breadcrumb_data = Vec::new();
@@ -212,7 +233,10 @@ pub async fn show_page_handler(
         let page_children = page_repo
             .list_children_sorted(nav_page_id)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+            .map_err(|e| {
+                tracing::error!(error = %e, nav_page_id = nav_page_id, "Failed to list children for navigation");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
 
         // Skip if no children
         if page_children.is_empty() {
@@ -284,7 +308,10 @@ pub async fn show_page_handler(
     // Add base context (site_title, root_page_title, logo data, navigation)
     add_base_context(&mut context, &state, &site, Some(&page))
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to add base context");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
     context.insert("page", &page);
     context.insert("components", &components);
     context.insert("breadcrumbs", &breadcrumb_data);
@@ -382,7 +409,10 @@ pub async fn show_page_handler(
             state
                 .templates
                 .render("page_templates/default.html", &context)
-                .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+                .map_err(|e| {
+                    tracing::error!(error = %e, "Failed to render default template");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?
         }
     };
 

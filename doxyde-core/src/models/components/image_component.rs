@@ -141,7 +141,7 @@ impl ComponentRenderer for ImageComponent {
                     self.title
                         .as_ref()
                         .map(|t| format!(r#"<figcaption>{}</figcaption>"#, escape_html(t)))
-                        .unwrap_or_default()
+                        .unwrap_or_else(|| String::new())
                 )
             }
             "hero" => {
@@ -170,7 +170,7 @@ impl ComponentRenderer for ImageComponent {
                             r#"<div class="gallery-caption">{}</div>"#,
                             escape_html(t)
                         ))
-                        .unwrap_or_default()
+                        .unwrap_or_else(|| String::new())
                 )
             }
             "thumbnail" => {
@@ -184,7 +184,7 @@ impl ComponentRenderer for ImageComponent {
             }
             "responsive" => {
                 // For responsive images, we could generate multiple sizes
-                // For now, just use the regular image with responsive classes
+                // Use responsive image template with appropriate CSS classes
                 format!(
                     r#"<picture class="image-component responsive">
     {}

@@ -134,7 +134,10 @@ pub async fn reorder_page_handler(
     // Add base context (site_title, root_page_title, logo data, navigation)
     add_base_context(&mut tera_context, &state, &site, Some(&page))
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to add base context for reorder page");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     tera_context.insert("page", &context.page);
     tera_context.insert("children", &context.children);

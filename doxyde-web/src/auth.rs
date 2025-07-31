@@ -60,7 +60,10 @@ where
         let session = session_repo
             .find_by_id(&session_id)
             .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?
+            .map_err(|e| {
+                tracing::error!(error = %e, session_id = session_id, "Failed to find session by ID");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+            })?
             .ok_or((StatusCode::UNAUTHORIZED, "Invalid session"))?;
 
         // Check if session is expired
@@ -89,7 +92,10 @@ where
         let user = user_repo
             .find_by_id(session.user_id)
             .await
-            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?
+            .map_err(|e| {
+                tracing::error!(error = %e, user_id = session.user_id, "Failed to find user by ID");
+                (StatusCode::INTERNAL_SERVER_ERROR, "Database error")
+            })?
             .ok_or((StatusCode::UNAUTHORIZED, "User not found"))?;
 
         // Check if user is active

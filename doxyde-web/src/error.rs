@@ -172,7 +172,10 @@ impl AppError {
                 if template_name != "errors/generic.html" {
                     templates
                         .render("errors/generic.html", &context)
-                        .map_err(|_| ())
+                        .map_err(|e| {
+                            tracing::error!("Failed to render generic error template: {:?}", e);
+                            ()
+                        })
                 } else {
                     Err(())
                 }

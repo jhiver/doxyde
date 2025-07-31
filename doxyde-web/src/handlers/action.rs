@@ -320,7 +320,10 @@ async fn handle_reorder(
         positions,
     )
     .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to update page order");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Redirect back to the page
     let redirect_path = build_redirect_path(&content_path);
@@ -331,12 +334,18 @@ async fn handle_reorder(
 
 /// Parse form data from body
 fn parse_form_data(body: &str) -> Result<Vec<(String, String)>, StatusCode> {
-    serde_urlencoded::from_str(body).map_err(|_| StatusCode::BAD_REQUEST)
+    serde_urlencoded::from_str(body).map_err(|e| {
+        tracing::error!(error = %e, "Failed to parse form data");
+        StatusCode::BAD_REQUEST
+    })
 }
 
 /// Parse a specific form type
 fn parse_form<T: serde::de::DeserializeOwned>(body: &str) -> Result<T, StatusCode> {
-    serde_urlencoded::from_str(body).map_err(|_| StatusCode::BAD_REQUEST)
+    serde_urlencoded::from_str(body).map_err(|e| {
+        tracing::error!(error = %e, "Failed to parse form");
+        StatusCode::BAD_REQUEST
+    })
 }
 
 /// Extract action from form data
@@ -445,7 +454,10 @@ fn parse_add_component_form(form_data: &[(String, String)]) -> AddComponentForm 
         .iter()
         .find(|(k, _)| k == "content")
         .map(|(_, v)| v.clone())
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            tracing::debug!("No content field in form data, using empty string");
+            String::new()
+        });
 
     let component_type = form_data
         .iter()
@@ -465,7 +477,10 @@ async fn resolve_site(state: &AppState, host: &str) -> Result<Site, StatusCode> 
     site_repo
         .find_by_domain(host)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!(error = %e, host = host, "Failed to find site by domain");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::NOT_FOUND)
 }
 
@@ -490,7 +505,10 @@ async fn get_root_page(page_repo: &PageRepository, site_id: i64) -> Result<Page,
     page_repo
         .get_root_page(site_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map_err(|e| {
+            tracing::error!(error = %e, site_id = site_id, "Failed to get root page");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
         .ok_or(StatusCode::NOT_FOUND)
 }
 
@@ -525,7 +543,10 @@ async fn find_child_by_slug(
     let children = page_repo
         .list_children(parent_id)
         .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        .map_err(|e| {
+            tracing::error!(error = %e, parent_id = parent_id, "Failed to list children");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     children
         .into_iter()

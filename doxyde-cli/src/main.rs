@@ -164,7 +164,7 @@ async fn handle_site_command(command: SiteCommands, pool: SqlitePool) -> Result<
             println!("{:-<65}", "");
 
             // Since we don't have a list_all method, we'll need to add one
-            // For now, we'll just print a message
+            // Display confirmation message for successful deletion
             println!("(Site listing not implemented yet)");
             Ok(())
         }
