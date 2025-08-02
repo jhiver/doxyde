@@ -1,6 +1,6 @@
 use axum::{
     body::Body,
-    extract::State,
+    extract::{FromRequestParts, State},
     http::{Request, StatusCode},
     middleware::Next,
     response::Response,
@@ -13,10 +13,17 @@ use crate::{auth::SessionUser, AppState};
 /// Middleware to update session last activity time
 pub async fn update_session_activity(
     State(state): State<Arc<AppState>>,
-    session_user: Option<SessionUser>,
-    request: Request<Body>,
+    mut request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    // Try to extract session user from request parts
+    let session_user = {
+        let (mut parts, body) = request.into_parts();
+        let session_user = SessionUser::from_request_parts(&mut parts, &state).await.ok();
+        request = Request::from_parts(parts, body);
+        session_user
+    };
+
     // Update last activity if user is authenticated
     if let Some(session_user) = session_user {
         let now = Utc::now().to_rfc3339();

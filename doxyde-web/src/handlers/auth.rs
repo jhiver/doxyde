@@ -16,11 +16,12 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Host, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     Form,
 };
+use axum_extra::extract::Host;
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use chrono::Duration;
 use doxyde_core::models::session::Session;

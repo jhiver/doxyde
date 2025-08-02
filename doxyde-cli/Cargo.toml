@@ -12,9 +12,13 @@ path = "src/main.rs"
 [dependencies]
 doxyde-core = { path = "../doxyde-core" }
 doxyde-db = { path = "../doxyde-db" }
+doxyde-web = { path = "../doxyde-web" }
 anyhow.workspace = true
 clap = { version = "4.5", features = ["derive"] }
 tokio.workspace = true
 sqlx.workspace = true
 dotenvy = "0.15"
 rpassword = "7.3"
+
+[dev-dependencies]
+tempfile.workspace = true

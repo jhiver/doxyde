@@ -16,10 +16,11 @@
 
 use axum::{
     body::Body,
-    extract::{Host, State},
+    extract::State,
     http::{Request, Response, StatusCode},
     middleware::Next,
 };
+use axum_extra::extract::Host;
 use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tera::Context;

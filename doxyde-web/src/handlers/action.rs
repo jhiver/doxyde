@@ -16,10 +16,11 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Host, State},
+    extract::State,
     http::{StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Host;
 use doxyde_core::models::{Page, Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 

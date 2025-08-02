@@ -58,4 +58,4 @@ doxyde-mcp = { path = "../doxyde-mcp" }
 [dev-dependencies]
 pretty_assertions.workspace = true
 tempfile.workspace = true
-axum-test = "16.4"
+axum-test = "17.3"

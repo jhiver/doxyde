@@ -16,7 +16,6 @@
 
 use anyhow::Result;
 use axum::{
-    async_trait,
     extract::{FromRef, FromRequestParts},
     http::{request::Parts, StatusCode},
     RequestPartsExt,
@@ -38,7 +37,6 @@ pub struct CurrentUser {
     pub session: Session,
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for CurrentUser
 where
     SqlitePool: FromRef<S>,
@@ -113,7 +111,6 @@ pub struct SessionUser {
     pub session_id: String,
 }
 
-#[async_trait]
 impl<S> FromRequestParts<S> for SessionUser
 where
     S: Send + Sync,
@@ -130,7 +127,6 @@ where
 #[derive(Debug, Clone)]
 pub struct OptionalUser(pub Option<CurrentUser>);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for OptionalUser
 where
     SqlitePool: FromRef<S>,
@@ -172,7 +168,6 @@ async fn extract_session_id(parts: &mut Parts) -> Result<String, (StatusCode, &'
 #[derive(Debug, Clone)]
 pub struct RequireAdmin(pub User);
 
-#[async_trait]
 impl<S> FromRequestParts<S> for RequireAdmin
 where
     SqlitePool: FromRef<S>,

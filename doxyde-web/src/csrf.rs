@@ -41,7 +41,6 @@ impl CsrfToken {
     }
 }
 
-#[axum::async_trait]
 impl<S> FromRequestParts<S> for CsrfToken
 where
     S: Send + Sync,

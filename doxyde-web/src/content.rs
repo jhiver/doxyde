@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
-    extract::{FromRequest, Host, Request, State},
+    extract::{FromRequest, Request, State},
     http::{header, StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Host;
 use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 use once_cell::sync::Lazy;
