@@ -41,10 +41,7 @@ pub async fn add_base_context(
 
             // Get children of root page for top navigation
             let children = if let Some(root_id) = root_page.id {
-                page_repo
-                    .list_children(root_id)
-                    .await
-                    .unwrap_or_default()
+                page_repo.list_children(root_id).await.unwrap_or_default()
             } else {
                 Vec::new()
             };
@@ -70,10 +67,7 @@ pub async fn add_base_context(
         } else if let Some(current) = current_page {
             // Check if current page is a descendant of this child
             if let (Some(current_id), Some(child_id)) = (current.id, child.id) {
-                if let Ok(is_desc) = page_repo
-                    .is_descendant_of(current_id, child_id)
-                    .await
-                {
+                if let Ok(is_desc) = page_repo.is_descendant_of(current_id, child_id).await {
                     is_current = is_desc;
                 }
             }
@@ -89,9 +83,7 @@ pub async fn add_base_context(
     context.insert("nav_items", &nav_items);
 
     // Get logo data
-    if let Ok(Some((logo_url, logo_width, logo_height))) =
-        get_logo_data(&state.db, site_id).await
-    {
+    if let Ok(Some((logo_url, logo_width, logo_height))) = get_logo_data(&state.db, site_id).await {
         context.insert("logo_url", &logo_url);
         context.insert("logo_width", &logo_width);
         context.insert("logo_height", &logo_height);

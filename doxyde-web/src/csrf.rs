@@ -116,7 +116,7 @@ pub async fn csrf_protection_middleware(
     if matches!(method, &Method::GET | &Method::HEAD | &Method::OPTIONS) {
         return Ok(next.run(request).await);
     }
-    
+
     let session_user = match session_user {
         Some(user) => user,
         None => return Ok(next.run(request).await), // No session to protect

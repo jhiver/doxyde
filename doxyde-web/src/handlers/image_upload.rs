@@ -195,13 +195,9 @@ pub async fn upload_image_handler(
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get current components to determine position
     let component_repo = ComponentRepository::new(state.db.clone());
@@ -493,13 +489,9 @@ pub async fn upload_component_image_handler(
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify the component belongs to the draft version
     let component = component_repo

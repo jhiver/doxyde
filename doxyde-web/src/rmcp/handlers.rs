@@ -74,9 +74,9 @@ pub async fn handle_sse(
 
     // Create SSE server config
     let config = SseServerConfig {
-        bind: "127.0.0.1:0".parse::<SocketAddr>().unwrap_or_else(|_| {
-            SocketAddr::from(([127, 0, 0, 1], 0))
-        }), // Not used in our case
+        bind: "127.0.0.1:0"
+            .parse::<SocketAddr>()
+            .unwrap_or_else(|_| SocketAddr::from(([127, 0, 0, 1], 0))), // Not used in our case
         sse_path: "/.mcp/sse".to_string(),
         post_path: "/.mcp/sse/message".to_string(),
         ct: CancellationToken::new(),

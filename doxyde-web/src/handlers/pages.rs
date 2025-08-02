@@ -51,13 +51,10 @@ pub async fn show_page_handler(
 
     // Get the published version of the page
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let published_version = version_repo
-        .get_published(page_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to get published version");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let published_version = version_repo.get_published(page_id).await.map_err(|e| {
+        tracing::error!(error = %e, "Failed to get published version");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Get components if we have a published version
     let mut components = if let Some(version) = &published_version {
@@ -180,22 +177,16 @@ pub async fn show_page_handler(
     }
 
     // Get child pages using sorted method
-    let children = page_repo
-        .list_children_sorted(page_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, page_id = page_id, "Failed to list children pages");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let children = page_repo.list_children_sorted(page_id).await.map_err(|e| {
+        tracing::error!(error = %e, page_id = page_id, "Failed to list children pages");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Get breadcrumb trail
-    let breadcrumb = page_repo
-        .get_breadcrumb_trail(page_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let breadcrumb = page_repo.get_breadcrumb_trail(page_id).await.map_err(|e| {
+        tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Build breadcrumb data for template
     let mut breadcrumb_data = Vec::new();
@@ -332,12 +323,12 @@ pub async fn show_page_handler(
             // Check site permissions
             let site_user_repo = SiteUserRepository::new(state.db.clone());
             if let (Some(site_id), Some(user_id)) = (site.id, current_user.user.id) {
-                if let Ok(Some(site_user)) = site_user_repo
-                    .find_by_site_and_user(site_id, user_id)
-                    .await
+                if let Ok(Some(site_user)) =
+                    site_user_repo.find_by_site_and_user(site_id, user_id).await
                 {
                     use doxyde_core::models::permission::SiteRole;
-                    can_edit = site_user.role == SiteRole::Editor || site_user.role == SiteRole::Owner;
+                    can_edit =
+                        site_user.role == SiteRole::Editor || site_user.role == SiteRole::Owner;
                 }
             }
         }

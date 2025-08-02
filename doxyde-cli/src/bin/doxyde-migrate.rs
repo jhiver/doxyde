@@ -93,8 +93,13 @@ async fn main() -> Result<()> {
 
     // Copy database file
     println!("Copying database...");
-    fs::copy(&args.source, &dest_db)
-        .with_context(|| format!("Failed to copy database from {} to {}", args.source, dest_db.display()))?;
+    fs::copy(&args.source, &dest_db).with_context(|| {
+        format!(
+            "Failed to copy database from {} to {}",
+            args.source,
+            dest_db.display()
+        )
+    })?;
 
     // Verify the new database
     println!("Verifying migrated database...");
@@ -117,9 +122,11 @@ async fn main() -> Result<()> {
 
     if let Some(existing_domain) = site_domain {
         if existing_domain != args.domain {
-            println!("\n⚠️  WARNING: The database contains site '{}' but you specified '{}'", 
-                existing_domain, args.domain);
-            
+            println!(
+                "\n⚠️  WARNING: The database contains site '{}' but you specified '{}'",
+                existing_domain, args.domain
+            );
+
             if args.update_domain {
                 println!("   Updating domain in database...");
                 sqlx::query("UPDATE sites SET domain = ? WHERE id = 1")
@@ -130,7 +137,10 @@ async fn main() -> Result<()> {
                 println!("   ✅ Domain updated successfully");
             } else {
                 println!("   Use --update-domain to automatically update it");
-                println!("   Or manually run: UPDATE sites SET domain = '{}' WHERE id = 1;", args.domain);
+                println!(
+                    "   Or manually run: UPDATE sites SET domain = '{}' WHERE id = 1;",
+                    args.domain
+                );
             }
         }
     }

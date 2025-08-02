@@ -113,7 +113,7 @@ impl TemplateEngine {
                         // Use the updated instance
                         match cached.read() {
                             Ok(read_guard) => Ok(read_guard.render(template_name, context)?),
-                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock"))
+                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock")),
                         }
                     }
                     Err(e) => {
@@ -121,7 +121,7 @@ impl TemplateEngine {
                         tracing::warn!("Failed to reload templates: {}. Using cached version.", e);
                         match cached.read() {
                             Ok(read_guard) => Ok(read_guard.render(template_name, context)?),
-                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock"))
+                            Err(_) => Err(anyhow::anyhow!("Failed to acquire read lock")),
                         }
                     }
                 }
@@ -156,12 +156,10 @@ impl TemplateEngine {
     ) -> tera::Result<String> {
         match self {
             Self::Static(tera) => tera.render(template_name, context),
-            Self::Reloadable { cached, .. } => {
-                match cached.read() {
-                    Ok(read_guard) => read_guard.render(template_name, context),
-                    Err(_) => Err(tera::Error::msg("Failed to acquire read lock"))
-                }
-            }
+            Self::Reloadable { cached, .. } => match cached.read() {
+                Ok(read_guard) => read_guard.render(template_name, context),
+                Err(_) => Err(tera::Error::msg("Failed to acquire read lock")),
+            },
         }
     }
 

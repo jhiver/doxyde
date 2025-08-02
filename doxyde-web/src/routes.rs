@@ -22,7 +22,6 @@ use crate::{
     AppState,
 };
 use axum::extract::{DefaultBodyLimit, Query, State};
-use axum_extra::extract::Host;
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::{
@@ -30,6 +29,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
+use axum_extra::extract::Host;
 use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tower::ServiceBuilder;

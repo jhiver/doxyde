@@ -125,33 +125,25 @@ pub async fn edit_page_content_handler(
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = match get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    {
-        Ok(draft) => {
-            tracing::info!("Got draft version ID: {:?}", draft.id);
-            draft
-        }
-        Err(e) => {
-            tracing::error!(
-                error = ?e,
-                page_id = ?page.id,
-                "Failed to get or create draft"
-            );
-            return Err(StatusCode::INTERNAL_SERVER_ERROR);
-        }
-    };
+    let draft_version =
+        match get_or_create_draft(&state.db, page_id, Some(user.user.username.clone())).await {
+            Ok(draft) => {
+                tracing::info!("Got draft version ID: {:?}", draft.id);
+                draft
+            }
+            Err(e) => {
+                tracing::error!(
+                    error = ?e,
+                    page_id = ?page.id,
+                    "Failed to get or create draft"
+                );
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        };
 
     // Get components from the draft version
     let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let components = match component_repo
-        .list_by_page_version(draft_version_id)
-        .await
-    {
+    let components = match component_repo.list_by_page_version(draft_version_id).await {
         Ok(comps) => {
             tracing::info!("Retrieved {} components from draft", comps.len());
             for (idx, comp) in comps.iter().enumerate() {
@@ -345,16 +337,12 @@ pub async fn add_component_handler(
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to get or create draft: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get or create draft: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
 
     // Get current components to determine position
     let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
@@ -559,11 +547,7 @@ pub async fn create_page_handler(
     let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
     let parent_page_id = parent_page.id.ok_or(StatusCode::NOT_FOUND)?;
     let mut new_page = if form.slug.is_empty() {
-        Page::new_with_parent_and_title(
-            site_id,
-            parent_page_id,
-            form.title.clone(),
-        )
+        Page::new_with_parent_and_title(site_id, parent_page_id, form.title.clone())
     } else {
         Page::new_with_parent(
             site_id,
@@ -750,13 +734,9 @@ pub async fn save_draft_handler(
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     tracing::info!("Draft version ID: {:?}", draft_version.id);
 
@@ -910,13 +890,9 @@ pub async fn delete_component_handler(
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify the component belongs to the draft version
     let component = component_repo
@@ -964,13 +940,9 @@ pub async fn move_component_handler(
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(
-        &state.db,
-        page_id,
-        Some(user.user.username.clone()),
-    )
-    .await
-    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Verify the component belongs to the draft version
     let component = component_repo

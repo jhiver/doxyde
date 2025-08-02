@@ -40,7 +40,9 @@ pub async fn get_logo_data(db: &SqlitePool, site_id: i64) -> Result<Option<LogoD
     };
 
     // Get the published version of the root page
-    let root_page_id = root_page.id.ok_or_else(|| anyhow::anyhow!("Root page has no ID"))?;
+    let root_page_id = root_page
+        .id
+        .ok_or_else(|| anyhow::anyhow!("Root page has no ID"))?;
     let root_version = version_repo
         .get_published(root_page_id)
         .await
@@ -52,7 +54,9 @@ pub async fn get_logo_data(db: &SqlitePool, site_id: i64) -> Result<Option<LogoD
     };
 
     // Get components for root page
-    let root_version_id = root_version.id.ok_or_else(|| anyhow::anyhow!("Root version has no ID"))?;
+    let root_version_id = root_version
+        .id
+        .ok_or_else(|| anyhow::anyhow!("Root version has no ID"))?;
     let components = component_repo
         .list_by_page_version(root_version_id)
         .await

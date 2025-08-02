@@ -97,12 +97,7 @@ impl ComponentRegistry {
     }
 
     /// Compare content of two components
-    pub fn content_equals(
-        &self,
-        component_type: &str,
-        content1: &Value,
-        content2: &Value,
-    ) -> bool {
+    pub fn content_equals(&self, component_type: &str, content1: &Value, content2: &Value) -> bool {
         if let Some(handler) = self.get_handler(component_type) {
             handler.content_equals(content1, content2)
         } else {

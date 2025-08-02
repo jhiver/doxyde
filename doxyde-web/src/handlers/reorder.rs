@@ -55,13 +55,10 @@ pub async fn reorder_page_handler(
     // Get child pages using the sorted method
     let page_repo = PageRepository::new(state.db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let children = page_repo
-        .list_children_sorted(page_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = ?e, "Failed to list children");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let children = page_repo.list_children_sorted(page_id).await.map_err(|e| {
+        tracing::error!(error = ?e, "Failed to list children");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Build current path by traversing parent pages
     let mut path_parts = Vec::new();
@@ -100,7 +97,7 @@ pub async fn reorder_page_handler(
         .filter_map(|child| {
             // Skip children without ID
             let child_id = child.id?;
-            
+
             // Build child URL
             let child_url = if current_path == "/" {
                 format!("/{}", child.slug)

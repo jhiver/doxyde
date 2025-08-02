@@ -63,13 +63,10 @@ pub async fn page_properties_handler(
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
 
     // Get breadcrumb for navigation
-    let breadcrumb = page_repo
-        .get_breadcrumb_trail(page_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let breadcrumb = page_repo.get_breadcrumb_trail(page_id).await.map_err(|e| {
+        tracing::error!(error = %e, page_id = page_id, "Failed to get breadcrumb trail");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Build breadcrumb data
     let mut breadcrumb_data = Vec::new();
@@ -232,13 +229,10 @@ pub async fn update_page_properties_handler(
 
     // Save to database
     let page_repo = PageRepository::new(state.db.clone());
-    page_repo
-        .update(&page)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, "Failed to update page in database");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    page_repo.update(&page).await.map_err(|e| {
+        tracing::error!(error = %e, "Failed to update page in database");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     // Build redirect path using the updated page
     let redirect_path = if page.parent_page_id.is_none() {

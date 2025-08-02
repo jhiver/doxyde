@@ -212,7 +212,7 @@ pub async fn login(
         tracing::error!("User has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    
+
     // Delete any existing sessions for this user (session rotation)
     let session_repo = SessionRepository::new(state.db.clone());
     if let Err(e) = session_repo.delete_user_sessions(user_id).await {

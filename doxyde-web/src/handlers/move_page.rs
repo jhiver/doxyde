@@ -45,10 +45,7 @@ pub async fn move_page_handler(
         let site_user_repo = SiteUserRepository::new(state.db.clone());
         let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
         let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
-        if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site_id, user_id)
-            .await
-        {
+        if let Ok(Some(site_user)) = site_user_repo.find_by_site_and_user(site_id, user_id).await {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {
                 return Err(StatusCode::FORBIDDEN);
             }
@@ -172,10 +169,7 @@ pub async fn do_move_page_handler(
         let site_user_repo = SiteUserRepository::new(state.db.clone());
         let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
         let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
-        if let Ok(Some(site_user)) = site_user_repo
-            .find_by_site_and_user(site_id, user_id)
-            .await
-        {
+        if let Ok(Some(site_user)) = site_user_repo.find_by_site_and_user(site_id, user_id).await {
             if site_user.role != SiteRole::Editor && site_user.role != SiteRole::Owner {
                 return Err(StatusCode::FORBIDDEN);
             }

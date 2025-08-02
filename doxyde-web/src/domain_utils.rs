@@ -1,5 +1,5 @@
 use sha2::{Digest, Sha256};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Extracts the base domain from a full domain name.
 ///
@@ -17,17 +17,17 @@ use std::path::PathBuf;
 pub fn extract_base_domain(domain: &str) -> String {
     // Remove port if present
     let domain_no_port = domain.split(':').next().unwrap_or(domain);
-    
+
     // Handle email-like domains by taking everything after @
     let domain_no_prefix = if let Some(at_pos) = domain_no_port.rfind('@') {
         &domain_no_port[at_pos + 1..]
     } else {
         domain_no_port
     };
-    
+
     // Split by dots
     let parts: Vec<&str> = domain_no_prefix.split('.').collect();
-    
+
     // If we have at least 2 parts, take the last 2 as the base domain
     // This handles most common cases like example.com, example.org, etc.
     if parts.len() >= 2 {
@@ -56,12 +56,12 @@ pub fn extract_base_domain(domain: &str) -> String {
 /// let path = resolve_site_directory(&base, "example.com");
 /// // Returns something like: /sites/example-com-a1b2c3d4/
 /// ```
-pub fn resolve_site_directory(base_path: &PathBuf, domain: &str) -> PathBuf {
+pub fn resolve_site_directory(base_path: &Path, domain: &str) -> PathBuf {
     // Extract base domain to ensure subdomains share the same directory
     let base_domain = extract_base_domain(domain);
-    
+
     // Sanitize the base domain for filesystem usage
-    let sanitized = base_domain.replace('.', "-").replace(':', "-");
+    let sanitized = base_domain.replace(['.', ':'], "-");
 
     // Generate hash suffix from the base domain
     let mut hasher = Sha256::new();
@@ -90,17 +90,17 @@ mod tests {
         // Basic domains
         assert_eq!(extract_base_domain("example.com"), "example.com");
         assert_eq!(extract_base_domain("example.org"), "example.org");
-        
+
         // Subdomains
         assert_eq!(extract_base_domain("www.example.com"), "example.com");
         assert_eq!(extract_base_domain("site1.example.com"), "example.com");
         assert_eq!(extract_base_domain("sse.example.com"), "example.com");
         assert_eq!(extract_base_domain("api.v2.example.com"), "example.com");
-        
+
         // With ports
         assert_eq!(extract_base_domain("example.com:8080"), "example.com");
         assert_eq!(extract_base_domain("site1.example.com:3000"), "example.com");
-        
+
         // Single part (localhost)
         assert_eq!(extract_base_domain("localhost"), "localhost");
         assert_eq!(extract_base_domain("localhost:3000"), "localhost");
@@ -131,7 +131,7 @@ mod tests {
 
         // Port should be stripped, so both should resolve to same directory
         assert_eq!(result, result_no_port);
-        
+
         let dir_name = result.file_name().unwrap().to_str().unwrap();
         assert!(dir_name.starts_with("example-com-"));
     }
@@ -146,7 +146,7 @@ mod tests {
         // All subdomains should resolve to the same directory
         assert_eq!(result1, result2);
         assert_eq!(result2, result3);
-        
+
         let dir_name = result1.file_name().unwrap().to_str().unwrap();
         assert!(dir_name.starts_with("example-com-"));
     }

@@ -38,11 +38,10 @@ pub struct DoxydeRmcpService {
 impl DoxydeRmcpService {
     pub fn new(pool: SqlitePool, site_id: i64) -> Self {
         // Use the standard Doxyde upload directory
-        let upload_dir = std::env::var("DOXYDE_UPLOADS_DIR")
-            .unwrap_or_else(|_| {
-                let home = std::env::var("HOME").unwrap_or_else(|_| "/home/doxyde".to_string());
-                format!("{}/.doxyde/uploads", home)
-            });
+        let upload_dir = std::env::var("DOXYDE_UPLOADS_DIR").unwrap_or_else(|_| {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/home/doxyde".to_string());
+            format!("{}/.doxyde/uploads", home)
+        });
         Self::with_upload_dir(pool, site_id, std::path::PathBuf::from(upload_dir))
     }
 
@@ -262,7 +261,9 @@ pub struct CreateComponentTextRequest {
     )]
     pub position: Option<i32>,
 
-    #[schemars(description = "Component template (default, with_title, card, highlight, quote, hidden)")]
+    #[schemars(
+        description = "Component template (default, with_title, card, highlight, quote, hidden)"
+    )]
     pub template: Option<String>,
 
     #[schemars(description = "Optional title for the component")]
@@ -515,11 +516,9 @@ impl DoxydeRmcpService {
         Parameters(req): Parameters<CreateComponentMarkdownRequest>,
     ) -> String {
         match self.internal_create_component_markdown(req).await {
-            Ok(response) => {
-                serde_json::to_string_pretty(&response).unwrap_or_else(|e| {
-                    format!("{{\"error\": \"Failed to serialize response: {}\"}}", e)
-                })
-            }
+            Ok(response) => serde_json::to_string_pretty(&response).unwrap_or_else(|e| {
+                format!("{{\"error\": \"Failed to serialize response: {}\"}}", e)
+            }),
             Err(e) => format!("{{\"error\": \"{}\"}}", e),
         }
     }
@@ -1095,9 +1094,7 @@ impl DoxydeRmcpService {
         let version_id = version
             .id
             .ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
-        let components = component_repo
-            .list_by_page_version(version_id)
-            .await?;
+        let components = component_repo.list_by_page_version(version_id).await?;
 
         // Convert to ComponentInfo
         let component_infos = components
@@ -1134,9 +1131,7 @@ impl DoxydeRmcpService {
         let version_id = version
             .id
             .ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
-        let components = component_repo
-            .list_by_page_version(version_id)
-            .await?;
+        let components = component_repo.list_by_page_version(version_id).await?;
 
         // Convert to ComponentInfo
         let component_infos = components
@@ -1175,9 +1170,8 @@ impl DoxydeRmcpService {
                 let published_id = published
                     .id
                     .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
-                let published_components = component_repo
-                    .list_by_page_version(published_id)
-                    .await?;
+                let published_components =
+                    component_repo.list_by_page_version(published_id).await?;
 
                 // Create new draft version
                 let new_version = doxyde_core::models::PageVersion::new(
@@ -1219,12 +1213,8 @@ impl DoxydeRmcpService {
         };
 
         // Get all components in the draft
-        let draft_id = draft
-            .id
-            .ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
-        let components = component_repo
-            .list_by_page_version(draft_id)
-            .await?;
+        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
+        let components = component_repo.list_by_page_version(draft_id).await?;
 
         let component_infos: Vec<ComponentInfo> = components
             .into_iter()
@@ -1233,11 +1223,13 @@ impl DoxydeRmcpService {
 
         // Check if draft is identical to published
         let is_identical_to_published = if !is_new {
-            self.compare_draft_and_published(page_id).await.unwrap_or(false)
+            self.compare_draft_and_published(page_id)
+                .await
+                .unwrap_or(false)
         } else {
             false
         };
-        
+
         // Build response
 
         let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
@@ -1335,13 +1327,22 @@ impl DoxydeRmcpService {
             .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created component"))?;
 
         // Build workflow guidance based on draft status
-        let is_new_draft = draft.get("is_new").and_then(|v| v.as_bool()).unwrap_or(false);
-        let is_identical = draft.get("is_identical_to_published").and_then(|v| v.as_bool()).unwrap_or(false);
-        let component_count = draft_info.get("component_count").and_then(|v| v.as_u64()).unwrap_or(0);
-        
+        let is_new_draft = draft
+            .get("is_new")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let is_identical = draft
+            .get("is_identical_to_published")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let component_count = draft_info
+            .get("component_count")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0);
+
         let workflow_guidance = if is_new_draft {
             WorkflowGuidance {
-                message: format!("Component created in new draft version. This is the first component in the draft."),
+                message: "Component created in new draft version. This is the first component in the draft.".to_string(),
                 warning: None,
                 next_steps: vec![
                     "Add more components as needed".to_string(),
@@ -1369,7 +1370,7 @@ impl DoxydeRmcpService {
                 ],
             }
         };
-        
+
         Ok(ComponentCreateResponse {
             component: self.component_to_info(created_component),
             draft_status: draft.clone(),
@@ -1463,7 +1464,9 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?
+        let updated_component = component_repo
+            .find_by_id(req.component_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
@@ -1500,7 +1503,11 @@ impl DoxydeRmcpService {
                 WHERE id = ?
                 "#,
             )
-            .bind(current_published.id.ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?)
+            .bind(
+                current_published
+                    .id
+                    .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?,
+            )
             .execute(&self.pool)
             .await
             .context("Failed to unpublish current version")?;
@@ -1513,9 +1520,7 @@ impl DoxydeRmcpService {
         // Get component count for the draft
         use doxyde_db::repositories::ComponentRepository;
         let component_repo = ComponentRepository::new(self.pool.clone());
-        let components = component_repo
-            .list_by_page_version(draft_id)
-            .await?;
+        let components = component_repo.list_by_page_version(draft_id).await?;
 
         Ok(DraftInfo {
             page_id,
@@ -1618,7 +1623,9 @@ impl DoxydeRmcpService {
 
         // Get all pages to build path
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let created_page = page_repo.find_by_id(page_id).await?
+        let created_page = page_repo
+            .find_by_id(page_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Created page not found"))?;
 
         self.page_to_info(&all_pages, &created_page).await
@@ -1712,7 +1719,9 @@ impl DoxydeRmcpService {
 
         // Get all pages to build path
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let updated_page = page_repo.find_by_id(req.page_id).await?
+        let updated_page = page_repo
+            .find_by_id(req.page_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         self.page_to_info(&all_pages, &updated_page).await
@@ -1837,10 +1846,10 @@ impl DoxydeRmcpService {
         };
 
         // Get components
-        let version_id = version.id.ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
-        let components = component_repo
-            .list_by_page_version(version_id)
-            .await?;
+        let version_id = version
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Version has no ID"))?;
+        let components = component_repo.list_by_page_version(version_id).await?;
 
         // Convert to ComponentInfo
         let component_infos = components
@@ -2057,7 +2066,9 @@ impl DoxydeRmcpService {
 
         // Get updated page info
         let all_pages = page_repo.list_by_site_id(self.site_id).await?;
-        let moved_page = page_repo.find_by_id(req.page_id).await?
+        let moved_page = page_repo
+            .find_by_id(req.page_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         self.page_to_info(&all_pages, &moved_page).await
@@ -2191,7 +2202,9 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?
+        let updated_component = component_repo
+            .find_by_id(req.component_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
@@ -2294,7 +2307,9 @@ impl DoxydeRmcpService {
         }
 
         // Get updated component
-        let updated_component = component_repo.find_by_id(req.component_id).await?
+        let updated_component = component_repo
+            .find_by_id(req.component_id)
+            .await?
             .ok_or_else(|| anyhow::anyhow!("Component not found"))?;
 
         Ok(self.component_to_info(updated_component))
@@ -2315,41 +2330,43 @@ impl DoxydeRmcpService {
 
     /// Compare draft and published versions to check if they're identical
     async fn compare_draft_and_published(&self, page_id: i64) -> Result<bool> {
-        use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
         use doxyde_core::models::component_trait::ComponentEq;
-        
+        use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
+
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
-        
+
         // Get both draft and published versions
         let draft = match version_repo.get_draft(page_id).await? {
             Some(d) => d,
             None => return Ok(false), // No draft means not identical
         };
-        
+
         let published = match version_repo.get_published(page_id).await? {
             Some(p) => p,
             None => return Ok(false), // No published means not identical
         };
-        
+
         // Get components for both versions
         let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
-        let published_id = published.id.ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
+        let published_id = published
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
         let draft_components = component_repo.list_by_page_version(draft_id).await?;
         let published_components = component_repo.list_by_page_version(published_id).await?;
-        
+
         // Quick check: different number of components
         if draft_components.len() != published_components.len() {
             return Ok(false);
         }
-        
+
         // Compare each component
         for (draft_comp, pub_comp) in draft_components.iter().zip(published_components.iter()) {
             if !draft_comp.content_equals(pub_comp) {
                 return Ok(false);
             }
         }
-        
+
         Ok(true)
     }
 
@@ -2618,7 +2635,8 @@ impl DoxydeRmcpService {
 
             // Decode base64
             use base64::Engine;
-            base64::engine::general_purpose::STANDARD.decode(parts[1])
+            base64::engine::general_purpose::STANDARD
+                .decode(parts[1])
                 .map_err(|e| anyhow::anyhow!("Failed to decode base64 data: {}", e))?
         } else if req.uri.starts_with("http://") || req.uri.starts_with("https://") {
             // Download from URL
@@ -2627,15 +2645,21 @@ impl DoxydeRmcpService {
                 .map_err(|e| anyhow::anyhow!("Failed to download image: {}", e))?;
 
             if !response.status().is_success() {
-                return Err(anyhow::anyhow!("Failed to download image: HTTP {}", response.status()));
+                return Err(anyhow::anyhow!(
+                    "Failed to download image: HTTP {}",
+                    response.status()
+                ));
             }
 
-            response.bytes()
+            response
+                .bytes()
                 .await
                 .map_err(|e| anyhow::anyhow!("Failed to read image data: {}", e))?
                 .to_vec()
         } else {
-            return Err(anyhow::anyhow!("URI must be either http(s):// URL or data: URI"));
+            return Err(anyhow::anyhow!(
+                "URI must be either http(s):// URL or data: URI"
+            ));
         };
 
         // Extract image metadata
@@ -2644,9 +2668,9 @@ impl DoxydeRmcpService {
             .map_err(|e| anyhow::anyhow!("Invalid image format: {}", e))?;
 
         // Create upload directory
-        use chrono::Utc;
         use crate::uploads::{create_upload_directory, generate_unique_filename, save_upload};
-        
+        use chrono::Utc;
+
         let now = Utc::now();
         let upload_dir = create_upload_directory(&self.upload_dir, now)?;
 
@@ -2654,7 +2678,7 @@ impl DoxydeRmcpService {
         let original_filename = if req.uri.starts_with("data:") {
             format!("{}.{}", req.slug, metadata.format.extension())
         } else {
-            req.uri.split('/').last().unwrap_or("image").to_string()
+            req.uri.split('/').next_back().unwrap_or("image").to_string()
         };
         let filename = generate_unique_filename(&original_filename);
 
@@ -2692,7 +2716,7 @@ impl DoxydeRmcpService {
             "mime_type": metadata.format.mime_type(),
             "size": metadata.size,
         });
-        
+
         // Add dimensions if available (not available for SVG)
         if let Some(width) = metadata.width {
             content["width"] = serde_json::json!(width);
@@ -2770,19 +2794,19 @@ impl DoxydeRmcpService {
 
         // Update component metadata (not the image file itself)
         let mut content = component.content.clone();
-        
+
         if let Some(slug) = req.slug {
             content["slug"] = serde_json::Value::String(slug);
         }
-        
+
         if let Some(title) = req.title.clone() {
             content["title"] = serde_json::Value::String(title);
         }
-        
+
         if let Some(description) = req.description {
             content["description"] = serde_json::Value::String(description);
         }
-        
+
         if let Some(alt_text) = req.alt_text {
             content["alt_text"] = serde_json::Value::String(alt_text);
         }
@@ -2927,11 +2951,11 @@ impl DoxydeRmcpService {
 
         // Update component fields
         let mut content = component.content.clone();
-        
+
         if let Some(code) = req.code {
             content["code"] = serde_json::Value::String(code);
         }
-        
+
         if let Some(language) = req.language {
             content["language"] = serde_json::Value::String(language);
         }
@@ -3115,13 +3139,13 @@ mod tests {
         Ok(())
     }
 
-    fn create_test_service(pool: SqlitePool, site_id: i64) -> (DoxydeRmcpService, tempfile::TempDir) {
+    fn create_test_service(
+        pool: SqlitePool,
+        site_id: i64,
+    ) -> (DoxydeRmcpService, tempfile::TempDir) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-        let service = DoxydeRmcpService::with_upload_dir(
-            pool,
-            site_id,
-            temp_dir.path().to_path_buf(),
-        );
+        let service =
+            DoxydeRmcpService::with_upload_dir(pool, site_id, temp_dir.path().to_path_buf());
         (service, temp_dir)
     }
 
@@ -4005,7 +4029,13 @@ mod tests {
         assert_eq!(response.component.template, "card");
         assert_eq!(response.component.title, Some("Test Component".to_string()));
 
-        let content = response.component.content.get("text").unwrap().as_str().unwrap();
+        let content = response
+            .component
+            .content
+            .get("text")
+            .unwrap()
+            .as_str()
+            .unwrap();
         assert!(content.contains("# Test Content"));
         Ok(())
     }
@@ -4138,9 +4168,12 @@ mod tests {
 
         let result = service.create_component_markdown(Parameters(req)).await;
         assert!(!result.contains("error"));
-        
+
         let response: ComponentCreateResponse = serde_json::from_str(&result)?;
-        assert_eq!(response.workflow_guidance.message, "Component created in new draft version. This is the first component in the draft.");
+        assert_eq!(
+            response.workflow_guidance.message,
+            "Component created in new draft version. This is the first component in the draft."
+        );
         assert!(response.workflow_guidance.warning.is_none());
         assert_eq!(response.workflow_guidance.next_steps.len(), 3);
         assert!(response.workflow_guidance.next_steps[0].contains("Add more components"));
@@ -4161,12 +4194,12 @@ mod tests {
         );
         page2.parent_page_id = root.id;
         let page2_id = page_repo.create(&page2).await?;
-        
+
         // Create and publish an empty version (no components)
         let empty_version = doxyde_core::models::PageVersion::new(page2_id, 1, None);
         let empty_version_id = version_repo.create(&empty_version).await?;
         version_repo.publish(empty_version_id).await?;
-        
+
         // Create a new draft that's identical to published (both have no components)
         let new_draft = doxyde_core::models::PageVersion::new(page2_id, 2, None);
         version_repo.create(&new_draft).await?;
@@ -4182,11 +4215,17 @@ mod tests {
 
         let result2 = service.create_component_markdown(Parameters(req2)).await;
         assert!(!result2.contains("error"));
-        
+
         let response2: ComponentCreateResponse = serde_json::from_str(&result2)?;
         // Should say "Component added to existing draft (now has 1 components)..."
-        assert!(response2.workflow_guidance.message.contains("Component added to existing draft"));
-        assert!(response2.workflow_guidance.message.contains("was identical to published version before this change"));
+        assert!(response2
+            .workflow_guidance
+            .message
+            .contains("Component added to existing draft"));
+        assert!(response2
+            .workflow_guidance
+            .message
+            .contains("was identical to published version before this change"));
         assert!(response2.workflow_guidance.warning.is_none());
 
         // Scenario 3: Creating component when draft has existing changes
@@ -4211,13 +4250,23 @@ mod tests {
 
         let result3 = service.create_component_markdown(Parameters(req3)).await;
         assert!(!result3.contains("error"));
-        
+
         let response3: ComponentCreateResponse = serde_json::from_str(&result3)?;
         // Should say "Component added to existing draft with X other components"
-        assert!(response3.workflow_guidance.message.contains("Component added to existing draft with"));
-        assert!(response3.workflow_guidance.message.contains("other components"));
+        assert!(response3
+            .workflow_guidance
+            .message
+            .contains("Component added to existing draft with"));
+        assert!(response3
+            .workflow_guidance
+            .message
+            .contains("other components"));
         assert!(response3.workflow_guidance.warning.is_some());
-        assert!(response3.workflow_guidance.warning.unwrap().contains("already has an unpublished draft with changes"));
+        assert!(response3
+            .workflow_guidance
+            .warning
+            .unwrap()
+            .contains("already has an unpublished draft with changes"));
 
         Ok(())
     }
@@ -6672,7 +6721,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_text(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -6725,7 +6776,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_text_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -6769,7 +6822,7 @@ mod tests {
     }
 
     // Tests for image components
-    #[sqlx::test] 
+    #[sqlx::test]
     async fn test_create_component_image_with_base64(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
         use doxyde_db::repositories::{PageRepository, SiteRepository};
@@ -6789,7 +6842,7 @@ mod tests {
 
         // Create a simple 1x1 red PNG image in base64
         let base64_png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==";
-        
+
         let req = CreateComponentImageRequest {
             page_id: root.id.unwrap(),
             uri: format!("data:image/png;base64,{}", base64_png),
@@ -6812,9 +6865,18 @@ mod tests {
 
         let content = &component.content;
         assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "test-image");
-        assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Test Image");
-        assert_eq!(content.get("description").unwrap().as_str().unwrap(), "A test image");
-        assert_eq!(content.get("alt_text").unwrap().as_str().unwrap(), "Red pixel");
+        assert_eq!(
+            content.get("title").unwrap().as_str().unwrap(),
+            "Test Image"
+        );
+        assert_eq!(
+            content.get("description").unwrap().as_str().unwrap(),
+            "A test image"
+        );
+        assert_eq!(
+            content.get("alt_text").unwrap().as_str().unwrap(),
+            "Red pixel"
+        );
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "png");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 1);
         assert_eq!(content.get("height").unwrap().as_u64().unwrap(), 1);
@@ -6860,7 +6922,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_image(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -6917,10 +6981,22 @@ mod tests {
         assert_eq!(updated.template, "hero");
 
         let content = &updated.content;
-        assert_eq!(content.get("slug").unwrap().as_str().unwrap(), "updated-slug");
-        assert_eq!(content.get("title").unwrap().as_str().unwrap(), "Updated Title");
-        assert_eq!(content.get("description").unwrap().as_str().unwrap(), "Updated Description");
-        assert_eq!(content.get("alt_text").unwrap().as_str().unwrap(), "Updated Alt");
+        assert_eq!(
+            content.get("slug").unwrap().as_str().unwrap(),
+            "updated-slug"
+        );
+        assert_eq!(
+            content.get("title").unwrap().as_str().unwrap(),
+            "Updated Title"
+        );
+        assert_eq!(
+            content.get("description").unwrap().as_str().unwrap(),
+            "Updated Description"
+        );
+        assert_eq!(
+            content.get("alt_text").unwrap().as_str().unwrap(),
+            "Updated Alt"
+        );
         // Original file data should remain unchanged
         assert_eq!(content.get("format").unwrap().as_str().unwrap(), "jpg");
         assert_eq!(content.get("width").unwrap().as_u64().unwrap(), 100);
@@ -6980,7 +7056,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_code(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7030,7 +7108,10 @@ mod tests {
         assert_eq!(updated.template, "default");
 
         let content = &updated.content;
-        assert_eq!(content.get("code").unwrap().as_str().unwrap(), "print('updated')");
+        assert_eq!(
+            content.get("code").unwrap().as_str().unwrap(),
+            "print('updated')"
+        );
         assert_eq!(content.get("language").unwrap().as_str().unwrap(), "python");
         Ok(())
     }
@@ -7038,7 +7119,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_code_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7127,7 +7210,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_html(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7181,7 +7266,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_html_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7228,7 +7315,9 @@ mod tests {
     #[sqlx::test]
     async fn test_create_components_position_shift(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7247,7 +7336,7 @@ mod tests {
         let version_id = version_repo.create(&version).await?;
 
         let component_repo = ComponentRepository::new(pool.clone());
-        
+
         // Add 3 components at positions 0, 1, 2
         let comp0 = doxyde_core::models::Component::new(
             version_id,
@@ -7256,7 +7345,7 @@ mod tests {
             serde_json::json!({"text": "Component 0"}),
         );
         let comp0_id = component_repo.create(&comp0).await?;
-        
+
         let comp1 = doxyde_core::models::Component::new(
             version_id,
             "code".to_string(),
@@ -7264,7 +7353,7 @@ mod tests {
             serde_json::json!({"code": "// Component 1", "language": "rust"}),
         );
         let comp1_id = component_repo.create(&comp1).await?;
-        
+
         let comp2 = doxyde_core::models::Component::new(
             version_id,
             "html".to_string(),
@@ -7288,7 +7377,7 @@ mod tests {
 
         // Verify positions were shifted
         let components = component_repo.list_by_page_version(version_id).await?;
-        
+
         assert_eq!(components.len(), 4);
         assert_eq!(components[0].id, Some(comp0_id));
         assert_eq!(components[0].position, 0); // Should remain at 0
@@ -7305,7 +7394,9 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_published_version_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository, SiteRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        };
 
         // Create test site and page
         let site_repo = SiteRepository::new(pool.clone());
@@ -7325,7 +7416,7 @@ mod tests {
         let version_id = version_repo.create(&version).await?;
 
         let component_repo = ComponentRepository::new(pool.clone());
-        
+
         // Create one component of each type
         let text_comp = doxyde_core::models::Component::new(
             version_id,
@@ -7334,7 +7425,7 @@ mod tests {
             serde_json::json!({"text": "Published text"}),
         );
         let text_id = component_repo.create(&text_comp).await?;
-        
+
         let code_comp = doxyde_core::models::Component::new(
             version_id,
             "code".to_string(),
@@ -7342,7 +7433,7 @@ mod tests {
             serde_json::json!({"code": "published();", "language": "js"}),
         );
         let code_id = component_repo.create(&code_comp).await?;
-        
+
         let html_comp = doxyde_core::models::Component::new(
             version_id,
             "html".to_string(),

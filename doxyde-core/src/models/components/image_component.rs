@@ -31,40 +31,58 @@ pub struct ImageComponent {
 impl ImageComponent {
     pub fn from_component(component: &Component) -> Self {
         // Only support new format
-        let slug = component.content.get("slug")
+        let slug = component
+            .content
+            .get("slug")
             .and_then(|s| s.as_str())
             .unwrap_or("");
-        let format = component.content.get("format")
+        let format = component
+            .content
+            .get("format")
             .and_then(|f| f.as_str())
             .unwrap_or("jpg");
         let src = format!("/{}.{}", slug, format);
-        
+
         // Use alt_text field, fallback to title or description
-        let alt = component.content.get("alt_text")
+        let alt = component
+            .content
+            .get("alt_text")
             .and_then(|a| a.as_str())
             .unwrap_or_else(|| {
-                component.content.get("title")
+                component
+                    .content
+                    .get("title")
                     .and_then(|t| t.as_str())
                     .unwrap_or_else(|| {
-                        component.content.get("description")
+                        component
+                            .content
+                            .get("description")
                             .and_then(|d| d.as_str())
                             .unwrap_or("")
                     })
             })
             .to_string();
-            
-        let width = component.content.get("width")
+
+        let width = component
+            .content
+            .get("width")
             .and_then(|w| w.as_u64())
             .map(|w| w as u32);
-        let height = component.content.get("height")
+        let height = component
+            .content
+            .get("height")
             .and_then(|h| h.as_u64())
             .map(|h| h as u32);
 
-        let display_width = component.content.get("display_width")
+        let display_width = component
+            .content
+            .get("display_width")
             .and_then(|w| w.as_str())
             .filter(|w| !w.is_empty())
             .map(|w| w.to_string());
-        let display_height = component.content.get("display_height")
+        let display_height = component
+            .content
+            .get("display_height")
             .and_then(|h| h.as_str())
             .filter(|h| !h.is_empty())
             .map(|h| h.to_string());
@@ -74,7 +92,9 @@ impl ImageComponent {
             src,
             alt,
             title: component.title.clone().or_else(|| {
-                component.content.get("title")
+                component
+                    .content
+                    .get("title")
                     .and_then(|t| t.as_str())
                     .map(|s| s.to_string())
             }),
@@ -141,7 +161,7 @@ impl ComponentRenderer for ImageComponent {
                     self.title
                         .as_ref()
                         .map(|t| format!(r#"<figcaption>{}</figcaption>"#, escape_html(t)))
-                        .unwrap_or_else(|| String::new())
+                        .unwrap_or_default()
                 )
             }
             "hero" => {
@@ -170,7 +190,7 @@ impl ComponentRenderer for ImageComponent {
                             r#"<div class="gallery-caption">{}</div>"#,
                             escape_html(t)
                         ))
-                        .unwrap_or_else(|| String::new())
+                        .unwrap_or_default()
                 )
             }
             "thumbnail" => {

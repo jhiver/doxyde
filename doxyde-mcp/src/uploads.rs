@@ -128,7 +128,7 @@ impl ImageFormatExt for ImageFormat {
 pub fn extract_image_metadata(data: &[u8]) -> Result<ImageMetadata> {
     let format = ImageFormat::detect(data)?;
     let size = data.len();
-    
+
     // Extract dimensions based on format
     let (width, height) = match format {
         ImageFormat::Svg => {
@@ -138,9 +138,7 @@ pub fn extract_image_metadata(data: &[u8]) -> Result<ImageMetadata> {
         _ => {
             // Use the image crate to decode and get dimensions
             match image::load_from_memory(data) {
-                Ok(img) => {
-                    (Some(img.width()), Some(img.height()))
-                }
+                Ok(img) => (Some(img.width()), Some(img.height())),
                 Err(_) => {
                     // If we can't decode, just skip dimensions
                     (None, None)
@@ -174,10 +172,10 @@ pub fn create_upload_directory(base_path: &Path, date: DateTime<Utc>) -> Result<
 /// Generate a unique filename
 pub fn generate_unique_filename(original_name: &str) -> String {
     use chrono::Utc;
-    
+
     let timestamp = Utc::now().timestamp_millis();
     let random_suffix: u32 = rand::random();
-    
+
     let extension = Path::new(original_name)
         .extension()
         .and_then(|ext| ext.to_str())

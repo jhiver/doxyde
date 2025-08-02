@@ -19,7 +19,9 @@ pub async fn update_session_activity(
     // Try to extract session user from request parts
     let session_user = {
         let (mut parts, body) = request.into_parts();
-        let session_user = SessionUser::from_request_parts(&mut parts, &state).await.ok();
+        let session_user = SessionUser::from_request_parts(&mut parts, &state)
+            .await
+            .ok();
         request = Request::from_parts(parts, body);
         session_user
     };
