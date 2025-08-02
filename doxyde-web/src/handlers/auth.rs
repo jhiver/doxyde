@@ -316,24 +316,13 @@ mod tests {
     async fn test_login_form_renders() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool,
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         let response = login_form(
@@ -351,24 +340,13 @@ mod tests {
     async fn test_login_success() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create test user
@@ -409,24 +387,13 @@ mod tests {
     async fn test_login_with_email() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create test user
@@ -462,24 +429,13 @@ mod tests {
     async fn test_login_invalid_password() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create test user
@@ -520,24 +476,13 @@ mod tests {
     async fn test_login_nonexistent_user() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         let form = LoginForm {
@@ -566,24 +511,13 @@ mod tests {
     async fn test_login_inactive_user() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create inactive user
@@ -624,24 +558,13 @@ mod tests {
     async fn test_login_starred_password() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create user with starred password
@@ -689,24 +612,13 @@ mod tests {
     async fn test_logout() -> Result<()> {
         let pool = create_test_db().await?;
         let templates = init_templates("templates", false)?;
-        let config = crate::config::Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test-secret".to_string(),
-            development_mode: false,
-            uploads_dir: "/tmp/test-uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-        };
+        let config = crate::test_helpers::create_test_config();
         let state = AppState::new(
             pool.clone(),
             templates,
             config,
-            crate::rate_limit::create_login_rate_limiter(),
-            crate::rate_limit::create_api_rate_limiter(),
+            crate::rate_limit::create_login_rate_limiter(5),
+            crate::rate_limit::create_api_rate_limiter(60),
         );
 
         // Create test session

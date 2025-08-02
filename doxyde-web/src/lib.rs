@@ -20,6 +20,7 @@ pub mod autoreload_templates;
 pub mod component_registry;
 pub mod component_render;
 pub mod config;
+pub mod configuration;
 pub mod content;
 pub mod csrf;
 pub mod db;
@@ -52,4 +53,5 @@ mod template_tests;
 pub mod test_helpers;
 
 pub use config::Config;
+pub use configuration::Configuration;
 pub use state::AppState;

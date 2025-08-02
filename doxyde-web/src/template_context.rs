@@ -110,7 +110,7 @@ mod tests {
     #[test]
     fn test_add_csrf_token() {
         let mut context = Context::new();
-        let csrf_token = CsrfToken::new();
+        let csrf_token = CsrfToken::new(32);
 
         add_csrf_token(&mut context, &csrf_token);
 

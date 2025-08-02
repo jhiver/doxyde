@@ -28,3 +28,30 @@ secure_cookies = true
 
 # Development settings
 development_mode = false
+
+# Rate limiting configuration
+rate_limit_login_attempts = 5
+rate_limit_api_requests = 60
+
+# CSRF protection
+csrf_enabled = true
+csrf_token_expiry_hours = 24
+
+# Security headers
+security_headers_hsts = true
+security_headers_csp = true
+security_headers_frame_options = true
+security_headers_content_type_options = true
+
+# Security header content (optional - if not specified, defaults are used)
+security_headers_csp_content = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+security_hsts_content = "max-age=31536000; includeSubDomains"
+security_frame_options_content = "DENY"
+security_referrer_policy = "strict-origin-when-cross-origin"
+security_permissions_policy = "geolocation=(), camera=(), microphone=()"
+
+# Cache settings
+cache_static_files_max_age = 31536000  # 1 year in seconds
+
+# MCP settings
+mcp_oauth_token_expiry = 3600  # 1 hour in seconds

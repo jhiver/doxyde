@@ -29,8 +29,9 @@
 4. [Architecture](#architecture)
 5. [Testing Strategy](#testing-strategy)
 6. [Common Tasks](#common-tasks)
-7. [Recent Updates](#recent-updates)
-8. [Future Work](#future-work)
+7. [Configuration Management](#configuration-management)
+8. [Recent Updates](#recent-updates)
+9. [Future Work](#future-work)
 
 ## Project Overview
 
@@ -330,6 +331,119 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 git push origin feature/user-avatars
 ```
 
+## Configuration Management
+
+### Overview
+
+Doxyde uses a flexible, hierarchical configuration system that allows for multiple configuration sources, giving users maximum flexibility in how they configure the application.
+
+### Configuration Loading Order
+
+Configurations are loaded in the following priority (from lowest to highest):
+
+1. **Default Values**: Built-in default settings
+2. **Global Configuration**: `/etc/doxyde/doxyde.toml`
+3. **User Configuration**: `~/.doxyde/config.toml`
+4. **Environment Variables**: Highest priority, can override all other settings
+
+### Configuration File Format
+
+Configurations use TOML (Tom's Obvious, Minimal Language) for human-readable configuration files.
+
+**Example Configuration (`doxyde.toml`):**
+```toml
+[server]
+host = "0.0.0.0"
+port = 3000
+max_connections = 100
+
+[database]
+url = "sqlite:doxyde.db"
+max_pool_connections = 10
+
+[security]
+rate_limit = 100  # requests per minute
+cors_allowed_origins = ["https://example.com"]
+
+[logging]
+level = "info"
+file = "/var/log/doxyde/app.log"
+
+[mcp]
+enabled = true
+default_model = "claude-3-5-haiku"
+
+[uploads]
+max_file_size = 10_485_760  # 10MB
+allowed_types = ["image/png", "image/jpeg", "application/pdf"]
+```
+
+### Environment Variable Reference
+
+| Variable Name | Description | Default | Example |
+|--------------|-------------|---------|----------|
+| `DOXYDE_SERVER_HOST` | Server host address | `0.0.0.0` | `127.0.0.1` |
+| `DOXYDE_SERVER_PORT` | Server port | `3000` | `8080` |
+| `DOXYDE_DATABASE_URL` | Database connection string | `sqlite:doxyde.db` | `sqlite:/path/to/custom.db` |
+| `DOXYDE_LOG_LEVEL` | Logging verbosity | `info` | `debug` |
+| `DOXYDE_SECURITY_RATE_LIMIT` | Requests per minute | `100` | `50` |
+| `DOXYDE_MCP_ENABLED` | Enable MCP features | `true` | `false` |
+
+### Common Configuration Scenarios
+
+#### Changing Database Location
+
+**Option 1: TOML Configuration**
+```toml
+[database]
+url = "sqlite:/opt/doxyde/custom.db"
+```
+
+**Option 2: Environment Variable**
+```bash
+export DOXYDE_DATABASE_URL="sqlite:/opt/doxyde/custom.db"
+```
+
+#### Configuring Server Behavior
+
+**Option 1: TOML Configuration**
+```toml
+[server]
+host = "127.0.0.1"  # Only listen on localhost
+port = 8080         # Use non-standard port
+```
+
+**Option 2: Environment Variables**
+```bash
+export DOXYDE_SERVER_HOST="127.0.0.1"
+export DOXYDE_SERVER_PORT=8080
+```
+
+#### Security and Performance Tuning
+
+**Option 1: TOML Configuration**
+```toml
+[security]
+rate_limit = 50  # More restrictive rate limiting
+
+[server]
+max_connections = 50  # Limit concurrent connections
+```
+
+**Option 2: Environment Variables**
+```bash
+export DOXYDE_SECURITY_RATE_LIMIT=50
+export DOXYDE_SERVER_MAX_CONNECTIONS=50
+```
+
+### Notes and Best Practices
+
+- Always use absolute paths in configuration files
+- Environment variables take precedence over file configurations
+- Restart the application after changing configurations
+- Use strong, unique credentials for sensitive settings
+- Protect configuration files with appropriate file permissions
+
 ## Recent Updates
 
 ### July 2025
@@ -512,7 +626,7 @@ Permissions-Policy: geolocation=(), camera=(), microphone=()
 - Check for hardcoded paths in documentation
 - Ensure backward compatibility or migration path
 
-**Rationale**: 
+**Rationale**:
 - Consistent with existing dot-prefix pattern (/.login, /.admin, etc.)
 - Prevents conflicts with user content at /health or /static paths
 - Maintains clear separation between system and content routes
@@ -529,7 +643,7 @@ Permissions-Policy: geolocation=(), camera=(), microphone=()
 
 **Breakpoints**:
 - Mobile: < 768px
-- Tablet: 768px - 1024px  
+- Tablet: 768px - 1024px
 - Desktop: > 1024px
 
 **Mobile UI Elements**:
@@ -800,7 +914,7 @@ cargo build --release
 
 **Can't see edit links**: Verify user permissions with `doxyde user list`
 
-**Static files not found (404)**: 
+**Static files not found (404)**:
 - Static files go in the `static/` directory (NOT `.static/`)
 - The route `/.static` serves files from `static/` directory
 - Example: `/.static/js/script.js` serves `static/js/script.js`

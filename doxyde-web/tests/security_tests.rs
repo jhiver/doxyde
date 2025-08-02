@@ -178,7 +178,7 @@ mod security_tests {
     fn test_csrf_token_validation() {
         use doxyde_web::csrf::CsrfToken;
 
-        let token = CsrfToken::new();
+        let token = CsrfToken::new(32);
 
         // Valid token should verify
         assert!(token.verify(&token.token));

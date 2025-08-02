@@ -18,8 +18,8 @@ use crate::{
     auth::CurrentUser, content, debug_middleware::debug_form_middleware,
     error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware,
     request_logging::request_logging_middleware, rmcp,
-    security_headers::security_headers_middleware, session_activity::update_session_activity,
-    AppState,
+    security_headers::create_security_headers_middleware, session_activity::update_session_activity,
+    AppState, configuration::Configuration,
 };
 use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::StatusCode;
@@ -38,6 +38,10 @@ use tower_http::trace::TraceLayer;
 
 pub fn create_router(state: AppState) -> Router {
     let max_upload_size = state.config.max_upload_size;
+    
+    // Load the configuration to get security headers config
+    let config = Configuration::load().expect("Failed to load configuration");
+    let headers_middleware = create_security_headers_middleware(config.security.headers);
 
     Router::new()
         // Health check
@@ -104,7 +108,7 @@ pub fn create_router(state: AppState) -> Router {
             Arc::new(state.clone()),
             update_session_activity,
         ))
-        .layer(middleware::from_fn(security_headers_middleware))
+        .layer(middleware::from_fn(headers_middleware))
         .layer(
             ServiceBuilder::new()
                 .layer(DefaultBodyLimit::max(max_upload_size))
