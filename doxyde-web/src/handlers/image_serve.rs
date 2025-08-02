@@ -49,7 +49,7 @@ pub async fn serve_image_handler(
         tracing::error!("Site has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    
+
     let published_versions = page_version_repo
         .find_published_by_site(site_id)
         .await
@@ -64,7 +64,7 @@ pub async fn serve_image_handler(
             tracing::error!("Version has no ID");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-        
+
         let components = component_repo
             .list_by_page_version(version_id)
             .await
@@ -288,7 +288,7 @@ async fn check_component_permissions(
         tracing::error!("Site has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    
+
     if page.site_id != site_id {
         tracing::warn!(
             "Page site_id {} doesn't match current site_id {}",
@@ -304,7 +304,7 @@ async fn check_component_permissions(
             tracing::error!("User has no ID");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
-        
+
         let site_user_repo = SiteUserRepository::new(state.db.clone());
         let site_user = site_user_repo
             .find_by_site_and_user(site_id, user_id)

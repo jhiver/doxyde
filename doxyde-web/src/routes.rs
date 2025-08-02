@@ -21,7 +21,7 @@ use crate::{
     security_headers::security_headers_middleware, session_activity::update_session_activity,
     AppState,
 };
-use axum::extract::{DefaultBodyLimit, Host, Query, State};
+use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::StatusCode;
 use axum::response::Response;
 use axum::{
@@ -29,6 +29,7 @@ use axum::{
     routing::{delete, get, post},
     Router,
 };
+use axum_extra::extract::Host;
 use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tower::ServiceBuilder;
@@ -61,7 +62,7 @@ pub fn create_router(state: AppState) -> Router {
         // OAuth management (admin only)
         .route("/.mcp/token", post(rmcp::create_token))
         .route("/.mcp/tokens", get(rmcp::list_tokens))
-        .route("/.mcp/token/:id", delete(rmcp::revoke_token))
+        .route("/.mcp/token/{id}", delete(rmcp::revoke_token))
         // OAuth metadata discovery endpoints
         .route(
             "/.well-known/oauth-authorization-server",

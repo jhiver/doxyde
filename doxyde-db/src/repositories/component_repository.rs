@@ -1195,7 +1195,11 @@ mod tests {
 
         // Create components in random order
         let components_data = vec![
-            (2, "image", json!({"slug": "test-image2", "format": "jpg", "file_path": "/images/test2.jpg"})),
+            (
+                2,
+                "image",
+                json!({"slug": "test-image2", "format": "jpg", "file_path": "/images/test2.jpg"}),
+            ),
             (0, "text", json!({"text": "First"})),
             (1, "code", json!({"code": "println!()"})),
         ];

@@ -7,17 +7,16 @@ use std::collections::HashMap;
 
 /// Regex pattern that matches any amount of whitespace, carriage returns,
 /// or placeholder tags like &(123)
-static IGNORABLE_RE: Lazy<Regex> =
-    Lazy::new(|| {
-        match Regex::new(r"(?:\s|\r|\n|&\(\d+\))*") {
-            Ok(regex) => regex,
-            Err(_) => {
-                // This is a compile-time constant regex that should never fail
-                // If it does fail, the program cannot function correctly
-                std::process::abort();
-            }
+static IGNORABLE_RE: Lazy<Regex> = Lazy::new(|| {
+    match Regex::new(r"(?:\s|\r|\n|&\(\d+\))*") {
+        Ok(regex) => regex,
+        Err(_) => {
+            // This is a compile-time constant regex that should never fail
+            // If it does fail, the program cannot function correctly
+            std::process::abort();
         }
-    });
+    }
+});
 
 /// Represents the segregated text with placeholders and the original tags
 pub struct SegregatedContent {

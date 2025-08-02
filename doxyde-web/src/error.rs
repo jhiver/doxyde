@@ -174,7 +174,6 @@ impl AppError {
                         .render("errors/generic.html", &context)
                         .map_err(|e| {
                             tracing::error!("Failed to render generic error template: {:?}", e);
-                            ()
                         })
                 } else {
                     Err(())

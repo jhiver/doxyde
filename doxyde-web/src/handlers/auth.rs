@@ -16,11 +16,12 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Host, Query, State},
+    extract::{Query, State},
     http::StatusCode,
     response::{Html, IntoResponse, Redirect},
     Form,
 };
+use axum_extra::extract::Host;
 use axum_extra::extract::{cookie::Cookie, CookieJar};
 use chrono::Duration;
 use doxyde_core::models::session::Session;
@@ -211,7 +212,7 @@ pub async fn login(
         tracing::error!("User has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    
+
     // Delete any existing sessions for this user (session rotation)
     let session_repo = SessionRepository::new(state.db.clone());
     if let Err(e) = session_repo.delete_user_sessions(user_id).await {

@@ -15,10 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
-    extract::{FromRequest, Host, Request, State},
+    extract::{FromRequest, Request, State},
     http::{header, StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Host;
 use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 use once_cell::sync::Lazy;
@@ -171,8 +172,7 @@ async fn navigate_to_page(
                     return Err(AppError::internal_server_error("Failed to list children")
                         .with_details(format!(
                             "Failed to list children for page {}: {:?}",
-                            current_page_id,
-                            e
+                            current_page_id, e
                         ))
                         .with_templates(templates.clone()));
                 }
@@ -258,13 +258,7 @@ pub async fn content_handler(
     let site_id = site
         .id
         .ok_or_else(|| AppError::internal_server_error("Site has no ID"))?;
-    let page = navigate_to_page(
-        &page_repo,
-        site_id,
-        &content_path.path,
-        &state.templates,
-    )
-    .await?;
+    let page = navigate_to_page(&page_repo, site_id, &content_path.path, &state.templates).await?;
 
     // Handle trailing slash redirects
     if let Some(redirect) = handle_trailing_slash_redirect(&uri, &content_path) {

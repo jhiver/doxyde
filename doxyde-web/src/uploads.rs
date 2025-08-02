@@ -183,45 +183,43 @@ pub fn sanitize_slug(slug: &str) -> String {
 
 /// List of dangerous executable extensions that should be blocked
 const DANGEROUS_EXTENSIONS: &[&str] = &[
-    "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "msi",
-    "app", "deb", "rpm", "dmg", "pkg", "run", "sh", "bash", "csh", "ksh",
-    "ps1", "psm1", "psd1", "ps1xml", "psc1", "pssc", "cdxml", "clixml",
-    "pl", "py", "rb", "php", "asp", "aspx", "jsp", "cgi", "htm", "html",
-    "hta", "htaccess", "htpasswd", "ini", "inf", "reg", "scf", "url",
-    "vb", "vba", "vbe", "vbs", "ws", "wsf", "wsh", "wsc", "sct",
+    "exe", "bat", "cmd", "com", "pif", "scr", "vbs", "js", "jar", "msi", "app", "deb", "rpm",
+    "dmg", "pkg", "run", "sh", "bash", "csh", "ksh", "ps1", "psm1", "psd1", "ps1xml", "psc1",
+    "pssc", "cdxml", "clixml", "pl", "py", "rb", "php", "asp", "aspx", "jsp", "cgi", "htm", "html",
+    "hta", "htaccess", "htpasswd", "ini", "inf", "reg", "scf", "url", "vb", "vba", "vbe", "vbs",
+    "ws", "wsf", "wsh", "wsc", "sct",
 ];
 
 /// Check if a filename has a dangerous extension or double extension
 pub fn is_dangerous_filename(filename: &str) -> bool {
     let lower = filename.to_lowercase();
-    
+
     // Get all extensions (for detecting double extensions)
     let parts: Vec<&str> = lower.split('.').collect();
     if parts.len() < 2 {
         // No extension at all
         return false;
     }
-    
+
     // Check each extension part
-    for i in 1..parts.len() {
-        let ext = parts[i];
-        if DANGEROUS_EXTENSIONS.contains(&ext) {
+    for ext in &parts[1..] {
+        if DANGEROUS_EXTENSIONS.contains(ext) {
             return true;
         }
     }
-    
+
     // Check for specific dangerous double extension patterns
     // e.g., .php.jpg, .exe.txt
     if parts.len() > 2 {
         // Has double extension
-        for i in 1..parts.len() - 1 {
-            if DANGEROUS_EXTENSIONS.contains(&parts[i]) {
+        for ext in &parts[1..parts.len() - 1] {
+            if DANGEROUS_EXTENSIONS.contains(ext) {
                 // Dangerous extension hidden by another extension
                 return true;
             }
         }
     }
-    
+
     false
 }
 
@@ -230,21 +228,21 @@ pub fn validate_upload_filename(filename: &str) -> Result<()> {
     if filename.is_empty() {
         return Err(anyhow!("Filename cannot be empty"));
     }
-    
+
     if filename.len() > 255 {
         return Err(anyhow!("Filename too long"));
     }
-    
+
     // Check for dangerous characters
     if filename.contains('\0') || filename.contains('/') || filename.contains('\\') {
         return Err(anyhow!("Filename contains invalid characters"));
     }
-    
+
     // Check for dangerous extensions
     if is_dangerous_filename(filename) {
         return Err(anyhow!("File type not allowed for security reasons"));
     }
-    
+
     Ok(())
 }
 
@@ -420,7 +418,7 @@ mod tests {
         assert_eq!(svg_metadata.width, None);
         assert_eq!(svg_metadata.height, None);
     }
-    
+
     #[test]
     fn test_is_dangerous_filename() {
         // Test dangerous single extensions
@@ -429,44 +427,44 @@ mod tests {
         assert!(is_dangerous_filename("payload.php"));
         assert!(is_dangerous_filename("shell.sh"));
         assert!(is_dangerous_filename("UPPERCASE.EXE"));
-        
+
         // Test dangerous double extensions
         assert!(is_dangerous_filename("backdoor.php.jpg"));
         assert!(is_dangerous_filename("virus.exe.txt"));
         assert!(is_dangerous_filename("script.asp.png"));
         assert!(is_dangerous_filename("payload.jsp.gif"));
-        
+
         // Test safe files
         assert!(!is_dangerous_filename("image.jpg"));
         assert!(!is_dangerous_filename("document.pdf"));
         assert!(!is_dangerous_filename("photo.png"));
         assert!(!is_dangerous_filename("archive.zip"));
         assert!(!is_dangerous_filename("no_extension"));
-        
+
         // Test edge cases
         assert!(!is_dangerous_filename("file.execute")); // Not in list
         assert!(is_dangerous_filename("file.jpg.exe")); // Dangerous at end
         assert!(is_dangerous_filename("file.exe.jpg.php")); // Multiple dangerous
     }
-    
+
     #[test]
     fn test_validate_upload_filename() {
         // Valid filenames
         assert!(validate_upload_filename("image.jpg").is_ok());
         assert!(validate_upload_filename("document.pdf").is_ok());
         assert!(validate_upload_filename("my-file_123.png").is_ok());
-        
+
         // Invalid filenames
         assert!(validate_upload_filename("").is_err());
         assert!(validate_upload_filename("a".repeat(256).as_str()).is_err());
         assert!(validate_upload_filename("file\0name.jpg").is_err());
         assert!(validate_upload_filename("../../../etc/passwd").is_err());
         assert!(validate_upload_filename("file\\path.jpg").is_err());
-        
+
         // Dangerous extensions
         assert!(validate_upload_filename("virus.exe").is_err());
         assert!(validate_upload_filename("backdoor.php.jpg").is_err());
-        
+
         // Error messages
         let result = validate_upload_filename("script.sh");
         assert!(result.is_err());

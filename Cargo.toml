@@ -29,7 +29,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sqlx = { version = "0.8", features = ["runtime-tokio-rustls", "sqlite", "chrono"] }
 
 # Web
-axum = { version = "0.7", features = ["multipart"] }
+axum = { version = "0.8", features = ["multipart"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
 
@@ -44,7 +44,7 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 regex = "1.10"
 
 # Session & Cookies
-axum-extra = { version = "0.9", features = ["cookie", "typed-header", "form"] }
+axum-extra = { version = "0.10", features = ["cookie", "typed-header", "form"] }
 cookie = "0.18"
 serde_urlencoded = "0.7"
 

@@ -51,7 +51,6 @@ pub async fn rate_limit_middleware(
 /// Rate limiting specifically for login endpoint
 pub async fn login_rate_limit_middleware(
     State(limiter): State<SharedRateLimiter>,
-    addr: Option<ConnectInfo<SocketAddr>>,
     request: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
@@ -60,11 +59,7 @@ pub async fn login_rate_limit_middleware(
         match limiter.check() {
             Ok(_) => Ok(next.run(request).await),
             Err(_) => {
-                tracing::warn!(
-                    "Rate limit exceeded for login from {:?}",
-                    addr.map(|a| a.0.to_string())
-                        .unwrap_or_else(|| "unknown".to_string())
-                );
+                tracing::warn!("Rate limit exceeded for login");
                 Err(StatusCode::TOO_MANY_REQUESTS)
             }
         }

@@ -14,10 +14,10 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use crate::models::component_trait::ComponentEq;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use crate::models::component_trait::ComponentEq;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Component {
@@ -102,12 +102,16 @@ impl Component {
                 if !self.content.is_object() {
                     return Err("Image component content must be an object".to_string());
                 }
-                
+
                 // Validate required fields for new format
                 if self.content.get("slug").is_none()
                     || self.content.get("format").is_none()
-                    || self.content.get("file_path").is_none() {
-                    return Err("Image component must have 'slug', 'format', and 'file_path' fields".to_string());
+                    || self.content.get("file_path").is_none()
+                {
+                    return Err(
+                        "Image component must have 'slug', 'format', and 'file_path' fields"
+                            .to_string(),
+                    );
                 }
 
                 // Validate slug
@@ -413,7 +417,9 @@ mod tests {
         let component = Component::new(1, "image".to_string(), 0, missing_fields);
         let result = component.validate_content();
         assert!(result.is_err());
-        assert!(result.unwrap_err().contains("must have 'slug', 'format', and 'file_path' fields"));
+        assert!(result
+            .unwrap_err()
+            .contains("must have 'slug', 'format', and 'file_path' fields"));
 
         // Test invalid slug
         let invalid_slug = json!({
@@ -513,11 +519,16 @@ mod tests {
     fn test_is_valid_success() {
         let valid_components = vec![
             Component::new(1, "text".to_string(), 0, json!({"text": "Hello"})),
-            Component::new(10, "image".to_string(), 5, json!({
-                "slug": "img",
-                "format": "jpg",
-                "file_path": "/img.jpg"
-            })),
+            Component::new(
+                10,
+                "image".to_string(),
+                5,
+                json!({
+                    "slug": "img",
+                    "format": "jpg",
+                    "file_path": "/img.jpg"
+                }),
+            ),
             Component::new(100, "code".to_string(), 10, json!({"code": "print()"})),
             Component::new(1, "custom".to_string(), 0, json!({"any": "data"})),
         ];

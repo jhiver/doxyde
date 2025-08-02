@@ -22,9 +22,9 @@ tracing-subscriber.workspace = true
 sqlx.workspace = true
 
 # Web framework
-axum = { version = "0.8", features = ["multipart"] }
+axum.workspace = true
 tower.workspace = true
-tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+tower-http.workspace = true
 tokio.workspace = true
 tokio-util = { version = "0.7", features = ["rt"] }
 

@@ -16,10 +16,11 @@
 
 use anyhow::Result;
 use axum::{
-    extract::{Host, State},
+    extract::State,
     http::{StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Host;
 use doxyde_core::models::{Page, Site};
 use doxyde_db::repositories::{PageRepository, SiteRepository};
 
@@ -540,13 +541,10 @@ async fn find_child_by_slug(
     parent_id: i64,
     slug: &str,
 ) -> Result<Page, StatusCode> {
-    let children = page_repo
-        .list_children(parent_id)
-        .await
-        .map_err(|e| {
-            tracing::error!(error = %e, parent_id = parent_id, "Failed to list children");
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
+    let children = page_repo.list_children(parent_id).await.map_err(|e| {
+        tracing::error!(error = %e, parent_id = parent_id, "Failed to list children");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
 
     children
         .into_iter()

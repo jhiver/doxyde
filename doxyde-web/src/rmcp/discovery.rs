@@ -17,11 +17,12 @@
 use crate::AppState;
 use anyhow::Context;
 use axum::{
-    extract::{Host, State},
+    extract::State,
     http::{header, HeaderMap, StatusCode},
     response::IntoResponse,
     Json,
 };
+use axum_extra::extract::Host;
 use serde::{Deserialize, Serialize};
 use sqlx;
 
