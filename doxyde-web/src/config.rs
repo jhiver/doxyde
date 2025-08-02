@@ -14,8 +14,8 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use anyhow::{Context, Result};
-use std::{env, path::PathBuf};
+use crate::configuration::Configuration;
+use anyhow::Result;
 use uuid;
 
 #[derive(Debug, Clone)]
@@ -30,82 +30,223 @@ pub struct Config {
     pub max_upload_size: usize,
     pub secure_cookies: bool,
     pub session_timeout_minutes: i64,
+    pub login_attempts_per_minute: u32,
+    pub api_requests_per_minute: u32,
+    pub csrf_enabled: bool,
+    pub csrf_token_expiry_hours: u64,
+    pub csrf_token_length: usize,
+    pub csrf_header_name: String,
+    pub static_files_max_age: u64,
+    pub oauth_token_expiry: u64,
 }
 
 impl Config {
     pub fn from_env() -> Result<Self> {
-        // Find project root by looking for workspace Cargo.toml
-        let project_root = Self::find_project_root()?;
+        // Load the new Configuration system
+        let config = Configuration::load()?;
 
-        // Default templates directory relative to project root
-        let default_templates_dir = project_root.join("templates").to_string_lossy().to_string();
-
-        // Default uploads directory
-        let default_uploads_dir = env::var("HOME")
-            .map(|home| PathBuf::from(home).join(".doxyde").join("uploads"))
-            .unwrap_or_else(|_| PathBuf::from("/var/doxyde/uploads"))
-            .to_string_lossy()
-            .to_string();
-
+        // Map values from the new Configuration to the old Config struct
         Ok(Self {
-            database_url: env::var("DATABASE_URL")
-                .unwrap_or_else(|_| "sqlite:doxyde.db".to_string()),
-            host: env::var("HOST").unwrap_or_else(|_| "0.0.0.0".to_string()),
-            port: env::var("PORT")
-                .unwrap_or_else(|_| "3000".to_string())
-                .parse()
-                .context("Invalid PORT")?,
-            templates_dir: env::var("TEMPLATES_DIR").unwrap_or(default_templates_dir),
-            session_secret: env::var("SESSION_SECRET").unwrap_or_else(|_| {
-                // Generate a random secret for development
+            database_url: config.database_url,
+            host: config.server.host,
+            port: config.server.port,
+            templates_dir: config.path.templates,
+            session_secret: config.session.secret.unwrap_or_else(|| {
+                // Generate a random secret for development if none was provided
                 uuid::Uuid::new_v4().to_string()
             }),
-            development_mode: env::var("DEVELOPMENT_MODE")
-                .unwrap_or_else(|_| "false".to_string())
-                .parse()
-                .unwrap_or(false),
-            uploads_dir: env::var("UPLOADS_DIR").unwrap_or(default_uploads_dir),
-            max_upload_size: env::var("MAX_UPLOAD_SIZE")
-                .unwrap_or_else(|_| "10485760".to_string()) // 10MB default
-                .parse()
-                .unwrap_or(10_485_760),
-            secure_cookies: env::var("SECURE_COOKIES")
-                .unwrap_or_else(|_| "true".to_string())
-                .parse()
-                .unwrap_or(true),
-            session_timeout_minutes: env::var("SESSION_TIMEOUT_MINUTES")
-                .unwrap_or_else(|_| "1440".to_string()) // 24 hours default
-                .parse()
-                .unwrap_or(1440),
+            development_mode: config.development_mode,
+            uploads_dir: config.upload.directory,
+            max_upload_size: config.upload.max_size,
+            secure_cookies: config.session.secure_cookies,
+            session_timeout_minutes: config.session.timeout_minutes,
+            login_attempts_per_minute: config.rate_limit.login_attempts_per_minute,
+            api_requests_per_minute: config.rate_limit.api_requests_per_minute,
+            csrf_enabled: config.security.csrf.enabled,
+            csrf_token_expiry_hours: config.security.csrf.token_expiry_hours,
+            csrf_token_length: config.security.csrf.token_length,
+            csrf_header_name: config.security.csrf.header_name,
+            static_files_max_age: config.cache.static_files_max_age,
+            oauth_token_expiry: config.mcp.oauth_token_expiry,
         })
-    }
-
-    /// Find the project root by looking for the workspace Cargo.toml
-    fn find_project_root() -> Result<PathBuf> {
-        let mut current_dir = env::current_dir()?;
-
-        loop {
-            let cargo_toml = current_dir.join("Cargo.toml");
-            if cargo_toml.exists() {
-                // Check if this is the workspace root
-                let content = std::fs::read_to_string(&cargo_toml)?;
-                if content.contains("[workspace]") {
-                    return Ok(current_dir);
-                }
-            }
-
-            // Move up one directory
-            if !current_dir.pop() {
-                // We've reached the root directory
-                break;
-            }
-        }
-
-        // If we can't find the workspace root, use current directory
-        env::current_dir().context("Failed to determine project root")
     }
 
     pub fn bind_addr(&self) -> String {
         format!("{}:{}", self.host, self.port)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serial_test::serial;
+    use std::env;
+
+    #[test]
+    #[serial]
+    fn test_config_from_env_uses_new_configuration_system() {
+        // Save current environment state
+        let env_vars = [
+            "DATABASE_URL",
+            "HOST",
+            "PORT",
+            "DEVELOPMENT_MODE",
+            "SESSION_SECRET",
+            "SESSION_TIMEOUT_MINUTES",
+            "SECURE_COOKIES",
+            "MAX_UPLOAD_SIZE",
+            "UPLOADS_DIR",
+            "TEMPLATES_DIR",
+        ];
+
+        let saved_vars: Vec<(String, Option<String>)> = env_vars
+            .iter()
+            .map(|var| (var.to_string(), env::var(var).ok()))
+            .collect();
+
+        // Clear all environment variables
+        for var in &env_vars {
+            env::remove_var(var);
+        }
+
+        // Test loading with defaults
+        let config = Config::from_env().expect("Should load config with defaults");
+
+        // Verify that values come from the new Configuration system defaults
+        assert_eq!(config.host, "0.0.0.0"); // Should match Configuration defaults
+        assert_eq!(config.port, 3000);
+        assert!(!config.development_mode);
+        assert_eq!(config.session_timeout_minutes, 1440);
+        assert!(config.secure_cookies);
+        assert_eq!(config.max_upload_size, 10_485_760);
+        assert_eq!(config.login_attempts_per_minute, 5);
+        assert_eq!(config.api_requests_per_minute, 60);
+
+        // Verify CSRF configuration defaults
+        assert!(config.csrf_enabled);
+        assert_eq!(config.csrf_token_expiry_hours, 24);
+        assert_eq!(config.csrf_token_length, 32);
+        assert_eq!(config.csrf_header_name, "X-CSRF-Token");
+
+        // Verify DATABASE_URL handling remains the same (backward compatibility)
+        assert_eq!(config.database_url, "sqlite:doxyde.db");
+
+        // Test bind_addr method still works
+        assert_eq!(config.bind_addr(), "0.0.0.0:3000");
+
+        // Restore environment state
+        for (var, value) in saved_vars {
+            if let Some(val) = value {
+                env::set_var(&var, val);
+            }
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_database_url_backward_compatibility() {
+        // Save original state
+        let original_database_url = env::var("DATABASE_URL").ok();
+
+        // Set DATABASE_URL environment variable
+        env::set_var("DATABASE_URL", "sqlite:test.db");
+
+        let config = Config::from_env().expect("Should load config");
+
+        // DATABASE_URL should be passed through from environment variable
+        assert_eq!(config.database_url, "sqlite:test.db");
+
+        // Restore original state
+        if let Some(url) = original_database_url {
+            env::set_var("DATABASE_URL", url);
+        } else {
+            env::remove_var("DATABASE_URL");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_env_override_still_works() {
+        // Save original state
+        let original_host = env::var("HOST").ok();
+        let original_port = env::var("PORT").ok();
+        let original_dev_mode = env::var("DEVELOPMENT_MODE").ok();
+
+        // Set some environment variables that should override defaults
+        env::set_var("HOST", "127.0.0.1");
+        env::set_var("PORT", "8080");
+        env::set_var("DEVELOPMENT_MODE", "true");
+
+        let config = Config::from_env().expect("Should load config with env overrides");
+
+        // These should come from the new Configuration system which respects env vars
+        assert_eq!(config.host, "127.0.0.1");
+        assert_eq!(config.port, 8080);
+        assert!(config.development_mode);
+        assert_eq!(config.bind_addr(), "127.0.0.1:8080");
+
+        // CSRF should still use defaults even when other env vars are set
+        assert!(config.csrf_enabled);
+        assert_eq!(config.csrf_token_length, 32);
+        assert_eq!(config.csrf_header_name, "X-CSRF-Token");
+
+        // Restore original state
+        if let Some(host) = original_host {
+            env::set_var("HOST", host);
+        } else {
+            env::remove_var("HOST");
+        }
+
+        if let Some(port) = original_port {
+            env::set_var("PORT", port);
+        } else {
+            env::remove_var("PORT");
+        }
+
+        if let Some(dev_mode) = original_dev_mode {
+            env::set_var("DEVELOPMENT_MODE", dev_mode);
+        } else {
+            env::remove_var("DEVELOPMENT_MODE");
+        }
+    }
+
+    #[test]
+    #[serial]
+    fn test_config_csrf_env_overrides() {
+        // Save original state
+        let original_csrf_enabled = env::var("CSRF_ENABLED").ok();
+        let original_csrf_token_length = env::var("CSRF_TOKEN_LENGTH").ok();
+        let original_csrf_header_name = env::var("CSRF_HEADER_NAME").ok();
+
+        // Set CSRF environment variables
+        env::set_var("CSRF_ENABLED", "false");
+        env::set_var("CSRF_TOKEN_LENGTH", "64");
+        env::set_var("CSRF_HEADER_NAME", "X-Custom-CSRF-Token");
+
+        let config = Config::from_env().expect("Should load config with CSRF env overrides");
+
+        // CSRF config should come from environment variables
+        assert!(!config.csrf_enabled);
+        assert_eq!(config.csrf_token_length, 64);
+        assert_eq!(config.csrf_header_name, "X-Custom-CSRF-Token");
+
+        // Restore original state
+        if let Some(enabled) = original_csrf_enabled {
+            env::set_var("CSRF_ENABLED", enabled);
+        } else {
+            env::remove_var("CSRF_ENABLED");
+        }
+
+        if let Some(length) = original_csrf_token_length {
+            env::set_var("CSRF_TOKEN_LENGTH", length);
+        } else {
+            env::remove_var("CSRF_TOKEN_LENGTH");
+        }
+
+        if let Some(header_name) = original_csrf_header_name {
+            env::set_var("CSRF_HEADER_NAME", header_name);
+        } else {
+            env::remove_var("CSRF_HEADER_NAME");
+        }
     }
 }

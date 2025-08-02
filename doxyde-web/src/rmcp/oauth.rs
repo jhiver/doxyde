@@ -259,7 +259,7 @@ pub struct TokenResponse {
     pub refresh_token: Option<String>,
 }
 
-fn add_cors_headers(headers: &mut HeaderMap) {
+fn add_cors_headers(headers: &mut HeaderMap, max_age: u64) {
     // These are all static values that should always parse correctly
     // Using unwrap_or_else to avoid unwrap() in production
     if let Ok(value) = "*".parse() {
@@ -271,7 +271,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
     if let Ok(value) = "Authorization, Content-Type, MCP-Protocol-Version".parse() {
         headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value);
     }
-    if let Ok(value) = "3600".parse() {
+    if let Ok(value) = max_age.to_string().parse() {
         headers.insert(header::ACCESS_CONTROL_MAX_AGE, value);
     }
 }
@@ -350,7 +350,7 @@ pub async fn register_client(
             };
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -472,7 +472,7 @@ pub async fn token(
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -492,7 +492,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -520,7 +520,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -535,7 +535,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -552,7 +552,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         });
 
         let mut headers = HeaderMap::new();
-        add_cors_headers(&mut headers);
+        add_cors_headers(&mut headers, state.config.static_files_max_age);
         if let Ok(value) = "application/json".parse() {
             headers.insert(header::CONTENT_TYPE, value);
         };
@@ -565,7 +565,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         Ok(dt) => dt.with_timezone(&Utc),
         Err(_) => {
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -587,7 +587,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         });
 
         let mut headers = HeaderMap::new();
-        add_cors_headers(&mut headers);
+        add_cors_headers(&mut headers, state.config.static_files_max_age);
         if let Ok(value) = "application/json".parse() {
             headers.insert(header::CONTENT_TYPE, value);
         };
@@ -606,7 +606,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                 });
 
                 let mut headers = HeaderMap::new();
-                add_cors_headers(&mut headers);
+                add_cors_headers(&mut headers, state.config.static_files_max_age);
                 if let Ok(value) = "application/json".parse() {
                     headers.insert(header::CONTENT_TYPE, value);
                 };
@@ -632,7 +632,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -704,13 +704,13 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                     let response = TokenResponse {
                         access_token,
                         token_type: "Bearer".to_string(),
-                        expires_in: 3600,
+                        expires_in: state.config.oauth_token_expiry as i64,
                         scope: auth_code.scope.unwrap_or_else(|| "mcp:read".to_string()),
                         refresh_token: Some(refresh_token),
                     };
 
                     let mut headers = HeaderMap::new();
-                    add_cors_headers(&mut headers);
+                    add_cors_headers(&mut headers, state.config.static_files_max_age);
                     if let Ok(value) = "application/json".parse() {
                         headers.insert(header::CONTENT_TYPE, value);
                     };
@@ -725,7 +725,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                     });
 
                     let mut headers = HeaderMap::new();
-                    add_cors_headers(&mut headers);
+                    add_cors_headers(&mut headers, state.config.static_files_max_age);
                     if let Ok(value) = "application/json".parse() {
                         headers.insert(header::CONTENT_TYPE, value);
                     };
@@ -747,7 +747,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -772,7 +772,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -806,7 +806,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -821,7 +821,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -840,7 +840,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
         Ok(dt) => dt.with_timezone(&Utc),
         Err(_) => {
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -862,7 +862,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
         });
 
         let mut headers = HeaderMap::new();
-        add_cors_headers(&mut headers);
+        add_cors_headers(&mut headers, state.config.static_files_max_age);
         if let Ok(value) = "application/json".parse() {
             headers.insert(header::CONTENT_TYPE, value);
         };
@@ -933,7 +933,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                     let response = TokenResponse {
                         access_token,
                         token_type: "Bearer".to_string(),
-                        expires_in: 3600,
+                        expires_in: state.config.oauth_token_expiry as i64,
                         scope: stored_refresh
                             .scope
                             .unwrap_or_else(|| "mcp:read".to_string()),
@@ -941,7 +941,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                     };
 
                     let mut headers = HeaderMap::new();
-                    add_cors_headers(&mut headers);
+                    add_cors_headers(&mut headers, state.config.static_files_max_age);
                     if let Ok(value) = "application/json".parse() {
                         headers.insert(header::CONTENT_TYPE, value);
                     };
@@ -954,7 +954,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                     let response = TokenResponse {
                         access_token,
                         token_type: "Bearer".to_string(),
-                        expires_in: 3600,
+                        expires_in: state.config.oauth_token_expiry as i64,
                         scope: stored_refresh
                             .scope
                             .unwrap_or_else(|| "mcp:read".to_string()),
@@ -962,7 +962,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                     };
 
                     let mut headers = HeaderMap::new();
-                    add_cors_headers(&mut headers);
+                    add_cors_headers(&mut headers, state.config.static_files_max_age);
                     if let Ok(value) = "application/json".parse() {
                         headers.insert(header::CONTENT_TYPE, value);
                     };
@@ -979,7 +979,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
             });
 
             let mut headers = HeaderMap::new();
-            add_cors_headers(&mut headers);
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
             if let Ok(value) = "application/json".parse() {
                 headers.insert(header::CONTENT_TYPE, value);
             };
@@ -1106,8 +1106,8 @@ pub async fn authorize_consent(
     }
 }
 
-pub async fn oauth_options() -> impl IntoResponse {
+pub async fn oauth_options(State(state): State<AppState>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
+    add_cors_headers(&mut headers, state.config.static_files_max_age);
     (StatusCode::NO_CONTENT, headers)
 }

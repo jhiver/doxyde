@@ -25,6 +25,31 @@ use sqlx::SqlitePool;
 #[cfg(test)]
 use std::sync::Arc;
 
+/// Create a test configuration with sensible defaults
+#[cfg(test)]
+pub fn create_test_config() -> crate::config::Config {
+    crate::config::Config {
+        database_url: "sqlite::memory:".to_string(),
+        host: "localhost".to_string(),
+        port: 3000,
+        templates_dir: "templates".to_string(),
+        session_secret: "test-secret".to_string(),
+        development_mode: false,
+        uploads_dir: "/tmp/doxyde-test-uploads".to_string(),
+        max_upload_size: 1048576,      // 1MB for tests
+        secure_cookies: false,         // Disable for tests
+        session_timeout_minutes: 1440, // 24 hours
+        login_attempts_per_minute: 5,  // Test default
+        api_requests_per_minute: 60,   // Test default
+        csrf_enabled: true,            // Enable CSRF for tests
+        csrf_token_expiry_hours: 24,   // Test default
+        csrf_token_length: 32,         // Test default
+        csrf_header_name: "X-CSRF-Token".to_string(), // Test default
+        static_files_max_age: 3600,    // 1 hour for tests
+        oauth_token_expiry: 3600,      // 1 hour for tests
+    }
+}
+
 #[cfg(test)]
 pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     // Create in-memory SQLite database
@@ -167,22 +192,11 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     )?;
 
     // Create a test config
-    let config = crate::config::Config {
-        database_url: "sqlite::memory:".to_string(),
-        host: "localhost".to_string(),
-        port: 3000,
-        templates_dir: "templates".to_string(),
-        session_secret: "test-secret".to_string(),
-        development_mode: false,
-        uploads_dir: "/tmp/doxyde-test-uploads".to_string(),
-        max_upload_size: 1048576,      // 1MB for tests
-        secure_cookies: false,         // Disable for tests
-        session_timeout_minutes: 1440, // 24 hours
-    };
+    let config = create_test_config();
 
-    // Create rate limiters for tests
-    let login_rate_limiter = crate::rate_limit::create_login_rate_limiter();
-    let api_rate_limiter = crate::rate_limit::create_api_rate_limiter();
+    // Create rate limiters for tests (using default values)
+    let login_rate_limiter = crate::rate_limit::create_login_rate_limiter(5);
+    let api_rate_limiter = crate::rate_limit::create_api_rate_limiter(60);
 
     Ok(AppState {
         db: pool,

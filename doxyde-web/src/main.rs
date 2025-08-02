@@ -55,8 +55,8 @@ async fn main() -> Result<()> {
     info!("Uploads directory: {}", config.uploads_dir);
 
     // Create rate limiters
-    let login_rate_limiter = create_login_rate_limiter();
-    let api_rate_limiter = create_api_rate_limiter();
+    let login_rate_limiter = create_login_rate_limiter(config.login_attempts_per_minute);
+    let api_rate_limiter = create_api_rate_limiter(config.api_requests_per_minute);
 
     // Create application state
     let state = AppState::new(

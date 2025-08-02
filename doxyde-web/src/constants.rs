@@ -16,27 +16,46 @@
 
 //! Default configuration values for Doxyde
 
-// Server defaults
-pub const DEFAULT_HOST: &str = "0.0.0.0";
-pub const DEFAULT_PORT: u16 = 3000;
+use crate::configuration::defaults;
 
-// Database defaults
+// Server defaults
+pub fn default_host() -> String {
+    defaults::default_host()
+}
+
+pub fn default_port() -> u16 {
+    defaults::default_port()
+}
+
+// Database defaults - keep as-is per requirements
 pub const DEFAULT_DATABASE_URL: &str = "sqlite:doxyde.db";
 
-// Directory defaults
+// Directory defaults - these need special handling since they take parameters
 pub const DEFAULT_SITES_DIRECTORY: &str = "./sites";
 pub const DEFAULT_TEMPLATES_DIR: &str = "templates";
-pub const DEFAULT_UPLOADS_DIR: &str = ".doxyde/uploads";
 
 // Upload defaults
-pub const DEFAULT_MAX_UPLOAD_SIZE: usize = 10_485_760; // 10MB
+pub fn default_uploads_directory() -> String {
+    defaults::default_uploads_directory()
+}
+
+pub fn default_max_upload_size() -> usize {
+    defaults::default_max_upload_size()
+}
 
 // Session defaults
-pub const DEFAULT_SESSION_TIMEOUT_MINUTES: i64 = 1440; // 24 hours
-pub const DEFAULT_SECURE_COOKIES: bool = true;
+pub fn default_session_timeout_minutes() -> i64 {
+    defaults::default_session_timeout_minutes()
+}
+
+pub fn default_secure_cookies() -> bool {
+    defaults::default_secure_cookies()
+}
 
 // Development defaults
-pub const DEFAULT_DEVELOPMENT_MODE: bool = false;
+pub fn default_development_mode() -> bool {
+    defaults::default_development_mode()
+}
 
 // Configuration file paths
 pub const SYSTEM_CONFIG_PATH: &str = "/etc/doxyde.conf";

@@ -138,7 +138,7 @@ pub async fn oauth_authorization_server_metadata(
     };
 
     let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
+    add_cors_headers(&mut headers, state.config.static_files_max_age);
     if let Ok(value) = "application/json".parse() {
         headers.insert(header::CONTENT_TYPE, value);
     }
@@ -182,7 +182,7 @@ pub async fn oauth_protected_resource_metadata(
     };
 
     let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
+    add_cors_headers(&mut headers, state.config.static_files_max_age);
     if let Ok(value) = "application/json".parse() {
         headers.insert(header::CONTENT_TYPE, value);
     }
@@ -198,13 +198,13 @@ pub async fn oauth_protected_resource_mcp_metadata(
     oauth_protected_resource_metadata(State(state), Host(host), headers).await
 }
 
-pub async fn options_handler() -> impl IntoResponse {
+pub async fn options_handler(State(state): State<AppState>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
-    add_cors_headers(&mut headers);
+    add_cors_headers(&mut headers, state.config.static_files_max_age);
     (StatusCode::NO_CONTENT, headers)
 }
 
-fn add_cors_headers(headers: &mut HeaderMap) {
+fn add_cors_headers(headers: &mut HeaderMap, max_age: u64) {
     if let Ok(value) = "*".parse() {
         headers.insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, value);
     }
@@ -214,7 +214,7 @@ fn add_cors_headers(headers: &mut HeaderMap) {
     if let Ok(value) = "Authorization, Content-Type, MCP-Protocol-Version".parse() {
         headers.insert(header::ACCESS_CONTROL_ALLOW_HEADERS, value);
     }
-    if let Ok(value) = "3600".parse() {
+    if let Ok(value) = max_age.to_string().parse() {
         headers.insert(header::ACCESS_CONTROL_MAX_AGE, value);
     }
 }
@@ -283,7 +283,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_options_handler() {
-        let response = options_handler().await.into_response();
+        let state = test_helpers::create_test_app_state()
+            .await
+            .expect("Failed to create test state");
+        let response = options_handler(axum::extract::State(state)).await.into_response();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 

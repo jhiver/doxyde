@@ -134,6 +134,8 @@ mod tests {
             max_upload_size: 1048576,
             secure_cookies: false,
             session_timeout_minutes: 1440,
+            login_attempts_per_minute: 5,
+            api_requests_per_minute: 60,
             sites_directory: sites_dir,
         }
     }

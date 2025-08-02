@@ -93,7 +93,7 @@ pub async fn serve_image_handler(
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
-                            return serve_image_file(file_path, &format, &state.config.uploads_dir)
+                            return serve_image_file(file_path, &format, &state.config.uploads_dir, state.config.static_files_max_age)
                                 .await;
                         } else {
                             // Log missing file_path for debugging
@@ -118,6 +118,7 @@ async fn serve_image_file(
     file_path: &str,
     format: &str,
     uploads_dir: &str,
+    max_age: u64,
 ) -> Result<Response, StatusCode> {
     // Validate the path is safe and within uploads directory
     let uploads_base = PathBuf::from(uploads_dir);
@@ -149,10 +150,11 @@ async fn serve_image_file(
     };
 
     // Build response with appropriate headers
+    let cache_control = format!("public, max-age={}", max_age);
     Ok((
         [
             (header::CONTENT_TYPE, content_type),
-            (header::CACHE_CONTROL, "public, max-age=31536000"), // Cache for 1 year
+            (header::CACHE_CONTROL, cache_control.as_str()),
         ],
         data,
     )
@@ -189,7 +191,7 @@ pub async fn image_preview_handler(
         state.config.uploads_dir
     );
 
-    serve_image_file(file_path, format, &state.config.uploads_dir).await
+    serve_image_file(file_path, format, &state.config.uploads_dir, state.config.static_files_max_age).await
 }
 
 /// Get component and validate it's an image type

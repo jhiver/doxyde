@@ -13,27 +13,18 @@ use std::sync::Arc;
 
 use crate::{auth::SessionUser, AppState};
 
-const CSRF_TOKEN_LENGTH: usize = 32;
-const CSRF_HEADER_NAME: &str = "X-CSRF-Token";
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrfToken {
     pub token: String,
 }
 
-impl Default for CsrfToken {
-    fn default() -> Self {
-        let mut bytes = [0u8; CSRF_TOKEN_LENGTH];
+impl CsrfToken {
+    pub fn new(token_length: usize) -> Self {
+        let mut bytes = vec![0u8; token_length];
         rand::thread_rng().fill_bytes(&mut bytes);
         Self {
-            token: URL_SAFE_NO_PAD.encode(bytes),
+            token: URL_SAFE_NO_PAD.encode(&bytes),
         }
-    }
-}
-
-impl CsrfToken {
-    pub fn new() -> Self {
-        Self::default()
     }
 
     pub fn verify(&self, provided_token: &str) -> bool {
@@ -85,8 +76,8 @@ pub async fn get_or_create_csrf_token(state: &AppState, session_id: &str) -> Res
         }
     }
 
-    // Create new token
-    let csrf_token = CsrfToken::new();
+    // Create new token using configured length
+    let csrf_token = CsrfToken::new(state.config.csrf_token_length);
 
     sqlx::query!(
         r#"
@@ -127,8 +118,8 @@ pub async fn csrf_protection_middleware(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Extract provided token from header or form
-    let provided_token = extract_csrf_token(&request);
+    // Extract provided token from header or form using configured header name
+    let provided_token = extract_csrf_token(&request, &state.config.csrf_header_name);
 
     match provided_token {
         Some(token) if expected_token.verify(&token) => Ok(next.run(request).await),
@@ -136,9 +127,9 @@ pub async fn csrf_protection_middleware(
     }
 }
 
-fn extract_csrf_token(request: &Request<Body>) -> Option<String> {
+fn extract_csrf_token(request: &Request<Body>, header_name: &str) -> Option<String> {
     // First check header
-    if let Some(header_value) = request.headers().get(CSRF_HEADER_NAME) {
+    if let Some(header_value) = request.headers().get(header_name) {
         if let Ok(token) = header_value.to_str() {
             return Some(token.to_string());
         }
@@ -156,8 +147,8 @@ mod tests {
 
     #[test]
     fn test_csrf_token_generation() {
-        let token1 = CsrfToken::new();
-        let token2 = CsrfToken::new();
+        let token1 = CsrfToken::new(32);
+        let token2 = CsrfToken::new(32);
 
         // Tokens should be unique
         assert_ne!(token1.token, token2.token);
@@ -169,7 +160,7 @@ mod tests {
 
     #[test]
     fn test_csrf_token_verification() {
-        let token = CsrfToken::new();
+        let token = CsrfToken::new(32);
 
         // Should verify correctly
         assert!(token.verify(&token.token));
@@ -187,7 +178,7 @@ mod tests {
 
     #[test]
     fn test_csrf_token_serialization() {
-        let token = CsrfToken::new();
+        let token = CsrfToken::new(32);
 
         // Should serialize to JSON
         let json = serde_json::to_string(&token).unwrap();
@@ -196,5 +187,44 @@ mod tests {
         let deserialized: CsrfToken = serde_json::from_str(&json).unwrap();
 
         assert_eq!(token.token, deserialized.token);
+    }
+
+    #[test]
+    fn test_csrf_token_different_lengths() {
+        let token_16 = CsrfToken::new(16);
+        let token_32 = CsrfToken::new(32);
+        let token_64 = CsrfToken::new(64);
+
+        // Different lengths should produce different token sizes (base64 encoded)
+        // 16 bytes -> ~22 chars, 32 bytes -> ~43 chars, 64 bytes -> ~86 chars
+        assert!(token_16.token.len() < token_32.token.len());
+        assert!(token_32.token.len() < token_64.token.len());
+
+        // All should be valid tokens
+        assert!(token_16.verify(&token_16.token));
+        assert!(token_32.verify(&token_32.token));
+        assert!(token_64.verify(&token_64.token));
+    }
+
+    #[test]
+    fn test_csrf_token_configurable_length() {
+        // Test that different configured lengths work correctly
+        let length_8 = 8;
+        let length_128 = 128;
+
+        let token_8 = CsrfToken::new(length_8);
+        let token_128 = CsrfToken::new(length_128);
+
+        // Base64 encoding means actual string length will be different
+        // 8 bytes -> ~11 chars, 128 bytes -> ~171 chars
+        assert!(token_8.token.len() < token_128.token.len());
+
+        // Both should be valid regardless of length
+        assert!(token_8.verify(&token_8.token));
+        assert!(token_128.verify(&token_128.token));
+
+        // Cross-verification should fail
+        assert!(!token_8.verify(&token_128.token));
+        assert!(!token_128.verify(&token_8.token));
     }
 }
