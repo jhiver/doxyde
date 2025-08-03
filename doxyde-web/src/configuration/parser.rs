@@ -48,6 +48,7 @@ pub struct TomlConfig {
     pub mcp: Option<TomlMcpConfig>,
     pub database_url: Option<String>,
     pub development_mode: Option<bool>,
+    pub multi_site_mode: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -134,6 +135,7 @@ impl Default for TomlConfig {
             mcp: None,
             database_url: None,
             development_mode: None,
+            multi_site_mode: None,
         }
     }
 }
@@ -329,6 +331,9 @@ pub fn merge_toml_configs(configs: Vec<TomlConfig>) -> TomlConfig {
         }
         if config.development_mode.is_some() {
             merged.development_mode = config.development_mode;
+        }
+        if config.multi_site_mode.is_some() {
+            merged.multi_site_mode = config.multi_site_mode;
         }
     }
 

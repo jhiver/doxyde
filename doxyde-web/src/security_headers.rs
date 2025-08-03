@@ -7,7 +7,12 @@ use axum::{
 
 pub fn create_security_headers_middleware(
     config: HeadersConfig,
-) -> impl Fn(Request<Body>, Next) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send>> + Clone {
+) -> impl Fn(
+    Request<Body>,
+    Next,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send>,
+> + Clone {
     move |request: Request<Body>, next: Next| {
         let config = config.clone();
         Box::pin(async move {
@@ -269,7 +274,10 @@ mod tests {
         let headers = response.headers();
 
         let csp = headers.get(header::CONTENT_SECURITY_POLICY).unwrap();
-        assert_eq!(csp.to_str().unwrap(), "default-src 'none'; script-src 'self'");
+        assert_eq!(
+            csp.to_str().unwrap(),
+            "default-src 'none'; script-src 'self'"
+        );
 
         let hsts = headers.get(header::STRICT_TRANSPORT_SECURITY).unwrap();
         assert_eq!(hsts.to_str().unwrap(), "max-age=3600");
@@ -281,6 +289,9 @@ mod tests {
         assert_eq!(referrer_policy.to_str().unwrap(), "no-referrer");
 
         let permissions_policy = headers.get("Permissions-Policy").unwrap();
-        assert_eq!(permissions_policy.to_str().unwrap(), "camera=(), microphone=()");
+        assert_eq!(
+            permissions_policy.to_str().unwrap(),
+            "camera=(), microphone=()"
+        );
     }
 }

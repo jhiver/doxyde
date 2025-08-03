@@ -201,7 +201,7 @@ async fn main() -> Result<()> {
     let default_pool = db.clone();
     let _service_handle = sse_server.with_service(move || {
         info!("Creating new DoxydeRmcpService instance for site_id=1");
-        DoxydeRmcpService::new(default_pool.clone(), 1)
+        DoxydeRmcpService::new(default_pool.clone())
     });
 
     // Create OAuth validation middleware that works for both SSE and POST requests
@@ -221,12 +221,11 @@ async fn main() -> Result<()> {
                 match validate_token(&state.db, token).await {
                     Ok(Some(token_info)) => {
                         debug!(
-                            "Valid OAuth token: site_id={}, path={}",
-                            token_info.site_id,
+                            "Valid OAuth token: id={}, path={}",
+                            token_info.id,
                             req.uri().path()
                         );
-                        // The service registered with site_id=1 will handle requests
-                        // In the future, we could dynamically switch services based on token_info.site_id
+                        // In multi-database mode, each database represents one site
                         Ok(next.run(req).await)
                     }
                     Ok(None) => {

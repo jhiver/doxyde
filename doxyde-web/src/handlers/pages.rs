@@ -41,13 +41,14 @@ pub async fn list_pages() -> Result<&'static str, StatusCode> {
 /// Display a page with its components
 pub async fn show_page_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> Result<impl IntoResponse, StatusCode> {
-    let page_repo = PageRepository::new(state.db.clone());
-    let version_repo = PageVersionRepository::new(state.db.clone());
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
+    let version_repo = PageVersionRepository::new(db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get the published version of the page
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
@@ -96,7 +97,7 @@ pub async fn show_page_handler(
                     // Currently fetching all pages except the home page
                     if let Some(site_id) = site.id {
                         page_repo
-                            .list_by_site_id(site_id)
+                            .list_all()
                             .await
                             .unwrap_or_else(|e| {
                                 tracing::warn!(error = %e, site_id = site_id, "Failed to list pages by site, using empty list");
@@ -297,7 +298,7 @@ pub async fn show_page_handler(
     let mut context = Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut context, &state, &site, Some(&page))
+    add_base_context(&mut context, &db, &site, Some(&page))
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to add base context");
@@ -321,7 +322,7 @@ pub async fn show_page_handler(
             can_edit = true;
         } else {
             // Check site permissions
-            let site_user_repo = SiteUserRepository::new(state.db.clone());
+            let site_user_repo = SiteUserRepository::new(db.clone());
             if let (Some(site_id), Some(user_id)) = (site.id, current_user.user.id) {
                 if let Ok(Some(site_user)) =
                     site_user_repo.find_by_site_and_user(site_id, user_id).await

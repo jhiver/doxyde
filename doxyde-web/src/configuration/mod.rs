@@ -51,6 +51,7 @@ pub struct Configuration {
     pub mcp: McpConfig,
     pub database_url: String,
     pub development_mode: bool,
+    pub multi_site_mode: bool,
 }
 
 /// Server configuration for host and port settings
@@ -175,6 +176,17 @@ impl Configuration {
             .parse()
             .unwrap_or_else(|_| defaults::default_development_mode());
 
+        let multi_site_mode = env::var("MULTI_SITE_MODE")
+            .or_else(|_| {
+                toml_config
+                    .multi_site_mode
+                    .map(|b| b.to_string())
+                    .ok_or_else(|| env::VarError::NotPresent)
+            })
+            .unwrap_or_else(|_| defaults::default_multi_site_mode().to_string())
+            .parse()
+            .unwrap_or_else(|_| defaults::default_multi_site_mode());
+
         Ok(Self {
             server,
             session,
@@ -186,6 +198,7 @@ impl Configuration {
             mcp,
             database_url,
             development_mode,
+            multi_site_mode,
         })
     }
 
@@ -267,6 +280,7 @@ impl Configuration {
             }),
             database_url: Some(self.database_url.clone()),
             development_mode: Some(self.development_mode),
+            multi_site_mode: Some(self.multi_site_mode),
         };
 
         toml::to_string_pretty(&toml_config).context("Failed to serialize configuration to TOML")
@@ -927,6 +941,7 @@ mod tests {
             },
             database_url: "sqlite:test.db".to_string(),
             development_mode: false,
+            multi_site_mode: true,
         };
 
         assert_eq!(config.bind_addr(), "127.0.0.1:8080");

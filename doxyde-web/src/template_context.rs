@@ -19,13 +19,14 @@ use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::PageRepository;
 use tera::Context;
 
-use crate::{csrf::CsrfToken, logo::get_logo_data, AppState};
+use crate::{csrf::CsrfToken, logo::get_logo_data};
+use sqlx::SqlitePool;
 
 /// Add common base template context variables
 /// This includes site_title, root_page_title, logo information, and navigation
 pub async fn add_base_context(
     context: &mut Context,
-    state: &AppState,
+    db: &SqlitePool,
     site: &Site,
     current_page: Option<&Page>,
 ) -> Result<()> {
@@ -33,10 +34,10 @@ pub async fn add_base_context(
     context.insert("site_title", &site.title);
 
     // Get root page and its children for navigation
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let site_id = site.id.ok_or_else(|| anyhow::anyhow!("Site has no ID"))?;
     let (root_page_title, root_children) =
-        if let Ok(Some(root_page)) = page_repo.get_root_page(site_id).await {
+        if let Ok(Some(root_page)) = page_repo.get_root_page().await {
             let title = root_page.title.clone();
 
             // Get children of root page for top navigation
@@ -83,7 +84,7 @@ pub async fn add_base_context(
     context.insert("nav_items", &nav_items);
 
     // Get logo data
-    if let Ok(Some((logo_url, logo_width, logo_height))) = get_logo_data(&state.db, site_id).await {
+    if let Ok(Some((logo_url, logo_width, logo_height))) = get_logo_data(db, site_id).await {
         context.insert("logo_url", &logo_url);
         context.insert("logo_width", &logo_width);
         context.insert("logo_height", &logo_height);

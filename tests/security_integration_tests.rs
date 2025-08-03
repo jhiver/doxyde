@@ -3,7 +3,7 @@
 
 use axum::http::{header, Method, Request, StatusCode};
 use doxyde_core::models::{site::Site, user::User};
-use doxyde_db::repositories::{SiteRepository, UserRepository};
+use doxyde_db::repositories::{UserRepository};
 use sqlx::SqlitePool;
 
 #[sqlx::test]
@@ -18,10 +18,8 @@ async fn test_authentication_required_endpoints(pool: SqlitePool) {
         "/test-page/.properties",
     ];
     
-    // Create test site
-    let site_repo = SiteRepository::new(pool.clone());
-    let site = Site::new("test.local", "Test Site");
-    site_repo.create_with_root_page(&site).await.unwrap();
+    // Create test site - in multi-database mode, site config is already created by migration
+    // So we don't need to create anything here for the site
     
     // Without authentication, these should all return 401 or redirect to login
     // This would be tested with actual HTTP client in a full integration test
@@ -53,19 +51,18 @@ async fn test_csrf_protection_on_state_changes(pool: SqlitePool) {
 #[sqlx::test]
 async fn test_sql_injection_in_search(pool: SqlitePool) {
     // Test SQL injection attempts in various query parameters
-    let site_repo = SiteRepository::new(pool.clone());
-    let site = Site::new("test.local", "Test Site");
-    site_repo.create_with_root_page(&site).await.unwrap();
-    
-    // Attempt SQL injection in domain lookup
+    // In multi-database mode, we test site_config queries instead
     let injection_attempts = vec![
-        "test.local'; DROP TABLE sites; --",
-        "test.local' OR '1'='1",
-        "test.local' UNION SELECT * FROM users--",
+        "Test Site'; DROP TABLE site_config; --",
+        "Test Site' OR '1'='1",
+        "Test Site' UNION SELECT * FROM users--",
     ];
     
     for attempt in injection_attempts {
-        let result = site_repo.find_by_domain(attempt).await;
+        // Test that query parameters are properly escaped
+        let result = sqlx::query!("SELECT title FROM site_config WHERE title = ?", attempt)
+            .fetch_optional(&pool)
+            .await;
         // Should either not find anything or error safely
         assert!(result.is_ok());
         assert!(result.unwrap().is_none());
@@ -120,46 +117,45 @@ async fn test_session_rotation_on_login(pool: SqlitePool) {
 }
 
 #[sqlx::test]
-async fn test_authorization_across_sites(pool: SqlitePool) {
+async fn test_authorization_within_site(pool: SqlitePool) {
     use doxyde_core::models::permission::{SiteRole, SiteUser};
     use doxyde_db::repositories::{PageRepository, SiteUserRepository};
     
-    let site_repo = SiteRepository::new(pool.clone());
     let user_repo = UserRepository::new(pool.clone());
     let site_user_repo = SiteUserRepository::new(pool.clone());
     let page_repo = PageRepository::new(pool.clone());
     
-    // Create two sites
-    let site1 = Site::new("site1.local", "Site 1");
-    let site2 = Site::new("site2.local", "Site 2");
-    site_repo.create_with_root_page(&site1).await.unwrap();
-    site_repo.create_with_root_page(&site2).await.unwrap();
+    // In multi-database mode, each database represents one site with site_id=1
+    // Create users with different access levels to the site
+    let mut viewer_user = User::new("viewer@example.com", "viewer", "password");
+    user_repo.create(&viewer_user).await.unwrap();
+    let viewer_user = user_repo.find_by_email("viewer@example.com").await.unwrap().unwrap();
     
-    let site1 = site_repo.find_by_domain("site1.local").await.unwrap().unwrap();
-    let site2 = site_repo.find_by_domain("site2.local").await.unwrap().unwrap();
+    let mut editor_user = User::new("editor@example.com", "editor", "password");
+    user_repo.create(&editor_user).await.unwrap();
+    let editor_user = user_repo.find_by_email("editor@example.com").await.unwrap().unwrap();
     
-    // Create user with access to site1 only
-    let mut user = User::new("limited@example.com", "limited", "password");
-    user_repo.create(&user).await.unwrap();
-    let user = user_repo.find_by_email("limited@example.com").await.unwrap().unwrap();
+    // Grant different roles (site_id is always 1 in multi-database mode)
+    let site_user_viewer = SiteUser::new(1, viewer_user.id.unwrap(), SiteRole::Viewer);
+    site_user_repo.create(&site_user_viewer).await.unwrap();
     
-    // Grant access to site1
-    let site_user = SiteUser::new(site1.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
-    site_user_repo.create(&site_user).await.unwrap();
+    let site_user_editor = SiteUser::new(1, editor_user.id.unwrap(), SiteRole::Editor);
+    site_user_repo.create(&site_user_editor).await.unwrap();
     
-    // Verify user has access to site1
-    let access = site_user_repo
-        .find_by_site_and_user(site1.id.unwrap(), user.id.unwrap())
+    // Verify users have correct access levels
+    let viewer_access = site_user_repo
+        .find_by_site_and_user(1, viewer_user.id.unwrap())
         .await
         .unwrap();
-    assert!(access.is_some());
+    assert!(viewer_access.is_some());
+    assert_eq!(viewer_access.unwrap().role, SiteRole::Viewer);
     
-    // Verify user has NO access to site2
-    let access = site_user_repo
-        .find_by_site_and_user(site2.id.unwrap(), user.id.unwrap())
+    let editor_access = site_user_repo
+        .find_by_site_and_user(1, editor_user.id.unwrap())
         .await
         .unwrap();
-    assert!(access.is_none());
+    assert!(editor_access.is_some());
+    assert_eq!(editor_access.unwrap().role, SiteRole::Editor);
 }
 
 #[sqlx::test]
@@ -167,13 +163,10 @@ async fn test_path_traversal_in_page_slugs(pool: SqlitePool) {
     use doxyde_core::models::page::Page;
     use doxyde_db::repositories::PageRepository;
     
-    let site_repo = SiteRepository::new(pool.clone());
     let page_repo = PageRepository::new(pool.clone());
     
-    // Create site
-    let site = Site::new("test.local", "Test Site");
-    site_repo.create_with_root_page(&site).await.unwrap();
-    let site = site_repo.find_by_domain("test.local").await.unwrap().unwrap();
+    // In multi-database mode, site is already configured
+    // We test path traversal in page slugs
     
     // Try to create pages with path traversal attempts
     let dangerous_slugs = vec![
@@ -184,7 +177,7 @@ async fn test_path_traversal_in_page_slugs(pool: SqlitePool) {
     ];
     
     for slug in dangerous_slugs {
-        let page = Page::new(site.id.unwrap(), slug.to_string(), format!("Page {}", slug));
+        let page = Page::new(slug.to_string(), format!("Page {}", slug));
         let result = page_repo.create(&page).await;
         // Should either fail validation or sanitize the slug
         if result.is_ok() {

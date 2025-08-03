@@ -16,10 +16,13 @@
 
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
-use doxyde_core::models::{site::Site, user::User};
-use doxyde_db::repositories::{SiteRepository, SiteUserRepository, UserRepository};
+use doxyde_core::models::user::User;
+use doxyde_db::repositories::{SiteUserRepository, UserRepository};
+use doxyde_web::domain_utils::resolve_site_directory;
 use sqlx::SqlitePool;
+use std::fs;
 use std::io::Write;
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "doxyde")]
@@ -32,26 +35,38 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Initialize the database (create tables)
-    Init,
+    Init {
+        /// Site domain to initialize (required for multi-database mode)
+        #[arg(long)]
+        site: Option<String>,
+    },
 
     /// Site management commands
     Site {
         #[command(subcommand)]
         command: SiteCommands,
+        
+        /// Site domain to operate on (required for init, show, update-title commands)
+        #[arg(long, global = true)]
+        site: Option<String>,
     },
 
     /// User management commands
     User {
         #[command(subcommand)]
         command: UserCommands,
+        
+        /// Site domain to operate on (required for multi-database mode)
+        #[arg(long, global = true)]
+        site: Option<String>,
     },
 }
 
 #[derive(Subcommand)]
 enum SiteCommands {
-    /// Create a new site
+    /// Create a new site with directory and database
     Create {
-        /// Domain name (e.g., localhost, example.com)
+        /// Domain name for the site
         domain: String,
         /// Site title
         title: String,
@@ -59,6 +74,21 @@ enum SiteCommands {
 
     /// List all sites
     List,
+
+    /// Initialize site configuration in current database
+    Init {
+        /// Site title
+        title: String,
+    },
+
+    /// Show site configuration
+    Show,
+
+    /// Update site title
+    UpdateTitle {
+        /// New site title
+        title: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -77,12 +107,10 @@ enum UserCommands {
         password: Option<String>,
     },
 
-    /// Grant user access to a site
+    /// Grant user access to this site
     Grant {
         /// Username or email
         user: String,
-        /// Site domain
-        site: String,
         /// Role (viewer, editor, owner)
         #[arg(default_value = "owner")]
         role: String,
@@ -110,12 +138,15 @@ async fn main() -> Result<()> {
         std::env::var("DATABASE_URL").unwrap_or_else(|_| "sqlite:doxyde.db".to_string());
 
     match cli.command {
-        Commands::Init => init_database(&database_url).await,
-        Commands::Site { command } => {
-            let pool = connect_database(&database_url).await?;
-            handle_site_command(command, pool).await
+        Commands::Init { site } => {
+            let database_url = resolve_database_url(&database_url, site.as_deref())?;
+            init_database(&database_url).await
         }
-        Commands::User { command } => {
+        Commands::Site { command, site } => {
+            handle_site_command(command, site.as_deref()).await
+        }
+        Commands::User { command, site } => {
+            let database_url = resolve_database_url(&database_url, site.as_deref())?;
             let pool = connect_database(&database_url).await?;
             handle_user_command(command, pool).await
         }
@@ -137,35 +168,77 @@ async fn connect_database(database_url: &str) -> Result<SqlitePool> {
     doxyde_db::init_database(database_url).await
 }
 
-async fn handle_site_command(command: SiteCommands, pool: SqlitePool) -> Result<()> {
-    let site_repo = SiteRepository::new(pool);
-
+async fn handle_site_command(command: SiteCommands, site: Option<&str>) -> Result<()> {
     match command {
         SiteCommands::Create { domain, title } => {
-            println!("Creating site: {} - {}", domain, title);
-
-            let site = Site::new(domain.clone(), title.clone());
-            if let Err(e) = site.is_valid() {
-                anyhow::bail!("Invalid site data: {}", e);
-            }
-
-            let site_id = site_repo
-                .create(&site)
-                .await
-                .context("Failed to create site")?;
-
-            println!("Site created successfully with ID: {}", site_id);
-            Ok(())
+            create_site(&domain, &title).await
         }
 
         SiteCommands::List => {
-            println!("Listing all sites:");
-            println!("{:<5} {:<30} {:<30}", "ID", "Domain", "Title");
-            println!("{:-<65}", "");
+            list_sites().await
+        }
+        SiteCommands::Init { title } => {
+            println!("Initializing site configuration with title: {}", title);
+            
+            let database_url = resolve_database_url("sqlite:doxyde.db", site)?;
+            let pool = connect_database(&database_url).await?;
 
-            // Since we don't have a list_all method, we'll need to add one
-            // Display confirmation message for successful deletion
-            println!("(Site listing not implemented yet)");
+            // Check if site_config already exists
+            let existing = sqlx::query!("SELECT title FROM site_config WHERE id = 1")
+                .fetch_optional(&pool)
+                .await?;
+
+            if existing.is_some() {
+                anyhow::bail!("Site configuration already exists. Use 'update-title' to change it.");
+            }
+
+            // Create site_config entry
+            sqlx::query!("INSERT INTO site_config (id, title) VALUES (1, ?)", title)
+                .execute(&pool)
+                .await
+                .context("Failed to create site configuration")?;
+
+            println!("Site configuration initialized successfully!");
+            Ok(())
+        }
+
+        SiteCommands::Show => {
+            println!("Site configuration:");
+            
+            let database_url = resolve_database_url("sqlite:doxyde.db", site)?;
+            let pool = connect_database(&database_url).await?;
+            
+            let config = sqlx::query!("SELECT title FROM site_config WHERE id = 1")
+                .fetch_optional(&pool)
+                .await?;
+
+            match config {
+                Some(config) => {
+                    println!("Title: {}", config.title);
+                }
+                None => {
+                    println!("No site configuration found. Run 'site init' first.");
+                }
+            }
+            Ok(())
+        }
+
+        SiteCommands::UpdateTitle { title } => {
+            println!("Updating site title to: {}", title);
+            
+            let database_url = resolve_database_url("sqlite:doxyde.db", site)?;
+            let pool = connect_database(&database_url).await?;
+
+            let result = sqlx::query!("UPDATE site_config SET title = ? WHERE id = 1", title)
+                .execute(&pool)
+                .await
+                .context("Failed to update site title")?;
+
+            if result.rows_affected() == 0 {
+                anyhow::bail!("Site configuration not found. Run 'site init' first.");
+            }
+
+            println!("Site title updated successfully!");
             Ok(())
         }
     }
@@ -215,8 +288,8 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
             Ok(())
         }
 
-        UserCommands::Grant { user, site, role } => {
-            println!("Granting {} role on {} to {}", role, site, user);
+        UserCommands::Grant { user, role } => {
+            println!("Granting {} role to {}", role, user);
 
             // Find user by username or email
             let found_user = if user.contains('@') {
@@ -227,13 +300,6 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
 
             let found_user = found_user.ok_or_else(|| anyhow::anyhow!("User not found"))?;
 
-            // Find site by domain
-            let site_repo = SiteRepository::new(pool.clone());
-            let found_site = site_repo
-                .find_by_domain(&site)
-                .await?
-                .ok_or_else(|| anyhow::anyhow!("Site not found"))?;
-
             // Parse role
             let site_role = match role.as_str() {
                 "viewer" => doxyde_core::models::permission::SiteRole::Viewer,
@@ -242,12 +308,11 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
                 _ => anyhow::bail!("Invalid role. Must be: viewer, editor, or owner"),
             };
 
-            // Create site-user relationship
+            // In multi-database mode, site_id is always 1
             let site_user_repo = SiteUserRepository::new(pool);
-            let site_id = found_site.id.ok_or_else(|| anyhow!("Site has no ID"))?;
             let user_id = found_user.id.ok_or_else(|| anyhow!("User has no ID"))?;
             let site_user =
-                doxyde_core::models::permission::SiteUser::new(site_id, user_id, site_role);
+                doxyde_core::models::permission::SiteUser::new(1, user_id, site_role);
 
             site_user_repo.create(&site_user).await?;
 
@@ -287,5 +352,176 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
             println!("Password changed successfully!");
             Ok(())
         }
+    }
+}
+
+/// Resolves the database URL based on the given base URL and optional site domain
+fn resolve_database_url(base_url: &str, site: Option<&str>) -> Result<String> {
+    match site {
+        Some(domain) => {
+            // Get sites directory (default: "./sites")
+            let sites_dir = std::env::var("DOXYDE_SITES_DIRECTORY")
+                .unwrap_or_else(|_| "./sites".to_string());
+            
+            let sites_path = PathBuf::from(sites_dir);
+            let site_dir = resolve_site_directory(&sites_path, domain);
+            let db_path = site_dir.join("site.db");
+            
+            Ok(format!("sqlite:{}", db_path.display()))
+        }
+        None => {
+            // If DATABASE_URL is set, use it; otherwise show error
+            if base_url != "sqlite:doxyde.db" {
+                Ok(base_url.to_string())
+            } else {
+                Err(anyhow!(
+                    "No site specified and DATABASE_URL not set. Use --site <domain> or set DATABASE_URL"
+                ))
+            }
+        }
+    }
+}
+
+/// Creates a new site with directory and database
+async fn create_site(domain: &str, title: &str) -> Result<()> {
+    println!("Creating site: {} ({})", domain, title);
+    
+    // Validate domain
+    if domain.is_empty() {
+        return Err(anyhow!("Domain cannot be empty"));
+    }
+    
+    // Get sites directory
+    let sites_dir = std::env::var("DOXYDE_SITES_DIRECTORY")
+        .unwrap_or_else(|_| "./sites".to_string());
+    
+    let sites_path = PathBuf::from(&sites_dir);
+    let site_dir = resolve_site_directory(&sites_path, domain);
+    
+    // Check if site already exists
+    if site_dir.exists() {
+        let db_path = site_dir.join("site.db");
+        if db_path.exists() {
+            return Err(anyhow!(
+                "Site already exists at: {}\nDatabase: {}", 
+                site_dir.display(),
+                db_path.display()
+            ));
+        }
+    }
+    
+    // Create site directory
+    println!("Creating directory: {}", site_dir.display());
+    fs::create_dir_all(&site_dir)
+        .with_context(|| format!("Failed to create site directory: {}", site_dir.display()))?;
+    
+    // Initialize database
+    let db_path = site_dir.join("site.db");
+    let database_url = format!("sqlite:{}", db_path.display());
+    
+    println!("Initializing database: {}", db_path.display());
+    let pool = doxyde_db::init_database(&database_url).await
+        .with_context(|| format!("Failed to initialize database: {}", database_url))?;
+    
+    // Create or update site_config entry (migrations create a default entry)
+    println!("Setting site title: {}", title);
+    sqlx::query!("UPDATE site_config SET title = ? WHERE id = 1", title)
+        .execute(&pool)
+        .await
+        .context("Failed to set site configuration")?;
+    
+    println!("✅ Site created successfully!");
+    println!("   Domain: {}", domain);
+    println!("   Title: {}", title);
+    println!("   Directory: {}", site_dir.display());
+    println!("   Database: {}", db_path.display());
+    
+    Ok(())
+}
+
+/// Lists all sites
+async fn list_sites() -> Result<()> {
+    // Get sites directory
+    let sites_dir = std::env::var("DOXYDE_SITES_DIRECTORY")
+        .unwrap_or_else(|_| "./sites".to_string());
+    
+    let sites_path = PathBuf::from(&sites_dir);
+    
+    println!("Sites directory: {}", sites_path.display());
+    
+    if !sites_path.exists() {
+        println!("No sites directory found. Use 'doxyde site create' to create your first site.");
+        return Ok(());
+    }
+    
+    // Read all directories
+    let entries = fs::read_dir(&sites_path)
+        .with_context(|| format!("Failed to read sites directory: {}", sites_path.display()))?;
+    
+    let mut sites = Vec::new();
+    
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        
+        if path.is_dir() {
+            let db_path = path.join("site.db");
+            
+            if db_path.exists() {
+                // Try to connect to database and get site info
+                let database_url = format!("sqlite:{}", db_path.display());
+                
+                match connect_database(&database_url).await {
+                    Ok(pool) => {
+                        // Get site config
+                        match sqlx::query!("SELECT title FROM site_config WHERE id = 1")
+                            .fetch_optional(&pool)
+                            .await
+                        {
+                            Ok(Some(config)) => {
+                                // Extract domain from directory name
+                                if let Some(dir_name) = path.file_name().and_then(|n| n.to_str()) {
+                                    // Remove hash suffix to get domain
+                                    let domain = extract_domain_from_directory(dir_name);
+                                    sites.push((domain, config.title, path.clone()));
+                                }
+                            }
+                            Ok(None) => {
+                                println!("⚠️  Database found but no site config: {}", db_path.display());
+                            }
+                            Err(e) => {
+                                println!("⚠️  Error reading site config from {}: {}", db_path.display(), e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("⚠️  Error connecting to database {}: {}", db_path.display(), e);
+                    }
+                }
+            }
+        }
+    }
+    
+    if sites.is_empty() {
+        println!("No sites found. Use 'doxyde site create' to create your first site.");
+    } else {
+        println!("\nFound {} site(s):", sites.len());
+        for (domain, title, path) in sites {
+            println!("  • {} - {} ({})", domain, title, path.display());
+        }
+    }
+    
+    Ok(())
+}
+
+/// Extracts the domain from a directory name by removing the hash suffix
+fn extract_domain_from_directory(dir_name: &str) -> String {
+    // Directory format is: domain-hash
+    // We need to remove the last 9 characters (dash + 8 char hash)
+    if dir_name.len() > 9 {
+        let without_hash = &dir_name[..dir_name.len() - 9];
+        without_hash.replace('-', ".")
+    } else {
+        dir_name.to_string()
     }
 }

@@ -30,30 +30,25 @@ use tracing::info;
 #[derive(Debug, Clone)]
 pub struct DoxydeRmcpService {
     pool: SqlitePool,
-    site_id: i64,
     tool_router: ToolRouter<Self>,
     upload_dir: std::path::PathBuf,
 }
 
 impl DoxydeRmcpService {
-    pub fn new(pool: SqlitePool, site_id: i64) -> Self {
+    pub fn new(pool: SqlitePool) -> Self {
         // Use the standard Doxyde upload directory
         let upload_dir = std::env::var("DOXYDE_UPLOADS_DIR").unwrap_or_else(|_| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/home/doxyde".to_string());
             format!("{}/.doxyde/uploads", home)
         });
-        Self::with_upload_dir(pool, site_id, std::path::PathBuf::from(upload_dir))
+        Self::with_upload_dir(pool, std::path::PathBuf::from(upload_dir))
     }
 
-    pub fn with_upload_dir(pool: SqlitePool, site_id: i64, upload_dir: std::path::PathBuf) -> Self {
+    pub fn with_upload_dir(pool: SqlitePool, upload_dir: std::path::PathBuf) -> Self {
         let router = Self::tool_router();
-        info!(
-            "Created DoxydeRmcpService with tool_router for site_id={}",
-            site_id
-        );
+        info!("Created DoxydeRmcpService with tool_router for single-database mode");
         Self {
             pool,
-            site_id,
             tool_router: router,
             upload_dir,
         }
@@ -896,7 +891,7 @@ impl DoxydeRmcpService {
         use doxyde_db::repositories::PageRepository;
 
         let page_repo = PageRepository::new(self.pool.clone());
-        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         // Build hierarchy
         let mut hierarchy = Vec::new();
@@ -946,9 +941,6 @@ impl DoxydeRmcpService {
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         // Verify page belongs to this site
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         Ok(page)
     }
@@ -957,7 +949,7 @@ impl DoxydeRmcpService {
         use doxyde_db::repositories::PageRepository;
 
         let page_repo = PageRepository::new(self.pool.clone());
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
 
         // Handle root path
         if path == "/" || path.is_empty() {
@@ -989,7 +981,7 @@ impl DoxydeRmcpService {
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
 
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
         let query_lower = query.to_lowercase();
 
         let mut results = Vec::new();
@@ -1073,14 +1065,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get published version
         let version_repo = PageVersionRepository::new(self.pool.clone());
@@ -1110,14 +1099,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get draft version
         let version_repo = PageVersionRepository::new(self.pool.clone());
@@ -1152,9 +1138,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
@@ -1262,14 +1245,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -1415,16 +1395,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!(
-                "Component belongs to a page in a different site"
-            ));
-        }
 
         // Track if anything changed
         let mut changed = false;
@@ -1477,14 +1452,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
 
@@ -1539,17 +1511,14 @@ impl DoxydeRmcpService {
 
         // Verify parent page exists and belongs to this site (if provided)
         if let Some(parent_id) = req.parent_page_id {
-            let parent = page_repo
+            let _parent = page_repo
                 .find_by_id(parent_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Parent page not found"))?;
 
-            if parent.site_id != self.site_id {
-                return Err(anyhow::anyhow!("Parent page does not belong to this site"));
-            }
         } else {
             // Check if root page already exists
-            let existing_pages = page_repo.list_by_site_id(self.site_id).await?;
+            let existing_pages = page_repo.list_all().await?;
             if existing_pages.iter().any(|p| p.parent_page_id.is_none()) {
                 return Err(anyhow::anyhow!(
                     "Root page already exists. New pages must have a parent."
@@ -1575,7 +1544,7 @@ impl DoxydeRmcpService {
             page_repo.list_children(parent_id).await?
         } else {
             page_repo
-                .list_by_site_id(self.site_id)
+                .list_all()
                 .await?
                 .into_iter()
                 .filter(|p| p.parent_page_id.is_none())
@@ -1595,24 +1564,20 @@ impl DoxydeRmcpService {
         // Create the page
         let template = req.template.unwrap_or_else(|| "default".to_string());
 
-        let new_page = doxyde_core::models::Page {
-            id: None,
-            site_id: self.site_id,
-            parent_page_id: req.parent_page_id,
-            slug: slug.clone(),
-            title: req.title.clone(),
-            template: template.clone(),
-            position,
-            description: req.description,
-            keywords: req.keywords,
-            meta_robots: "index, follow".to_string(),
-            canonical_url: None,
-            og_image_url: None,
-            structured_data_type: "Article".to_string(),
-            sort_mode: "position".to_string(),
-            created_at: chrono::Utc::now(),
-            updated_at: chrono::Utc::now(),
+        let mut new_page = if let Some(parent_id) = req.parent_page_id {
+            doxyde_core::models::Page::new_with_parent(parent_id, slug.clone(), req.title.clone())
+        } else {
+            doxyde_core::models::Page::new(slug.clone(), req.title.clone())
         };
+        
+        // Set additional fields
+        new_page.template = template.clone();
+        new_page.position = position;
+        new_page.description = req.description;
+        new_page.keywords = req.keywords;
+        new_page.meta_robots = "index, follow".to_string();
+        new_page.structured_data_type = "Article".to_string();
+        new_page.sort_mode = "position".to_string();
 
         let page_id = page_repo.create(&new_page).await?;
 
@@ -1622,7 +1587,7 @@ impl DoxydeRmcpService {
         version_repo.create(&version).await?;
 
         // Get all pages to build path
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
         let created_page = page_repo
             .find_by_id(page_id)
             .await?
@@ -1642,9 +1607,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Track if anything changed
         let mut changed = false;
@@ -1657,7 +1619,7 @@ impl DoxydeRmcpService {
                     page_repo.list_children(parent_id).await?
                 } else {
                     page_repo
-                        .list_by_site_id(self.site_id)
+                        .list_all()
                         .await?
                         .into_iter()
                         .filter(|p| p.parent_page_id.is_none())
@@ -1718,7 +1680,7 @@ impl DoxydeRmcpService {
         }
 
         // Get all pages to build path
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
         let updated_page = page_repo
             .find_by_id(req.page_id)
             .await?
@@ -1753,16 +1715,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!(
-                "Component belongs to a page in a different site"
-            ));
-        }
 
         let deleted_position = component.position;
 
@@ -1792,14 +1749,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
 
@@ -1823,14 +1777,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
@@ -1880,16 +1831,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!(
-                "Component belongs to a page in a different site"
-            ));
-        }
 
         Ok(self.component_to_info(component))
     }
@@ -1905,9 +1851,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Store parent_id before deletion
         let parent_id = page.parent_page_id;
@@ -1945,9 +1888,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Cannot move the root page
         if page.parent_page_id.is_none() && req.new_parent_id.is_none() {
@@ -1962,16 +1902,11 @@ impl DoxydeRmcpService {
 
         // Verify new parent exists and belongs to same site
         if let Some(new_parent_id) = req.new_parent_id {
-            let new_parent = page_repo
+            let _new_parent = page_repo
                 .find_by_id(new_parent_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("New parent page not found"))?;
 
-            if new_parent.site_id != self.site_id {
-                return Err(anyhow::anyhow!(
-                    "New parent page does not belong to this site"
-                ));
-            }
 
             // Check for circular reference
             if self
@@ -1990,7 +1925,7 @@ impl DoxydeRmcpService {
             page_repo.list_children(parent_id).await?
         } else {
             page_repo
-                .list_by_site_id(self.site_id)
+                .list_all()
                 .await?
                 .into_iter()
                 .filter(|p| p.parent_page_id.is_none())
@@ -2020,7 +1955,7 @@ impl DoxydeRmcpService {
                 page_repo.list_children(parent_id).await?
             } else {
                 page_repo
-                    .list_by_site_id(self.site_id)
+                    .list_all()
                     .await?
                     .into_iter()
                     .filter(|p| p.parent_page_id.is_none())
@@ -2041,7 +1976,7 @@ impl DoxydeRmcpService {
             page_repo.list_children(parent_id).await?
         } else {
             page_repo
-                .list_by_site_id(self.site_id)
+                .list_all()
                 .await?
                 .into_iter()
                 .filter(|p| p.parent_page_id.is_none())
@@ -2065,7 +2000,7 @@ impl DoxydeRmcpService {
         }
 
         // Get updated page info
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
         let moved_page = page_repo
             .find_by_id(req.page_id)
             .await?
@@ -2086,7 +2021,7 @@ impl DoxydeRmcpService {
         }
 
         let page_repo = PageRepository::new(self.pool.clone());
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
 
         // Check if new_parent_id is a descendant of page_id
         let mut current_id = Some(new_parent_id);
@@ -2150,16 +2085,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!(
-                "Components belong to a page in a different site"
-            ));
-        }
 
         // Get all components in the version
         let mut all_components = component_repo
@@ -2255,16 +2185,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!(
-                "Components belong to a page in a different site"
-            ));
-        }
 
         // Get all components in the version
         let mut all_components = component_repo
@@ -2458,14 +2383,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -2562,14 +2484,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Update component fields
         if let Some(content) = req.content {
@@ -2603,14 +2522,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -2678,7 +2594,11 @@ impl DoxydeRmcpService {
         let original_filename = if req.uri.starts_with("data:") {
             format!("{}.{}", req.slug, metadata.format.extension())
         } else {
-            req.uri.split('/').next_back().unwrap_or("image").to_string()
+            req.uri
+                .split('/')
+                .next_back()
+                .unwrap_or("image")
+                .to_string()
         };
         let filename = generate_unique_filename(&original_filename);
 
@@ -2783,14 +2703,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Update component metadata (not the image file itself)
         let mut content = component.content.clone();
@@ -2835,14 +2752,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -2940,14 +2854,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Update component fields
         let mut content = component.content.clone();
@@ -2987,14 +2898,11 @@ impl DoxydeRmcpService {
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -3091,14 +2999,11 @@ impl DoxydeRmcpService {
 
         // Verify the page belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
-        let page = page_repo
+        let _page = page_repo
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Update component fields
         if let Some(html) = req.html {

@@ -35,6 +35,8 @@ pub struct SiteContext {
     pub sanitized_domain: String,
     /// The site directory path
     pub site_directory: PathBuf,
+    /// The site key (hash suffix) for this domain
+    pub site_key: String,
 }
 
 impl SiteContext {
@@ -47,10 +49,24 @@ impl SiteContext {
             .unwrap_or(&domain)
             .to_string();
 
+        // Extract site key from the directory name (format: domain-hash)
+        let site_key = sanitized.rsplit('-').next().unwrap_or("").to_string();
+
         Self {
             domain,
             sanitized_domain: sanitized,
             site_directory: site_dir,
+            site_key,
+        }
+    }
+
+    /// Create a legacy site context (for single-database mode)
+    pub fn legacy(domain: String) -> Self {
+        Self {
+            domain,
+            sanitized_domain: String::new(),
+            site_directory: PathBuf::new(),
+            site_key: String::new(),
         }
     }
 
@@ -126,6 +142,31 @@ mod tests {
     };
     use tower::ServiceExt;
 
+    fn create_test_config(sites_directory: String) -> Config {
+        Config {
+            database_url: "sqlite:test.db".to_string(),
+            host: "localhost".to_string(),
+            port: 3000,
+            templates_dir: "templates".to_string(),
+            session_secret: "test".to_string(),
+            development_mode: false,
+            uploads_dir: "uploads".to_string(),
+            max_upload_size: 1048576,
+            secure_cookies: false,
+            session_timeout_minutes: 1440,
+            login_attempts_per_minute: 5,
+            api_requests_per_minute: 60,
+            csrf_enabled: true,
+            csrf_token_expiry_hours: 24,
+            csrf_token_length: 32,
+            csrf_header_name: "X-CSRF-Token".to_string(),
+            static_files_max_age: 86400,
+            oauth_token_expiry: 3600,
+            sites_directory,
+            multi_site_mode: true,
+        }
+    }
+
     async fn test_handler(request: Request) -> Result<String, StatusCode> {
         let context = request
             .site_context()
@@ -144,19 +185,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let sites_dir = temp_dir.path().to_string_lossy().to_string();
 
-        let config = Config {
-            database_url: "sqlite:test.db".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test".to_string(),
-            development_mode: false,
-            uploads_dir: "uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-            sites_directory: sites_dir,
-        };
+        let config = create_test_config(sites_dir);
 
         let app = Router::new()
             .route("/", get(test_handler))
@@ -186,19 +215,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let sites_dir = temp_dir.path().to_string_lossy().to_string();
 
-        let config = Config {
-            database_url: "sqlite:test.db".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test".to_string(),
-            development_mode: false,
-            uploads_dir: "uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-            sites_directory: sites_dir,
-        };
+        let config = create_test_config(sites_dir);
 
         let app = Router::new()
             .route("/", get(test_handler))
@@ -291,4 +308,119 @@ mod tests {
         assert!(uploads_path.to_str().unwrap().ends_with("/uploads"));
     }
 
+    #[test]
+    fn test_site_key_consistency() {
+        let base_path = PathBuf::from("/sites");
+
+        // Same domain should always produce same site_key
+        let context1 = SiteContext::new("example.com".to_string(), &base_path);
+        let context2 = SiteContext::new("example.com".to_string(), &base_path);
+        assert_eq!(context1.site_key, context2.site_key);
+
+        // Different domains should produce different site_keys
+        let context3 = SiteContext::new("other.com".to_string(), &base_path);
+        assert_ne!(context1.site_key, context3.site_key);
+    }
+
+    #[test]
+    fn test_subdomain_normalization() {
+        let base_path = PathBuf::from("/sites");
+
+        // All subdomains should normalize to base domain
+        let domains = vec![
+            "www.example.com",
+            "api.example.com",
+            "blog.example.com",
+            "example.com",
+        ];
+
+        let contexts: Vec<SiteContext> = domains
+            .iter()
+            .map(|d| SiteContext::new(d.to_string(), &base_path))
+            .collect();
+
+        // All should have same site_key and directory
+        for context in &contexts[1..] {
+            assert_eq!(context.site_key, contexts[0].site_key);
+            assert_eq!(context.site_directory, contexts[0].site_directory);
+        }
+    }
+
+    #[test]
+    fn test_legacy_context() {
+        let context = SiteContext::legacy("example.com".to_string());
+
+        // Legacy context should have empty paths
+        assert_eq!(context.site_directory, PathBuf::new());
+        assert_eq!(context.domain, "example.com");
+        assert!(context.site_key.is_empty());
+    }
+
+    #[test]
+    fn test_port_stripping() {
+        let base_path = PathBuf::from("/sites");
+
+        // Ports should be stripped from domain
+        let context1 = SiteContext::new("example.com:3000".to_string(), &base_path);
+        let context2 = SiteContext::new("example.com:8080".to_string(), &base_path);
+        let context3 = SiteContext::new("example.com".to_string(), &base_path);
+
+        // All should have same site_key (port ignored)
+        assert_eq!(context1.site_key, context2.site_key);
+        assert_eq!(context2.site_key, context3.site_key);
+    }
+
+    #[test]
+    fn test_case_insensitivity() {
+        let base_path = PathBuf::from("/sites");
+
+        // Domain names should be case-insensitive
+        let context1 = SiteContext::new("Example.COM".to_string(), &base_path);
+        let context2 = SiteContext::new("example.com".to_string(), &base_path);
+        let context3 = SiteContext::new("EXAMPLE.COM".to_string(), &base_path);
+
+        // All should have same site_key
+        assert_eq!(context1.site_key, context2.site_key);
+        assert_eq!(context2.site_key, context3.site_key);
+    }
+
+    #[test]
+    fn test_hash_determinism() {
+        let base_path = PathBuf::from("/sites");
+
+        // Same domain should always produce same hash
+        let context = SiteContext::new("test.example.com".to_string(), &base_path);
+        let site_key = &context.site_key;
+
+        // Verify it's a valid hex string of expected length (8 chars from first 4 bytes of SHA256)
+        assert_eq!(site_key.len(), 8);
+        assert!(site_key.chars().all(|c| c.is_ascii_hexdigit()));
+
+        // Create again and verify same hash
+        let context2 = SiteContext::new("test.example.com".to_string(), &base_path);
+        assert_eq!(context.site_key, context2.site_key);
+    }
+
+    #[tokio::test]
+    async fn test_site_resolver_middleware_integration() {
+        use axum::{body::Body, http::Request as HttpRequest, middleware::from_fn_with_state};
+        use tower::ServiceExt;
+
+        let config = create_test_config("/sites".to_string());
+
+        let app =
+            axum::Router::new().layer(from_fn_with_state(config.clone(), site_resolver_middleware));
+
+        // Test request with Host header
+        let request = HttpRequest::builder()
+            .header("Host", "test.example.com:3000")
+            .uri("/")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+
+        // Should succeed (middleware should add site context)
+        assert_eq!(response.status(), axum::http::StatusCode::NOT_FOUND); // No routes defined, so 404 is expected
+    }
 }

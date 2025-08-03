@@ -86,6 +86,7 @@ pub struct SaveDraftForm {
 /// Display page content edit form (components only)
 pub async fn edit_page_content_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -97,7 +98,7 @@ pub async fn edit_page_content_handler(
     );
 
     // Check permissions
-    match can_edit_page(&state, &site, &user).await {
+    match can_edit_page(&state, &db, &site, &user).await {
         Ok(true) => {}
         Ok(false) => {
             tracing::warn!(
@@ -116,8 +117,8 @@ pub async fn edit_page_content_handler(
         }
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     tracing::info!("=== EDIT PAGE HANDLER START ===");
     tracing::info!("Page: {} (ID: {:?})", page.title, page.id);
@@ -126,7 +127,7 @@ pub async fn edit_page_content_handler(
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let draft_version =
-        match get_or_create_draft(&state.db, page_id, Some(user.user.username.clone())).await {
+        match get_or_create_draft(&db, page_id, Some(user.user.username.clone())).await {
             Ok(draft) => {
                 tracing::info!("Got draft version ID: {:?}", draft.id);
                 draft
@@ -208,7 +209,7 @@ pub async fn edit_page_content_handler(
     let mut context = Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut context, &state, &site, Some(&page))
+    add_base_context(&mut context, &db, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("page", &page);
@@ -218,7 +219,7 @@ pub async fn edit_page_content_handler(
     context.insert("user", &user.user);
 
     // Add all action bar context variables
-    add_action_bar_context(&mut context, &state, &page, &user, ".edit").await?;
+    add_action_bar_context(&mut context, &state, &db, &page, &user, ".edit").await?;
 
     // Get component type usage statistics
     let component_type_stats = match component_repo.get_component_type_usage_stats().await {
@@ -280,14 +281,12 @@ pub async fn edit_page_content_handler(
     context.insert("ordered_component_types", &ordered_component_types);
 
     // Get all pages for blog summary parent page dropdown
-    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
-    let all_pages = match page_repo.list_by_site_id(site_id).await {
+    let all_pages = match page_repo.list_all().await {
         Ok(pages) => pages,
         Err(e) => {
             tracing::error!(
                 error = ?e,
-                site_id = ?site.id,
-                "Failed to list all pages for site"
+                "Failed to list all pages"
             );
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
@@ -317,6 +316,7 @@ pub async fn edit_page_content_handler(
 /// Add a component to the page
 pub async fn add_component_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -329,15 +329,15 @@ pub async fn add_component_handler(
     );
 
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|e| {
             tracing::error!("Failed to get or create draft: {:?}", e);
@@ -407,7 +407,7 @@ pub async fn add_component_handler(
         })?;
 
     // Redirect back to edit page with anchor to the new component
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
         format!("/.edit#component-{}", component_id)
     } else {
@@ -418,8 +418,9 @@ pub async fn add_component_handler(
 
 /// Check if user can edit the page
 pub async fn can_edit_page(
-    state: &AppState,
-    site: &Site,
+    _state: &AppState,
+    db: &sqlx::SqlitePool,
+    _site: &Site,
     user: &CurrentUser,
 ) -> Result<bool, StatusCode> {
     // Admins can always edit
@@ -428,11 +429,11 @@ pub async fn can_edit_page(
     }
 
     // Check site permissions
-    let site_user_repo = SiteUserRepository::new(state.db.clone());
-    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
+    // In multi-database mode, each database represents one site (site_id = 1)
+    let site_user_repo = SiteUserRepository::new(db.clone());
     let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
     let site_user = site_user_repo
-        .find_by_site_and_user(site_id, user_id)
+        .find_by_site_and_user(1, user_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -444,12 +445,16 @@ pub async fn can_edit_page(
 }
 
 /// Build the full path to a page
-async fn build_page_path(state: &AppState, page: &Page) -> Result<String, StatusCode> {
+async fn build_page_path(
+    _state: &AppState,
+    db: &sqlx::SqlitePool,
+    page: &Page,
+) -> Result<String, StatusCode> {
     if page.parent_page_id.is_none() {
         return Ok("/".to_string());
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let breadcrumb = page_repo
         .get_breadcrumb_trail(page_id)
@@ -464,16 +469,17 @@ async fn build_page_path(state: &AppState, page: &Page) -> Result<String, Status
 /// Display new page form
 pub async fn new_page_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
 
     // Get breadcrumb for navigation
@@ -510,7 +516,7 @@ pub async fn new_page_handler(
     let mut context = Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut context, &state, &site, Some(&page))
+    add_base_context(&mut context, &db, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("parent_page", &page);
@@ -519,7 +525,7 @@ pub async fn new_page_handler(
     context.insert("user", &user.user);
 
     // Add all action bar context variables
-    add_action_bar_context(&mut context, &state, &page, &user, ".new").await?;
+    add_action_bar_context(&mut context, &state, &db, &page, &user, ".new").await?;
 
     // Render the new page template
     let html = state
@@ -533,24 +539,23 @@ pub async fn new_page_handler(
 /// Create a new page
 pub async fn create_page_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     parent_page: Page,
     user: CurrentUser,
     Form(form): Form<NewPageForm>,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Create the new page
-    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
     let parent_page_id = parent_page.id.ok_or(StatusCode::NOT_FOUND)?;
     let mut new_page = if form.slug.is_empty() {
-        Page::new_with_parent_and_title(site_id, parent_page_id, form.title.clone())
+        Page::new_with_parent_and_title(parent_page_id, form.title.clone())
     } else {
         Page::new_with_parent(
-            site_id,
             parent_page_id,
             form.slug.clone(),
             form.title.clone(),
@@ -571,7 +576,7 @@ pub async fn create_page_handler(
         return Err(StatusCode::BAD_REQUEST);
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
     // Calculate the position for the new page
     let siblings = page_repo
@@ -589,7 +594,7 @@ pub async fn create_page_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Build the path to the new page
-    let parent_path = build_page_path(&state, &parent_page).await?;
+    let parent_path = build_page_path(&state, &db, &parent_page).await?;
     let new_page_path = if parent_path == "/" {
         format!("/{}", new_page.slug)
     } else {
@@ -603,17 +608,18 @@ pub async fn create_page_handler(
 /// Update a component
 pub async fn update_component_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
     Form(form): Form<UpdateComponentForm>,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Verify the component belongs to a draft version of this page
     let component = component_repo
@@ -654,7 +660,7 @@ pub async fn update_component_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect back to edit page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
         "/.edit".to_string()
     } else {
@@ -666,52 +672,55 @@ pub async fn update_component_handler(
 /// Publish the draft version
 pub async fn publish_draft_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Publish the draft
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    crate::draft::publish_draft(&state.db, page_id)
+    crate::draft::publish_draft(&db, page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect to view page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     Ok(Redirect::to(&redirect_path).into_response())
 }
 
 /// Discard draft changes
 pub async fn discard_draft_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
     // Delete the draft
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    crate::draft::delete_draft_if_exists(&state.db, page_id)
+    crate::draft::delete_draft_if_exists(&db, page_id)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect to view page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     Ok(Redirect::to(&redirect_path).into_response())
 }
 
 /// Save all component drafts
 pub async fn save_draft_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -726,15 +735,15 @@ pub async fn save_draft_handler(
     tracing::info!("Form struct: {:?}", form);
 
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -861,7 +870,7 @@ pub async fn save_draft_handler(
     tracing::info!("=== SAVE DRAFT HANDLER COMPLETE ===");
 
     // Redirect back to edit page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
         "/.edit".to_string()
     } else {
@@ -876,21 +885,22 @@ pub async fn save_draft_handler(
 /// Delete a component from the draft
 pub async fn delete_component_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
     component_id: i64,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -913,7 +923,7 @@ pub async fn delete_component_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect back to edit page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
         "/.edit".to_string()
     } else {
@@ -925,6 +935,7 @@ pub async fn delete_component_handler(
 /// Move a component up or down
 pub async fn move_component_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -932,15 +943,15 @@ pub async fn move_component_handler(
     direction: &str,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get or create a draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -974,7 +985,7 @@ pub async fn move_component_handler(
     }
 
     // Redirect back to edit page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
         "/.edit".to_string()
     } else {
@@ -989,28 +1000,32 @@ mod tests {
     use crate::test_helpers::{create_test_app_state, create_test_session, create_test_user};
     use doxyde_core::{PageVersion, SiteUser};
     use doxyde_db::repositories::{
-        ComponentRepository, PageRepository, PageVersionRepository, SiteRepository,
+        ComponentRepository, PageRepository, PageVersionRepository,
         SiteUserRepository,
     };
 
-    #[tokio::test]
-    async fn test_save_and_publish_with_deleted_components() -> anyhow::Result<()> {
+    #[sqlx::test]
+    async fn test_save_and_publish_with_deleted_components(
+        pool: sqlx::SqlitePool,
+    ) -> anyhow::Result<()> {
         // Create test app state which includes creating the schema
         let test_state = create_test_app_state().await?;
-        let pool = test_state.db.clone();
         // Setup test data
-        let site_repo = SiteRepository::new(pool.clone());
         let page_repo = PageRepository::new(pool.clone());
         let version_repo = PageVersionRepository::new(pool.clone());
         let component_repo = ComponentRepository::new(pool.clone());
         let site_user_repo = SiteUserRepository::new(pool.clone());
 
-        // Create a site
-        let site = Site::new("localhost:3000".to_string(), "Test Site".to_string());
-        let site_id = site_repo.create(&site).await?;
-
-        // Get the root page that was created with the site
-        let root_page = page_repo.get_root_page(site_id).await?.unwrap();
+        // Get the root page (or create one if it doesn't exist)
+        let root_page = match page_repo.get_root_page().await? {
+            Some(page) => page,
+            None => {
+                // Create a root page
+                let root = Page::new("".to_string(), "Home".to_string());
+                let page_id = page_repo.create(&root).await?;
+                page_repo.find_by_id(page_id).await?.unwrap()
+            }
+        };
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with 3 components
@@ -1110,6 +1125,7 @@ mod tests {
         // Call save_draft_handler (this is where the bug was)
         let result = save_draft_handler(
             app_state.clone(),
+            pool.clone(),
             site.clone(),
             page.clone(),
             current_user.clone(),
@@ -1139,7 +1155,8 @@ mod tests {
         );
 
         // Now publish the draft
-        let publish_result = publish_draft_handler(app_state, site, page, current_user).await;
+        let publish_result =
+            publish_draft_handler(app_state, pool.clone(), site, page, current_user).await;
         assert!(
             publish_result.is_ok(),
             "publish_draft_handler should succeed"
@@ -1178,24 +1195,26 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_add_and_delete_component() -> anyhow::Result<()> {
+    async fn test_add_and_delete_component(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
         // Create test app state
         let test_state = create_test_app_state().await?;
-        let pool = test_state.db.clone();
 
         // Setup test data
-        let site_repo = SiteRepository::new(pool.clone());
         let page_repo = PageRepository::new(pool.clone());
         let version_repo = PageVersionRepository::new(pool.clone());
         let component_repo = ComponentRepository::new(pool.clone());
         let site_user_repo = SiteUserRepository::new(pool.clone());
 
-        // Create a site
-        let site = Site::new("localhost:3000".to_string(), "Test Site".to_string());
-        let site_id = site_repo.create(&site).await?;
-
-        // Get the root page
-        let root_page = page_repo.get_root_page(site_id).await?.unwrap();
+        // Get the root page (or create one if it doesn't exist)
+        let root_page = match page_repo.get_root_page().await? {
+            Some(page) => page,
+            None => {
+                // Create a root page
+                let root = Page::new("".to_string(), "Home".to_string());
+                let page_id = page_repo.create(&root).await?;
+                page_repo.find_by_id(page_id).await?.unwrap()
+            }
+        };
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with no components
@@ -1225,6 +1244,7 @@ mod tests {
 
         let response = add_component_handler(
             app_state.clone(),
+            pool.clone(),
             site.clone(),
             root_page.clone(),
             current_user.clone(),
@@ -1252,6 +1272,7 @@ mod tests {
         // Now delete the component
         let delete_response = delete_component_handler(
             app_state.clone(),
+            pool.clone(),
             site.clone(),
             root_page.clone(),
             current_user.clone(),

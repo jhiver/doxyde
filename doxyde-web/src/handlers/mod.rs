@@ -42,3 +42,14 @@ pub use image_upload::{
 pub use move_page::{do_move_page_handler, move_page_handler};
 pub use properties::{page_properties_handler, update_page_properties_handler};
 pub use reorder::{reorder_page_handler, update_page_order_handler};
+
+// Helper to extract site-specific database from request extensions
+use crate::db_middleware::RequestDbExt;
+use axum::{extract::Request, http::StatusCode};
+use sqlx::SqlitePool;
+
+pub async fn get_site_db<B>(req: &Request<B>) -> Result<SqlitePool, StatusCode> {
+    req.site_db()
+        .map(|db| db.0.clone())
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
+}

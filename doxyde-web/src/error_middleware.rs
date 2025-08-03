@@ -21,11 +21,21 @@ use axum::{
     middleware::Next,
 };
 use axum_extra::extract::Host;
-use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tera::Context;
 
-use crate::{template_context::add_base_context, AppState};
+use crate::{
+    db_middleware::SiteDatabase, error::AppError, template_context::add_base_context, AppState,
+};
+
+/// Helper to extract site-specific database from request extensions
+fn get_site_db_from_request(request: &Request<Body>) -> Result<sqlx::SqlitePool, AppError> {
+    request
+        .extensions()
+        .get::<SiteDatabase>()
+        .map(|db| db.0.clone())
+        .ok_or_else(|| AppError::internal_server_error("Site-specific database not found"))
+}
 
 /// Middleware to enhance error responses with proper templates
 pub async fn error_enhancer_middleware(
@@ -34,6 +44,9 @@ pub async fn error_enhancer_middleware(
     request: Request<Body>,
     next: Next,
 ) -> Result<Response<Body>, Response<Body>> {
+    // Extract site-specific database before consuming the request
+    let db = get_site_db_from_request(&request).ok();
+
     // Call the next handler
     let response = next.run(request).await;
 
@@ -41,8 +54,10 @@ pub async fn error_enhancer_middleware(
     let status = response.status();
     if status.is_client_error() || status.is_server_error() {
         // Try to enhance the error response
-        if let Ok(enhanced) = enhance_error_response(status, &host, &state).await {
-            return Ok(enhanced);
+        if let Some(database) = db {
+            if let Ok(enhanced) = enhance_error_response(status, &host, &state, database).await {
+                return Ok(enhanced);
+            }
         }
     }
 
@@ -54,11 +69,11 @@ async fn enhance_error_response(
     status: StatusCode,
     host: &str,
     state: &AppState,
+    db: sqlx::SqlitePool,
 ) -> Result<Response<Body>, ()> {
-    // Try to find the site
-    let site_repo = SiteRepository::new(state.db.clone());
-    let site = match site_repo.find_by_domain(host).await {
-        Ok(Some(site)) => site,
+    // Try to find the site using the site-specific database
+    let site = match crate::site_config::get_site_config(&db, host).await {
+        Ok(site) => site,
         _ => return Err(()),
     };
 
@@ -66,7 +81,7 @@ async fn enhance_error_response(
     let mut context = Context::new();
 
     // Add base context for consistent site branding
-    if add_base_context(&mut context, state, &site, None)
+    if add_base_context(&mut context, &db, &site, None)
         .await
         .is_err()
     {

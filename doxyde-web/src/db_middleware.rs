@@ -15,7 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
-    extract::{Request, State},
+    extract::{FromRequestParts, Request, State},
+    http::{request::Parts, StatusCode},
     middleware::Next,
     response::Response,
 };
@@ -27,12 +28,28 @@ use crate::{db_router::DatabaseRouter, site_resolver::RequestSiteExt};
 #[derive(Clone)]
 pub struct SiteDatabase(pub SqlitePool);
 
+// Implement extractor for SiteDatabase
+impl<S> FromRequestParts<S> for SiteDatabase
+where
+    S: Send + Sync,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<SiteDatabase>()
+            .cloned()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+}
+
 /// Extension trait to get site-specific database from request
 pub trait RequestDbExt {
     fn site_db(&self) -> Option<&SiteDatabase>;
 }
 
-impl RequestDbExt for Request {
+impl<B> RequestDbExt for Request<B> {
     fn site_db(&self) -> Option<&SiteDatabase> {
         self.extensions().get::<SiteDatabase>()
     }
@@ -45,9 +62,7 @@ pub async fn database_injection_middleware(
     next: Next,
 ) -> Response {
     // Get site context from request (set by site_resolver_middleware)
-    let site_info = request
-        .site_context()
-        .map(|ctx| ctx.domain.clone());
+    let site_info = request.site_context().map(|ctx| ctx.domain.clone());
 
     if let Some(domain) = site_info {
         // Get site context again for the router
@@ -57,10 +72,7 @@ pub async fn database_injection_middleware(
                 Ok(pool) => {
                     // Inject pool into request extensions
                     request.extensions_mut().insert(SiteDatabase(pool));
-                    tracing::debug!(
-                        "Injected database pool for site: {}",
-                        domain
-                    );
+                    tracing::debug!("Injected database pool for site: {}", domain);
                 }
                 Err(e) => {
                     tracing::error!("Failed to get database pool for site '{}': {:?}", domain, e);
@@ -98,16 +110,9 @@ mod tests {
     };
     use tower::ServiceExt;
 
-    async fn test_handler(request: Request) -> Result<String, StatusCode> {
-        let db = request.site_db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-
-        // Just verify we got a pool
-        Ok(format!("pool_size:{}", db.0.size()))
-    }
-
-    #[tokio::test]
-    async fn test_database_injection_with_site_context() {
-        let config = Config {
+    fn create_test_config(sites_directory: Option<String>) -> Config {
+        let has_sites_dir = sites_directory.is_some();
+        Config {
             database_url: "sqlite::memory:".to_string(),
             host: "localhost".to_string(),
             port: 3000,
@@ -118,10 +123,29 @@ mod tests {
             max_upload_size: 1048576,
             secure_cookies: false,
             session_timeout_minutes: 1440,
-            sites_directory: None,
-            multi_site_mode: false,
-        };
+            login_attempts_per_minute: 5,
+            api_requests_per_minute: 60,
+            csrf_enabled: true,
+            csrf_token_expiry_hours: 24,
+            csrf_token_length: 32,
+            csrf_header_name: "X-CSRF-Token".to_string(),
+            static_files_max_age: 86400,
+            oauth_token_expiry: 3600,
+            sites_directory: sites_directory.unwrap_or_else(|| "".to_string()),
+            multi_site_mode: has_sites_dir,
+        }
+    }
 
+    async fn test_handler(request: Request) -> Result<String, StatusCode> {
+        let db = request.site_db().ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        // Just verify we got a pool
+        Ok(format!("pool_size:{}", db.0.size()))
+    }
+
+    #[tokio::test]
+    async fn test_database_injection_with_site_context() {
+        let config = create_test_config(None);
         let router = DatabaseRouter::new(config).await.unwrap();
 
         let app = Router::new()
@@ -151,21 +175,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_database_injection_without_site_context() {
-        let config = Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test".to_string(),
-            development_mode: false,
-            uploads_dir: "uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-            sites_directory: None,
-            multi_site_mode: false,
-        };
-
+        let config = create_test_config(None);
         let router = DatabaseRouter::new(config).await.unwrap();
 
         let app = Router::new()
@@ -197,21 +207,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let sites_dir = temp_dir.path().to_string_lossy().to_string();
 
-        let config = Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test".to_string(),
-            development_mode: false,
-            uploads_dir: "uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-            sites_directory: Some(sites_dir),
-            multi_site_mode: true,
-        };
-
+        let config = create_test_config(Some(sites_dir));
         let router = DatabaseRouter::new(config.clone()).await.unwrap();
 
         let app = Router::new()
@@ -251,21 +247,7 @@ mod tests {
         let temp_dir = TempDir::new().unwrap();
         let sites_dir = temp_dir.path().to_string_lossy().to_string();
 
-        let config = Config {
-            database_url: "sqlite::memory:".to_string(),
-            host: "localhost".to_string(),
-            port: 3000,
-            templates_dir: "templates".to_string(),
-            session_secret: "test".to_string(),
-            development_mode: false,
-            uploads_dir: "uploads".to_string(),
-            max_upload_size: 1048576,
-            secure_cookies: false,
-            session_timeout_minutes: 1440,
-            sites_directory: Some(sites_dir.clone()),
-            multi_site_mode: true,
-        };
-
+        let config = create_test_config(Some(sites_dir.clone()));
         let router = Arc::new(DatabaseRouter::new(config.clone()).await.unwrap());
 
         // Track which sites were accessed

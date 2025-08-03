@@ -24,10 +24,14 @@ use doxyde_db::repositories::{
     ComponentRepository, PageRepository, PageVersionRepository, SiteUserRepository,
 };
 use serde::Deserialize;
+use sqlx::SqlitePool;
 use std::fs;
 use std::path::PathBuf;
 
-use crate::{auth::CurrentUser, path_security::validate_safe_path, state::AppState};
+use crate::{
+    auth::CurrentUser, db_middleware::SiteDatabase, path_security::validate_safe_path,
+    state::AppState,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct ImagePreviewQuery {
@@ -39,10 +43,11 @@ pub async fn serve_image_handler(
     State(state): State<AppState>,
     site: Site,
     Path((slug, format)): Path<(String, String)>,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     // Search for an image component with this slug
-    let component_repo = ComponentRepository::new(state.db.clone());
-    let page_version_repo = PageVersionRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
+    let page_version_repo = PageVersionRepository::new(db.clone());
 
     // Find all published page versions for this site
     let site_id = site.id.ok_or_else(|| {
@@ -93,8 +98,13 @@ pub async fn serve_image_handler(
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
-                            return serve_image_file(file_path, &format, &state.config.uploads_dir, state.config.static_files_max_age)
-                                .await;
+                            return serve_image_file(
+                                file_path,
+                                &format,
+                                &state.config.uploads_dir,
+                                state.config.static_files_max_age,
+                            )
+                            .await;
                         } else {
                             // Log missing file_path for debugging
                             tracing::warn!(
@@ -167,6 +177,7 @@ pub async fn image_preview_handler(
     site: Site,
     Query(params): Query<ImagePreviewQuery>,
     user: CurrentUser,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     tracing::debug!(
         "Image preview requested - component_id: {}, site_id: {:?}, user_id: {:?}",
@@ -176,10 +187,10 @@ pub async fn image_preview_handler(
     );
 
     // Get and validate the component
-    let component = get_and_validate_component(&state, params.component_id).await?;
+    let component = get_and_validate_component(&db, params.component_id).await?;
 
     // Check permissions
-    check_component_permissions(&state, &site, &component, &user).await?;
+    check_component_permissions(&db, &site, &component, &user).await?;
 
     // Extract image data and serve
     let (file_path, format) = extract_image_data(&component)?;
@@ -191,17 +202,23 @@ pub async fn image_preview_handler(
         state.config.uploads_dir
     );
 
-    serve_image_file(file_path, format, &state.config.uploads_dir, state.config.static_files_max_age).await
+    serve_image_file(
+        file_path,
+        format,
+        &state.config.uploads_dir,
+        state.config.static_files_max_age,
+    )
+    .await
 }
 
 /// Get component and validate it's an image type
 async fn get_and_validate_component(
-    state: &AppState,
+    db: &SqlitePool,
     component_id: i64,
 ) -> Result<doxyde_core::models::component::Component, StatusCode> {
     tracing::debug!("Fetching component with id: {}", component_id);
 
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
     let component = component_repo
         .find_by_id(component_id)
         .await
@@ -235,13 +252,13 @@ async fn get_and_validate_component(
 
 /// Check if user has permission to view this component
 async fn check_component_permissions(
-    state: &AppState,
+    db: &SqlitePool,
     site: &Site,
     component: &doxyde_core::models::component::Component,
     user: &CurrentUser,
 ) -> Result<(), StatusCode> {
     // Get the page version
-    let page_version_repo = PageVersionRepository::new(state.db.clone());
+    let page_version_repo = PageVersionRepository::new(db.clone());
     let page_version = page_version_repo
         .find_by_id(component.page_version_id)
         .await
@@ -265,7 +282,7 @@ async fn check_component_permissions(
     );
 
     // Get the page
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page = page_repo
         .find_by_id(page_version.page_id)
         .await
@@ -279,26 +296,16 @@ async fn check_component_permissions(
         })?;
 
     tracing::debug!(
-        "Page found - id: {}, site_id: {}, current_site_id: {:?}",
+        "Page found - id: {}, current_site_id: {:?}",
         page.id.unwrap_or(-1),
-        page.site_id,
         site.id
     );
 
-    // Verify the page belongs to the current site
+    // Get site_id for permission checking
     let site_id = site.id.ok_or_else(|| {
         tracing::error!("Site has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
-    if page.site_id != site_id {
-        tracing::warn!(
-            "Page site_id {} doesn't match current site_id {}",
-            page.site_id,
-            site_id
-        );
-        return Err(StatusCode::FORBIDDEN);
-    }
 
     // Check if user can edit the page
     if !user.user.is_admin {
@@ -307,7 +314,7 @@ async fn check_component_permissions(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-        let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_user_repo = SiteUserRepository::new(db.clone());
         let site_user = site_user_repo
             .find_by_site_and_user(site_id, user_id)
             .await

@@ -22,7 +22,7 @@ use axum::{
 };
 use axum_extra::extract::Host;
 use doxyde_core::models::{Page, Site};
-use doxyde_db::repositories::{PageRepository, SiteRepository};
+use doxyde_db::repositories::PageRepository;
 
 use crate::{
     auth::CurrentUser,
@@ -41,6 +41,7 @@ pub async fn handle_action(
     Host(host): Host,
     uri: Uri,
     State(state): State<AppState>,
+    db: sqlx::SqlitePool,
     user: CurrentUser,
     body: String,
 ) -> Result<Response, StatusCode> {
@@ -54,15 +55,16 @@ pub async fn handle_action(
         body.len()
     );
 
-    let site = resolve_site(&state, &host).await?;
-    let page = resolve_page(&state, &site, &content_path).await?;
+    let site = resolve_site(&db, &host).await?;
+    let page = resolve_page(&db, &site, &content_path).await?;
 
-    route_to_handler(state, site, page, user, body, content_path).await
+    route_to_handler(state, db, site, page, user, body, content_path).await
 }
 
 /// Route to the appropriate handler based on action
 async fn route_to_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -70,12 +72,14 @@ async fn route_to_handler(
     content_path: ContentPath,
 ) -> Result<Response, StatusCode> {
     match content_path.action.as_deref() {
-        Some(".edit") | Some(".content") => handle_edit_action(state, site, page, user, body).await,
-        Some(".new") => handle_new_page(state, site, page, user, body).await,
-        Some(".properties") => handle_properties(state, site, page, user, body).await,
-        Some(".move") => handle_move_page(state, site, page, user, body).await,
-        Some(".delete") => handle_delete_page(state, site, page, user, body).await,
-        Some(".reorder") => handle_reorder(state, site, page, user, body, content_path).await,
+        Some(".edit") | Some(".content") => {
+            handle_edit_action(state, db, site, page, user, body).await
+        }
+        Some(".new") => handle_new_page(state, db, site, page, user, body).await,
+        Some(".properties") => handle_properties(state, db, site, page, user, body).await,
+        Some(".move") => handle_move_page(state, db, site, page, user, body).await,
+        Some(".delete") => handle_delete_page(state, db, site, page, user, body).await,
+        Some(".reorder") => handle_reorder(state, db, site, page, user, body, content_path).await,
         _ => Err(StatusCode::NOT_FOUND),
     }
 }
@@ -83,6 +87,7 @@ async fn route_to_handler(
 /// Handle edit/content action
 async fn handle_edit_action(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -93,14 +98,16 @@ async fn handle_edit_action(
 
     match action.as_deref() {
         Some("save_draft") | Some("publish_draft") => {
-            handle_save_or_publish(state, site, page, user, form_data, &action).await
+            handle_save_or_publish(state, db, site, page, user, form_data, &action).await
         }
-        Some("discard_draft") => handle_discard_draft(state, site, page, user).await,
-        Some("add_component") => handle_add_component(state, site, page, user, form_data).await,
+        Some("discard_draft") => handle_discard_draft(state, db, site, page, user).await,
+        Some("add_component") => handle_add_component(state, db, site, page, user, form_data).await,
         Some("delete_component") => {
-            handle_delete_component(state, site, page, user, form_data).await
+            handle_delete_component(state, db, site, page, user, form_data).await
         }
-        Some("move_component") => handle_move_component(state, site, page, user, form_data).await,
+        Some("move_component") => {
+            handle_move_component(state, db, site, page, user, form_data).await
+        }
         _ => Err(StatusCode::BAD_REQUEST),
     }
 }
@@ -108,6 +115,7 @@ async fn handle_edit_action(
 /// Handle save_draft or publish_draft actions
 async fn handle_save_or_publish(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -119,27 +127,29 @@ async fn handle_save_or_publish(
     let save_form = parse_save_draft_form(&form_data)?;
 
     if action.as_deref() == Some("save_draft") {
-        save_draft(state, site, page, user, save_form).await
+        save_draft(state, db, site, page, user, save_form).await
     } else {
-        save_and_publish(state, site, page, user, save_form).await
+        save_and_publish(state, db, site, page, user, save_form).await
     }
 }
 
 /// Save draft
 async fn save_draft(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
     save_form: SaveDraftForm,
 ) -> Result<Response, StatusCode> {
-    crate::handlers::save_draft_handler(state, site, page, user, axum::extract::Form(save_form))
+    crate::handlers::save_draft_handler(state, db, site, page, user, axum::extract::Form(save_form))
         .await
 }
 
 /// Save and publish draft
 async fn save_and_publish(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -148,6 +158,7 @@ async fn save_and_publish(
     // First save the draft
     crate::handlers::save_draft_handler(
         state.clone(),
+        db.clone(),
         site.clone(),
         page.clone(),
         user.clone(),
@@ -156,22 +167,24 @@ async fn save_and_publish(
     .await?;
 
     // Then publish it
-    crate::handlers::publish_draft_handler(state, site, page, user).await
+    crate::handlers::publish_draft_handler(state, db, site, page, user).await
 }
 
 /// Handle discard draft
 async fn handle_discard_draft(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
-    crate::handlers::discard_draft_handler(state, site, page, user).await
+    crate::handlers::discard_draft_handler(state, db, site, page, user).await
 }
 
 /// Handle add component
 async fn handle_add_component(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -179,13 +192,21 @@ async fn handle_add_component(
 ) -> Result<Response, StatusCode> {
     let add_form = parse_add_component_form(&form_data);
 
-    crate::handlers::add_component_handler(state, site, page, user, axum::extract::Form(add_form))
-        .await
+    crate::handlers::add_component_handler(
+        state,
+        db,
+        site,
+        page,
+        user,
+        axum::extract::Form(add_form),
+    )
+    .await
 }
 
 /// Handle delete component
 async fn handle_delete_component(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -193,12 +214,13 @@ async fn handle_delete_component(
 ) -> Result<Response, StatusCode> {
     let component_id = extract_component_id(&form_data, "delete_component_id")?;
 
-    crate::handlers::delete_component_handler(state, site, page, user, component_id).await
+    crate::handlers::delete_component_handler(state, db, site, page, user, component_id).await
 }
 
 /// Handle move component
 async fn handle_move_component(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -209,6 +231,7 @@ async fn handle_move_component(
 
     crate::handlers::save_draft_handler(
         state.clone(),
+        db.clone(),
         site.clone(),
         page.clone(),
         user.clone(),
@@ -222,6 +245,7 @@ async fn handle_move_component(
 
     crate::handlers::move_component_handler(
         state,
+        db,
         site,
         page,
         user,
@@ -234,6 +258,7 @@ async fn handle_move_component(
 /// Handle new page creation
 async fn handle_new_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -241,13 +266,14 @@ async fn handle_new_page(
 ) -> Result<Response, StatusCode> {
     let new_form: NewPageForm = parse_form(&body)?;
 
-    crate::handlers::create_page_handler(state, site, page, user, axum::extract::Form(new_form))
+    crate::handlers::create_page_handler(state, db, site, page, user, axum::extract::Form(new_form))
         .await
 }
 
 /// Handle properties update
 async fn handle_properties(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -257,6 +283,7 @@ async fn handle_properties(
 
     crate::handlers::update_page_properties_handler(
         state,
+        db,
         site,
         page,
         user,
@@ -268,6 +295,7 @@ async fn handle_properties(
 /// Handle page move
 async fn handle_move_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -275,13 +303,21 @@ async fn handle_move_page(
 ) -> Result<Response, StatusCode> {
     let move_form: MovePageForm = parse_form(&body)?;
 
-    crate::handlers::do_move_page_handler(state, site, page, user, axum::extract::Form(move_form))
-        .await
+    crate::handlers::do_move_page_handler(
+        state,
+        db,
+        site,
+        page,
+        user,
+        axum::extract::Form(move_form),
+    )
+    .await
 }
 
 /// Handle page deletion
 async fn handle_delete_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -291,6 +327,7 @@ async fn handle_delete_page(
 
     crate::handlers::do_delete_page_handler(
         state,
+        db,
         site,
         page,
         user,
@@ -302,6 +339,7 @@ async fn handle_delete_page(
 /// Handle reorder pages
 async fn handle_reorder(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -314,6 +352,7 @@ async fn handle_reorder(
 
     crate::handlers::update_page_order_handler(
         State(state.into()),
+        db,
         site,
         page.clone(),
         user,
@@ -473,41 +512,37 @@ fn parse_add_component_form(form_data: &[(String, String)]) -> AddComponentForm 
 }
 
 /// Resolve site from host domain
-async fn resolve_site(state: &AppState, host: &str) -> Result<Site, StatusCode> {
-    let site_repo = SiteRepository::new(state.db.clone());
-    site_repo
-        .find_by_domain(host)
+async fn resolve_site(db: &sqlx::SqlitePool, host: &str) -> Result<Site, StatusCode> {
+    crate::site_config::get_site_config(db, host)
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, host = host, "Failed to find site by domain");
+            tracing::error!(error = %e, host = host, "Failed to get site config");
             StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or(StatusCode::NOT_FOUND)
+        })
 }
 
 /// Resolve page from content path
 async fn resolve_page(
-    state: &AppState,
-    site: &Site,
+    db: &sqlx::SqlitePool,
+    _site: &Site,
     content_path: &ContentPath,
 ) -> Result<Page, StatusCode> {
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
-    let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
     if content_path.path == "/" {
-        get_root_page(&page_repo, site_id).await
+        get_root_page(&page_repo).await
     } else {
-        navigate_to_page(&page_repo, site_id, &content_path.path).await
+        navigate_to_page(&page_repo, &content_path.path).await
     }
 }
 
 /// Get root page for a site
-async fn get_root_page(page_repo: &PageRepository, site_id: i64) -> Result<Page, StatusCode> {
+async fn get_root_page(page_repo: &PageRepository) -> Result<Page, StatusCode> {
     page_repo
-        .get_root_page(site_id)
+        .get_root_page()
         .await
         .map_err(|e| {
-            tracing::error!(error = %e, site_id = site_id, "Failed to get root page");
+            tracing::error!(error = %e, "Failed to get root page");
             StatusCode::INTERNAL_SERVER_ERROR
         })?
         .ok_or(StatusCode::NOT_FOUND)
@@ -516,11 +551,10 @@ async fn get_root_page(page_repo: &PageRepository, site_id: i64) -> Result<Page,
 /// Navigate through page hierarchy to find target page
 async fn navigate_to_page(
     page_repo: &PageRepository,
-    site_id: i64,
     path: &str,
 ) -> Result<Page, StatusCode> {
     let segments = parse_path_segments(path);
-    let mut current_page = get_root_page(page_repo, site_id).await?;
+    let mut current_page = get_root_page(page_repo).await?;
 
     for segment in segments {
         let current_page_id = current_page.id.ok_or(StatusCode::NOT_FOUND)?;

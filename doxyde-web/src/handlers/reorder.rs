@@ -48,12 +48,13 @@ struct ReorderContext {
 
 pub async fn reorder_page_handler(
     State(state): State<Arc<AppState>>,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     current_user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Get child pages using the sorted method
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let children = page_repo.list_children_sorted(page_id).await.map_err(|e| {
         tracing::error!(error = ?e, "Failed to list children");
@@ -129,7 +130,7 @@ pub async fn reorder_page_handler(
     let mut tera_context = tera::Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut tera_context, &state, &site, Some(&page))
+    add_base_context(&mut tera_context, &db, &site, Some(&page))
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to add base context for reorder page");
@@ -143,7 +144,15 @@ pub async fn reorder_page_handler(
     tera_context.insert("user", &current_user.user);
 
     // Add all action bar context variables
-    add_action_bar_context(&mut tera_context, &state, &page, &current_user, ".reorder").await?;
+    add_action_bar_context(
+        &mut tera_context,
+        &state,
+        &db,
+        &page,
+        &current_user,
+        ".reorder",
+    )
+    .await?;
 
     match state.templates.render("page_reorder.html", &tera_context) {
         Ok(html) => Ok(Html(html).into_response()),
@@ -155,7 +164,8 @@ pub async fn reorder_page_handler(
 }
 
 pub async fn update_page_order_handler(
-    State(state): State<Arc<AppState>>,
+    State(_state): State<Arc<AppState>>,
+    db: sqlx::SqlitePool,
     _site: Site,
     page: Page,
     _current_user: CurrentUser,
@@ -165,7 +175,7 @@ pub async fn update_page_order_handler(
     // Simple permission check - user must be logged in
     // In production, you might want to check site permissions here
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
     // Update the page's sort mode if it changed
     if page.sort_mode != sort_mode {

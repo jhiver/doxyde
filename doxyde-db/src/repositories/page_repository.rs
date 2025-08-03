@@ -37,11 +37,10 @@ impl PageRepository {
 
         let result = sqlx::query(
             r#"
-            INSERT INTO pages (site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO pages (parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             "#,
         )
-        .bind(page.site_id)
         .bind(page.parent_page_id)
         .bind(&page.slug)
         .bind(&page.title)
@@ -65,9 +64,9 @@ impl PageRepository {
 
     pub async fn find_by_id(&self, id: i64) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE id = ?
             "#,
@@ -80,7 +79,6 @@ impl PageRepository {
         match result {
             Some((
                 id,
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -119,7 +117,6 @@ impl PageRepository {
 
                 Ok(Some(Page {
                     id: Some(id),
-                    site_id,
                     parent_page_id,
                     slug,
                     title,
@@ -140,25 +137,23 @@ impl PageRepository {
         }
     }
 
-    pub async fn find_by_slug_and_site_id(&self, slug: &str, site_id: i64) -> Result<Option<Page>> {
+    pub async fn find_by_slug(&self, slug: &str) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
-            WHERE slug = ? AND site_id = ?
+            WHERE slug = ?
             "#,
             )
             .bind(slug)
-            .bind(site_id)
             .fetch_optional(&self.pool)
             .await
-            .context("Failed to find page by slug and site_id")?;
+            .context("Failed to find page by slug")?;
 
         match result {
             Some((
                 id,
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -197,7 +192,6 @@ impl PageRepository {
 
                 Ok(Some(Page {
                     id: Some(id),
-                    site_id,
                     parent_page_id,
                     slug,
                     title,
@@ -218,25 +212,22 @@ impl PageRepository {
         }
     }
 
-    pub async fn list_by_site_id(&self, site_id: i64) -> Result<Vec<Page>> {
+    pub async fn list_all(&self) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
-            WHERE site_id = ?
             ORDER BY parent_page_id, position, slug
             "#,
             )
-            .bind(site_id)
             .fetch_all(&self.pool)
             .await
-            .context("Failed to list pages by site_id")?;
+            .context("Failed to list all pages")?;
 
         let mut pages = Vec::new();
         for (
             id,
-            site_id,
             parent_page_id,
             slug,
             title,
@@ -276,7 +267,6 @@ impl PageRepository {
 
             pages.push(Page {
                 id: Some(id),
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -303,11 +293,10 @@ impl PageRepository {
         let rows_affected = sqlx::query(
             r#"
             UPDATE pages
-            SET site_id = ?, parent_page_id = ?, slug = ?, title = ?, description = ?, keywords = ?, template = ?, meta_robots = ?, canonical_url = ?, og_image_url = ?, structured_data_type = ?, position = ?, sort_mode = ?, updated_at = ?
+            SET parent_page_id = ?, slug = ?, title = ?, description = ?, keywords = ?, template = ?, meta_robots = ?, canonical_url = ?, og_image_url = ?, structured_data_type = ?, position = ?, sort_mode = ?, updated_at = ?
             WHERE id = ?
             "#,
         )
-        .bind(page.site_id)
         .bind(page.parent_page_id)
         .bind(&page.slug)
         .bind(&page.title)
@@ -415,7 +404,7 @@ impl PageRepository {
 
         let query = format!(
             r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE parent_page_id = ?
             ORDER BY {}
@@ -426,7 +415,6 @@ impl PageRepository {
         let results = sqlx::query_as::<
             _,
             (
-                i64,
                 i64,
                 Option<i64>,
                 String,
@@ -452,7 +440,6 @@ impl PageRepository {
         let mut pages = Vec::new();
         for (
             id,
-            site_id,
             parent_page_id,
             slug,
             title,
@@ -492,7 +479,6 @@ impl PageRepository {
 
             pages.push(Page {
                 id: Some(id),
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -515,9 +501,9 @@ impl PageRepository {
 
     pub async fn list_children(&self, parent_page_id: i64) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE parent_page_id = ?
             ORDER BY position, slug
@@ -531,7 +517,6 @@ impl PageRepository {
         let mut pages = Vec::new();
         for (
             id,
-            site_id,
             parent_page_id,
             slug,
             title,
@@ -571,7 +556,6 @@ impl PageRepository {
 
             pages.push(Page {
                 id: Some(id),
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -593,17 +577,16 @@ impl PageRepository {
     }
 
     /// List all root-level pages for a site (pages with no parent)
-    pub async fn list_root_pages(&self, site_id: i64) -> Result<Vec<Page>> {
+    pub async fn list_root_pages(&self) -> Result<Vec<Page>> {
         let results =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
-            WHERE site_id = ? AND parent_page_id IS NULL
+            WHERE parent_page_id IS NULL
             ORDER BY position, slug
             "#,
             )
-            .bind(site_id)
             .fetch_all(&self.pool)
             .await
             .context("Failed to list root pages")?;
@@ -611,7 +594,6 @@ impl PageRepository {
         let mut pages = Vec::new();
         for (
             id,
-            site_id,
             parent_page_id,
             slug,
             title,
@@ -651,7 +633,6 @@ impl PageRepository {
 
             pages.push(Page {
                 id: Some(id),
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -904,9 +885,9 @@ impl PageRepository {
             .context("Failed to start transaction")?;
 
         // Get the page to be moved (within transaction)
-        let page = sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+        let page = sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
             r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
             WHERE id = ?
             "#
@@ -919,30 +900,29 @@ impl PageRepository {
 
         let page = Page {
             id: Some(page.0),
-            site_id: page.1,
-            parent_page_id: page.2,
-            slug: page.3,
-            title: page.4,
-            description: page.5,
-            keywords: page.6,
-            template: page.7,
-            meta_robots: page.8,
-            canonical_url: page.9,
-            og_image_url: page.10,
-            structured_data_type: page.11,
-            position: page.12,
-            sort_mode: page.13,
-            created_at: chrono::DateTime::parse_from_rfc3339(&page.14)
+            parent_page_id: page.1,
+            slug: page.2,
+            title: page.3,
+            description: page.4,
+            keywords: page.5,
+            template: page.6,
+            meta_robots: page.7,
+            canonical_url: page.8,
+            og_image_url: page.9,
+            structured_data_type: page.10,
+            position: page.11,
+            sort_mode: page.12,
+            created_at: chrono::DateTime::parse_from_rfc3339(&page.13)
                 .unwrap_or_else(|_| {
-                    chrono::NaiveDateTime::parse_from_str(&page.14, "%Y-%m-%d %H:%M:%S")
+                    chrono::NaiveDateTime::parse_from_str(&page.13, "%Y-%m-%d %H:%M:%S")
                         .unwrap_or_else(|_| chrono::Utc::now().naive_utc())
                         .and_utc()
                         .fixed_offset()
                 })
                 .with_timezone(&chrono::Utc),
-            updated_at: chrono::DateTime::parse_from_rfc3339(&page.15)
+            updated_at: chrono::DateTime::parse_from_rfc3339(&page.14)
                 .unwrap_or_else(|_| {
-                    chrono::NaiveDateTime::parse_from_str(&page.15, "%Y-%m-%d %H:%M:%S")
+                    chrono::NaiveDateTime::parse_from_str(&page.14, "%Y-%m-%d %H:%M:%S")
                         .unwrap_or_else(|_| chrono::Utc::now().naive_utc())
                         .and_utc()
                         .fixed_offset()
@@ -955,25 +935,19 @@ impl PageRepository {
             return Err(anyhow::anyhow!("Cannot move root page"));
         }
 
-        // Get the new parent (within transaction)
-        let new_parent_site =
-            sqlx::query_scalar::<_, i64>("SELECT site_id FROM pages WHERE id = ?")
+        // Check that new parent exists (within transaction)
+        let new_parent_exists =
+            sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM pages WHERE id = ?)")
                 .bind(new_parent_id)
-                .fetch_optional(&mut *tx)
+                .fetch_one(&mut *tx)
                 .await
                 .context("Failed to check new parent")?;
 
-        match new_parent_site {
-            None => {
-                return Err(anyhow::anyhow!(
-                    "New parent page with id {} not found",
-                    new_parent_id
-                ))
-            }
-            Some(parent_site_id) if parent_site_id != page.site_id => {
-                return Err(anyhow::anyhow!("Cannot move page to a different site"));
-            }
-            Some(_) => {} // Same site, continue
+        if !new_parent_exists {
+            return Err(anyhow::anyhow!(
+                "New parent page with id {} not found",
+                new_parent_id
+            ));
         }
 
         // Check if already at this parent (no-op)
@@ -1001,10 +975,9 @@ impl PageRepository {
             r#"
             SELECT id 
             FROM pages 
-            WHERE site_id = ? AND parent_page_id = ? AND slug = ? AND id != ?
+            WHERE parent_page_id = ? AND slug = ? AND id != ?
             "#,
         )
-        .bind(page.site_id)
         .bind(new_parent_id)
         .bind(&page.slug)
         .bind(page_id)
@@ -1054,16 +1027,15 @@ impl PageRepository {
         Ok(())
     }
 
-    pub async fn get_root_page(&self, site_id: i64) -> Result<Option<Page>> {
+    pub async fn get_root_page(&self) -> Result<Option<Page>> {
         let result =
-            sqlx::query_as::<_, (i64, i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
+            sqlx::query_as::<_, (i64, Option<i64>, String, String, Option<String>, Option<String>, String, String, Option<String>, Option<String>, String, i32, String, String, String)>(
                 r#"
-            SELECT id, site_id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
+            SELECT id, parent_page_id, slug, title, description, keywords, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at
             FROM pages
-            WHERE site_id = ? AND parent_page_id IS NULL
+            WHERE parent_page_id IS NULL
             "#,
             )
-            .bind(site_id)
             .fetch_optional(&self.pool)
             .await
             .context("Failed to get root page")?;
@@ -1071,7 +1043,6 @@ impl PageRepository {
         match result {
             Some((
                 id,
-                site_id,
                 parent_page_id,
                 slug,
                 title,
@@ -1110,7 +1081,6 @@ impl PageRepository {
 
                 Ok(Some(Page {
                     id: Some(id),
-                    site_id,
                     parent_page_id,
                     slug,
                     title,
@@ -1140,8 +1110,8 @@ impl PageRepository {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page with id {} not found", page_id))?;
 
-        // Get all pages in the same site
-        let all_pages = self.list_by_site_id(page.site_id).await?;
+        // Get all pages in the site
+        let all_pages = self.list_all().await?;
 
         // Get all descendants of the current page
         let descendants = self.get_all_descendants(page_id).await?;
@@ -1186,7 +1156,6 @@ impl PageRepository {
     /// Generate a unique slug for a page under the given parent
     pub async fn generate_unique_slug(
         &self,
-        site_id: i64,
         parent_page_id: Option<i64>,
         base_slug: &str,
     ) -> Result<String> {
@@ -1199,9 +1168,8 @@ impl PageRepository {
                 r#"
                 SELECT COUNT(*) as "count: i64" 
                 FROM pages 
-                WHERE site_id = ? AND parent_page_id IS ? AND slug = ?
+                WHERE parent_page_id IS ? AND slug = ?
                 "#,
-                site_id,
                 parent_page_id,
                 slug
             )
@@ -1228,7 +1196,7 @@ impl PageRepository {
 
         // Ensure slug is unique
         page.slug = self
-            .generate_unique_slug(page.site_id, page.parent_page_id, &page.slug)
+            .generate_unique_slug(page.parent_page_id, &page.slug)
             .await?;
 
         // Create the page with the unique slug
@@ -1257,12 +1225,12 @@ mod tests {
     }
 
     // Helper function to get the root page ID for a site
-    async fn get_root_page_id(pool: &SqlitePool, site_id: i64) -> Result<i64> {
+    async fn get_root_page_id(pool: &SqlitePool) -> Result<i64> {
         let repo = PageRepository::new(pool.clone());
         let root_page = repo
-            .get_root_page(site_id)
+            .get_root_page()
             .await?
-            .ok_or_else(|| anyhow::anyhow!("Root page not found for site {}", site_id))?;
+            .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
         root_page
             .id
             .ok_or_else(|| anyhow::anyhow!("Root page has no ID"))
@@ -1289,12 +1257,11 @@ mod tests {
         .execute(pool)
         .await?;
 
-        // Create pages table with foreign key to sites
+        // Create pages table
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS pages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                site_id INTEGER NOT NULL,
                 parent_page_id INTEGER,
                 slug TEXT NOT NULL,
                 title TEXT NOT NULL,
@@ -1309,9 +1276,8 @@ mod tests {
                 sort_mode TEXT NOT NULL DEFAULT 'created_at_asc',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-                FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
                 FOREIGN KEY (parent_page_id) REFERENCES pages(id) ON DELETE CASCADE,
-                UNIQUE(site_id, parent_page_id, slug)
+                UNIQUE(parent_page_id, slug)
             )
             "#,
         )
@@ -1357,12 +1323,17 @@ mod tests {
         .execute(pool)
         .await?;
 
-        // Create a test site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site = Site::new("test-site.com".to_string(), "Test Site".to_string());
-        let site_id = site_repo.create(&site).await?;
+        // Create a root page for testing (since we no longer have sites)
+        sqlx::query(
+            r#"
+            INSERT INTO pages (parent_page_id, slug, title, description, template, meta_robots, canonical_url, og_image_url, structured_data_type, position, sort_mode, created_at, updated_at)
+            VALUES (NULL, '', 'Home', 'Welcome to our site', 'default', 'index,follow', NULL, NULL, 'WebPage', 0, 'created_at_asc', datetime('now'), datetime('now'))
+            "#
+        )
+        .execute(pool)
+        .await?;
 
-        Ok(site_id)
+        Ok(1) // Return dummy site_id for tests that still expect it
     }
 
     #[sqlx::test]
@@ -1373,11 +1344,10 @@ mod tests {
         let repo = PageRepository::new(pool);
 
         // Get the root page that was created automatically
-        let root_page = repo.get_root_page(site_id).await?.unwrap();
+        let root_page = repo.get_root_page().await?.unwrap();
 
         // Create a child page under the root
         let page = Page::new_with_parent(
-            site_id,
             root_page.id.unwrap(),
             "about".to_string(),
             "About Us".to_string(),
@@ -1405,11 +1375,10 @@ mod tests {
         let repo = PageRepository::new(pool);
 
         // Get the root page that was created automatically
-        let root_page = repo.get_root_page(site_id).await?.unwrap();
+        let root_page = repo.get_root_page().await?.unwrap();
 
         // Create a child page under the root
         let page = Page::new_with_parent(
-            site_id,
             root_page.id.unwrap(),
             "services".to_string(),
             "Our Services".to_string(),
@@ -1448,11 +1417,10 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get the root page that was created automatically
-        let root_page_id = get_root_page_id(&pool, site_id).await?;
+        let root_page_id = get_root_page_id(&pool).await?;
 
         // Create parent page as child of root
         let parent_page = Page::new_with_parent(
-            site_id,
             root_page_id,
             "parent".to_string(),
             "Parent Page".to_string(),
@@ -1460,12 +1428,8 @@ mod tests {
         let parent_id = repo.create(&parent_page).await?;
 
         // Create child page
-        let mut child_page = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let mut child_page =
+            Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         child_page.position = 1;
         let child_id = repo.create(&child_page).await?;
 
@@ -1498,21 +1462,13 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create two pages with same slug under same parent
-        let page1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "duplicate".to_string(),
-            "First Page".to_string(),
-        );
-        let page2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "duplicate".to_string(),
-            "Second Page".to_string(),
-        );
+        let page1 =
+            Page::new_with_parent(root_id, "duplicate".to_string(), "First Page".to_string());
+        let page2 =
+            Page::new_with_parent(root_id, "duplicate".to_string(), "Second Page".to_string());
 
         // First insert should succeed
         let id1 = repo.create(&page1).await?;
@@ -1574,7 +1530,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
         // Try to create a page with non-existent site but valid parent
@@ -1595,28 +1551,13 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create child pages
         let pages = vec![
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "page1".to_string(),
-                "Page One".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "page2".to_string(),
-                "Page Two".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "page3".to_string(),
-                "Page Three".to_string(),
-            ),
+            Page::new_with_parent(root_id, "page1".to_string(), "Page One".to_string()),
+            Page::new_with_parent(root_id, "page2".to_string(), "Page Two".to_string()),
+            Page::new_with_parent(root_id, "page3".to_string(), "Page Three".to_string()),
         ];
 
         let mut ids = Vec::new();
@@ -1649,15 +1590,10 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "findme".to_string(),
-            "Find Me Page".to_string(),
-        );
+        let page = Page::new_with_parent(root_id, "findme".to_string(), "Find Me Page".to_string());
 
         // Create the page first
         let id = repo.create(&page).await?;
@@ -1696,11 +1632,10 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
         let page = Page::new_with_parent(
-            site_id,
             root_id,
             "timestamp".to_string(),
             "Timestamp Page".to_string(),
@@ -1739,30 +1674,15 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create multiple child pages
         let pages = vec![
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "first".to_string(),
-                "First Page".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "second".to_string(),
-                "Second Page".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "third".to_string(),
-                "Third Page".to_string(),
-            ),
+            Page::new_with_parent(root_id, "first".to_string(), "First Page".to_string()),
+            Page::new_with_parent(root_id, "second".to_string(), "Second Page".to_string()),
+            Page::new_with_parent(root_id, "third".to_string(), "Third Page".to_string()),
         ];
 
         let mut ids = Vec::new();
@@ -1809,11 +1729,10 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
         let page = Page::new_with_parent(
-            site_id,
             root_id,
             "deleteme".to_string(),
             "Delete Me Page".to_string(),
@@ -1840,26 +1759,22 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_existing_page() -> Result<()> {
+    async fn test_find_by_slug_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "about-us".to_string(),
-            "About Us Page".to_string(),
-        );
+        let page =
+            Page::new_with_parent(root_id, "about-us".to_string(), "About Us Page".to_string());
 
         // Create the page first
         let id = repo.create(&page).await?;
 
         // Find it by slug and site_id
-        let found = repo.find_by_slug_and_site_id("about-us", site_id).await?;
+        let found = repo.find_by_slug("about-us").await?;
 
         assert!(found.is_some());
         let found_page = found.unwrap();
@@ -1872,16 +1787,14 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_non_existing_page() -> Result<()> {
+    async fn test_find_by_slug_non_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
         // Try to find a non-existing page
-        let found = repo
-            .find_by_slug_and_site_id("nonexistent", site_id)
-            .await?;
+        let found = repo.find_by_slug("nonexistent").await?;
 
         assert!(found.is_none());
 
@@ -1889,7 +1802,7 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_wrong_site() -> Result<()> {
+    async fn test_find_by_slug_wrong_site() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id1 = setup_test_db(&pool).await?;
 
@@ -1913,7 +1826,7 @@ mod tests {
         repo.create(&page).await?;
 
         // Try to find it with site2's ID
-        let found = repo.find_by_slug_and_site_id("test-page", site_id2).await?;
+        let found = repo.find_by_slug("test-page").await?;
 
         assert!(found.is_none());
 
@@ -1921,7 +1834,7 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_same_slug_different_sites() -> Result<()> {
+    async fn test_find_by_slug_same_slug_different_sites() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id1 = setup_test_db(&pool).await?;
 
@@ -1953,12 +1866,12 @@ mod tests {
         let id2 = repo.create(&page2).await?;
 
         // Find first page
-        let found1 = repo.find_by_slug_and_site_id("about", site_id1).await?;
+        let found1 = repo.find_by_slug("about").await?;
         assert!(found1.is_some());
         assert_eq!(found1.unwrap().id, Some(id1));
 
         // Find second page
-        let found2 = repo.find_by_slug_and_site_id("about", site_id2).await?;
+        let found2 = repo.find_by_slug("about").await?;
         assert!(found2.is_some());
         assert_eq!(found2.unwrap().id, Some(id2));
 
@@ -1966,16 +1879,15 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_case_sensitive() -> Result<()> {
+    async fn test_find_by_slug_case_sensitive() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
         let page = Page::new_with_parent(
-            site_id,
             root_id,
             "CaseSensitive".to_string(),
             "Case Sensitive Page".to_string(),
@@ -1985,27 +1897,23 @@ mod tests {
         repo.create(&page).await?;
 
         // Try to find with exact case - should work
-        let found = repo
-            .find_by_slug_and_site_id("CaseSensitive", site_id)
-            .await?;
+        let found = repo.find_by_slug("CaseSensitive").await?;
         assert!(found.is_some());
 
         // Try to find with different case - SQLite is case-sensitive by default
-        let found_lower = repo
-            .find_by_slug_and_site_id("casesensitive", site_id)
-            .await?;
+        let found_lower = repo.find_by_slug("casesensitive").await?;
         assert!(found_lower.is_none());
 
         Ok(())
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_with_special_characters() -> Result<()> {
+    async fn test_find_by_slug_with_special_characters() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2019,15 +1927,11 @@ mod tests {
         ];
 
         for slug in test_slugs {
-            let page = Page::new_with_parent(
-                site_id,
-                root_id,
-                slug.to_string(),
-                format!("Page for {}", slug),
-            );
+            let page =
+                Page::new_with_parent(root_id, slug.to_string(), format!("Page for {}", slug));
             repo.create(&page).await?;
 
-            let found = repo.find_by_slug_and_site_id(slug, site_id).await?;
+            let found = repo.find_by_slug(slug).await?;
             assert!(found.is_some(), "Should find slug: {}", slug);
             assert_eq!(found.unwrap().slug, slug);
         }
@@ -2036,14 +1940,14 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_empty_slug() -> Result<()> {
+    async fn test_find_by_slug_empty_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
         // Empty slug should find the root page
-        let found = repo.find_by_slug_and_site_id("", site_id).await?;
+        let found = repo.find_by_slug("").await?;
         assert!(found.is_some());
         let page = found.unwrap();
         assert_eq!(page.slug, "");
@@ -2053,28 +1957,28 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_find_by_slug_and_site_id_non_existent_site() -> Result<()> {
+    async fn test_find_by_slug_non_existent_site() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
         // Try to find with non-existent site ID
-        let found = repo.find_by_slug_and_site_id("any-slug", 999).await?;
+        let found = repo.find_by_slug("any-slug").await?;
         assert!(found.is_none());
 
         Ok(())
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_no_pages() -> Result<()> {
+    async fn test_list_all_no_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // List pages for a site (should have 1 root page)
-        let pages = repo.list_by_site_id(site_id).await?;
+        let pages = repo.list_all().await?;
 
         assert_eq!(pages.len(), 1); // Root page exists
 
@@ -2082,26 +1986,21 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_single_page() -> Result<()> {
+    async fn test_list_all_single_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "about".to_string(),
-            "About Page".to_string(),
-        );
+        let page = Page::new_with_parent(root_id, "about".to_string(), "About Page".to_string());
 
         // Create a page
         let id = repo.create(&page).await?;
 
         // List pages (should have root + new page)
-        let pages = repo.list_by_site_id(site_id).await?;
+        let pages = repo.list_all().await?;
 
         assert_eq!(pages.len(), 2); // root + about
                                     // Find the about page in the list
@@ -2113,12 +2012,12 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_multiple_pages_ordered() -> Result<()> {
+    async fn test_list_all_multiple_pages_ordered() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2136,7 +2035,7 @@ mod tests {
         }
 
         // List pages
-        let pages = repo.list_by_site_id(site_id).await?;
+        let pages = repo.list_all().await?;
 
         // Verify they are ordered by slug (including root)
         assert_eq!(pages.len(), 5);
@@ -2151,7 +2050,7 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_multiple_sites() -> Result<()> {
+    async fn test_list_all_multiple_sites() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id1 = setup_test_db(&pool).await?;
 
@@ -2212,14 +2111,14 @@ mod tests {
         }
 
         // List pages for site1 (including root)
-        let pages1 = repo.list_by_site_id(site_id1).await?;
+        let pages1 = repo.list_all().await?;
         assert_eq!(pages1.len(), 3); // 1 root + 2 child pages
         for page in &pages1 {
             assert_eq!(page.site_id, site_id1);
         }
 
         // List pages for site2 (including root)
-        let pages2 = repo.list_by_site_id(site_id2).await?;
+        let pages2 = repo.list_all().await?;
         assert_eq!(pages2.len(), 4); // 1 root + 3 child pages
         for page in &pages2 {
             assert_eq!(page.site_id, site_id2);
@@ -2229,14 +2128,14 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_non_existent_site() -> Result<()> {
+    async fn test_list_all_non_existent_site() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
         // List pages for non-existent site
-        let pages = repo.list_by_site_id(999).await?;
+        let pages = repo.list_all(999).await?;
 
         assert!(pages.is_empty());
 
@@ -2244,12 +2143,12 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_with_special_characters() -> Result<()> {
+    async fn test_list_all_with_special_characters() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2268,7 +2167,7 @@ mod tests {
         }
 
         // List pages
-        let pages = repo.list_by_site_id(site_id).await?;
+        let pages = repo.list_all().await?;
 
         assert_eq!(pages.len(), 6); // 1 root + 5 child pages
                                     // Verify ordering
@@ -2283,12 +2182,12 @@ mod tests {
     }
 
     #[sqlx::test]
-    async fn test_list_by_site_id_after_delete() -> Result<()> {
+    async fn test_list_all_after_delete() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2312,7 +2211,7 @@ mod tests {
             .await?;
 
         // List pages
-        let pages = repo.list_by_site_id(site_id).await?;
+        let pages = repo.list_all().await?;
 
         assert_eq!(pages.len(), 3); // 1 root + 2 remaining child pages
         assert_eq!(pages[0].slug, ""); // root page
@@ -2328,11 +2227,10 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
         let mut page = Page::new_with_parent(
-            site_id,
             root_id,
             "original".to_string(),
             "Original Title".to_string(),
@@ -2369,26 +2267,18 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent page as child of root
-        let parent_page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent_page =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent_page).await?;
 
         // Create another page as child of root
-        let mut page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let mut page =
+            Page::new_with_parent(root_id, "child".to_string(), "Child Page".to_string());
         let id = repo.create(&page).await?;
         page.id = Some(id);
 
@@ -2449,7 +2339,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2487,15 +2377,11 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
-        let mut page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "preserve".to_string(),
-            "Original".to_string(),
-        );
+        let mut page =
+            Page::new_with_parent(root_id, "preserve".to_string(), "Original".to_string());
         let original_created_at = page.created_at;
 
         // Create the page
@@ -2525,7 +2411,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -2569,13 +2455,12 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create a child page to delete
         let page = Page::new_with_parent(
-            site_id,
             root_id,
             "deleteme".to_string(),
             "Delete Me Page".to_string(),
@@ -2622,32 +2507,18 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent page as a child of root
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Create child pages
-        let child1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
-        let child2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
+        let child1 = Page::new_with_parent(parent_id, "child1".to_string(), "Child 1".to_string());
+        let child2 = Page::new_with_parent(parent_id, "child2".to_string(), "Child 2".to_string());
 
         let child1_id = repo.create(&child1).await?;
         let child2_id = repo.create(&child2).await?;
@@ -2684,25 +2555,16 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent as child of root
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let child = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         let child_id = repo.create(&child).await?;
 
         // Delete the child
@@ -2721,30 +2583,15 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create multiple child pages
         let pages = vec![
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "delete1".to_string(),
-                "Delete 1".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "delete2".to_string(),
-                "Delete 2".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id,
-                root_id,
-                "delete3".to_string(),
-                "Delete 3".to_string(),
-            ),
+            Page::new_with_parent(root_id, "delete1".to_string(), "Delete 1".to_string()),
+            Page::new_with_parent(root_id, "delete2".to_string(), "Delete 2".to_string()),
+            Page::new_with_parent(root_id, "delete3".to_string(), "Delete 3".to_string()),
         ];
 
         let mut ids = Vec::new();
@@ -2772,13 +2619,12 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create a child page that we'll delete
         let page = Page::new_with_parent(
-            site_id,
             root_id,
             "double-delete".to_string(),
             "Double Delete".to_string(),
@@ -2823,15 +2669,11 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // List children when there are none
@@ -2847,26 +2689,17 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent as child of root
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Create child
-        let child = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         let child_id = repo.create(&child).await?;
 
         // List children
@@ -2886,42 +2719,26 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent as child of root
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Create children with different positions
-        let mut child1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "beta".to_string(),
-            "Beta Page".to_string(),
-        );
+        let mut child1 =
+            Page::new_with_parent(parent_id, "beta".to_string(), "Beta Page".to_string());
         child1.position = 2;
 
-        let mut child2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "alpha".to_string(),
-            "Alpha Page".to_string(),
-        );
+        let mut child2 =
+            Page::new_with_parent(parent_id, "alpha".to_string(), "Alpha Page".to_string());
         child2.position = 1;
 
-        let mut child3 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "gamma".to_string(),
-            "Gamma Page".to_string(),
-        );
+        let mut child3 =
+            Page::new_with_parent(parent_id, "gamma".to_string(), "Gamma Page".to_string());
         child3.position = 3;
 
         repo.create(&child1).await?;
@@ -2946,38 +2763,22 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent as child of root
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Create children with same position (0)
-        let child1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "zebra".to_string(),
-            "Zebra Page".to_string(),
-        );
-        let child2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "apple".to_string(),
-            "Apple Page".to_string(),
-        );
-        let child3 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "mango".to_string(),
-            "Mango Page".to_string(),
-        );
+        let child1 =
+            Page::new_with_parent(parent_id, "zebra".to_string(), "Zebra Page".to_string());
+        let child2 =
+            Page::new_with_parent(parent_id, "apple".to_string(), "Apple Page".to_string());
+        let child3 =
+            Page::new_with_parent(parent_id, "mango".to_string(), "Mango Page".to_string());
 
         repo.create(&child1).await?;
         repo.create(&child2).await?;
@@ -3001,29 +2802,19 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create hierarchy: root -> parent -> child -> grandchild
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let child = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         let child_id = repo.create(&child).await?;
 
         let grandchild = Page::new_with_parent(
-            site_id,
             child_id,
             "grandchild".to_string(),
             "Grandchild Page".to_string(),
@@ -3126,7 +2917,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3147,17 +2938,12 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create child of root
-        let child = Page::new_with_parent(
-            site_id,
-            root_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(root_id, "child".to_string(), "Child Page".to_string());
         let child_id = repo.create(&child).await?;
 
         // Get breadcrumb trail for child
@@ -3179,33 +2965,24 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create hierarchy: root -> products -> electronics -> phones
-        let products = Page::new_with_parent(
-            site_id,
-            root_id,
-            "products".to_string(),
-            "Products".to_string(),
-        );
+        let products =
+            Page::new_with_parent(root_id, "products".to_string(), "Products".to_string());
         let products_id = repo.create(&products).await?;
 
         let electronics = Page::new_with_parent(
-            site_id,
             products_id,
             "electronics".to_string(),
             "Electronics".to_string(),
         );
         let electronics_id = repo.create(&electronics).await?;
 
-        let phones = Page::new_with_parent(
-            site_id,
-            electronics_id,
-            "phones".to_string(),
-            "Phones".to_string(),
-        );
+        let phones =
+            Page::new_with_parent(electronics_id, "phones".to_string(), "Phones".to_string());
         let phones_id = repo.create(&phones).await?;
 
         // Get breadcrumb trail for phones
@@ -3243,7 +3020,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3273,7 +3050,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3282,20 +3059,10 @@ mod tests {
             Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let child1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
+        let child1 = Page::new_with_parent(parent_id, "child1".to_string(), "Child 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
-        let child2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
+        let child2 = Page::new_with_parent(parent_id, "child2".to_string(), "Child 2".to_string());
         let child2_id = repo.create(&child2).await?;
 
         // Get breadcrumb trail for child1
@@ -3326,15 +3093,11 @@ mod tests {
         let repo = PageRepository::new(pool);
 
         // Site already has a root page created automatically
-        let existing_root = repo.get_root_page(site_id).await?;
+        let existing_root = repo.get_root_page().await?;
         assert!(existing_root.is_some());
 
         // Try to create another root page manually - should fail
-        let root2 = Page::new(
-            site_id,
-            "another-root".to_string(),
-            "Another Root".to_string(),
-        );
+        let root2 = Page::new("another-root".to_string(), "Another Root".to_string());
         let result = repo.create(&root2).await;
         assert!(result.is_err());
         assert!(result
@@ -3351,7 +3114,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3376,26 +3139,17 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent page
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Create child page
-        let child = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         repo.create(&child).await?;
 
         // Try to delete parent page - should fail
@@ -3418,30 +3172,21 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create two parent pages
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "products".to_string(),
-            "Products".to_string(),
-        );
+        let parent1 =
+            Page::new_with_parent(root_id, "products".to_string(), "Products".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "services".to_string(),
-            "Services".to_string(),
-        );
+        let parent2 =
+            Page::new_with_parent(root_id, "services".to_string(), "Services".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
         // Create child with same slug under different parents - should succeed
         let child1 = Page::new_with_parent(
-            site_id,
             parent1_id,
             "overview".to_string(),
             "Product Overview".to_string(),
@@ -3449,7 +3194,6 @@ mod tests {
         let child1_id = repo.create(&child1).await?;
 
         let child2 = Page::new_with_parent(
-            site_id,
             parent2_id,
             "overview".to_string(),
             "Service Overview".to_string(),
@@ -3462,7 +3206,6 @@ mod tests {
 
         // Try to create another child with same slug under parent1 - should fail
         let duplicate = Page::new_with_parent(
-            site_id,
             parent1_id,
             "overview".to_string(),
             "Duplicate Overview".to_string(),
@@ -3507,7 +3250,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Should find root page that was created automatically
-        let found_root = repo.get_root_page(site_id).await?;
+        let found_root = repo.get_root_page().await?;
         assert!(found_root.is_some());
         let found_root = found_root.unwrap();
         assert!(found_root.id.is_some());
@@ -3523,7 +3266,7 @@ mod tests {
         let site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3541,20 +3284,11 @@ mod tests {
             Page::new_with_parent(site_id, root_id, "about".to_string(), "About 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "products".to_string(),
-            "Products".to_string(),
-        );
+        let parent2 =
+            Page::new_with_parent(root_id, "products".to_string(), "Products".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
-        let child2 = Page::new_with_parent(
-            site_id,
-            parent2_id,
-            "about".to_string(),
-            "About 2".to_string(),
-        );
+        let child2 = Page::new_with_parent(parent2_id, "about".to_string(), "About 2".to_string());
         let child2_id = repo.create(&child2).await?;
 
         // Both children should exist with same slug but different parents
@@ -3571,15 +3305,10 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a child page
-        let child = Page::new_with_parent(
-            site_id,
-            root_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(root_id, "child".to_string(), "Child Page".to_string());
         let child_id = repo.create(&child).await?;
 
         // Child should be a descendant of root
@@ -3598,31 +3327,16 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a deep hierarchy: root -> level1 -> level2 -> level3
-        let level1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "level1".to_string(),
-            "Level 1".to_string(),
-        );
+        let level1 = Page::new_with_parent(root_id, "level1".to_string(), "Level 1".to_string());
         let level1_id = repo.create(&level1).await?;
 
-        let level2 = Page::new_with_parent(
-            site_id,
-            level1_id,
-            "level2".to_string(),
-            "Level 2".to_string(),
-        );
+        let level2 = Page::new_with_parent(level1_id, "level2".to_string(), "Level 2".to_string());
         let level2_id = repo.create(&level2).await?;
 
-        let level3 = Page::new_with_parent(
-            site_id,
-            level2_id,
-            "level3".to_string(),
-            "Level 3".to_string(),
-        );
+        let level3 = Page::new_with_parent(level2_id, "level3".to_string(), "Level 3".to_string());
         let level3_id = repo.create(&level3).await?;
 
         // Test various relationships
@@ -3647,7 +3361,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -3667,7 +3381,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Non-existent page is not a descendant of anything
         assert!(!repo.is_descendant_of(9999, root_id).await?);
@@ -3688,7 +3402,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a child
         let child =
@@ -3710,23 +3424,15 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create two siblings under root
-        let sibling1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "sibling1".to_string(),
-            "Sibling 1".to_string(),
-        );
+        let sibling1 =
+            Page::new_with_parent(root_id, "sibling1".to_string(), "Sibling 1".to_string());
         let sibling1_id = repo.create(&sibling1).await?;
 
-        let sibling2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "sibling2".to_string(),
-            "Sibling 2".to_string(),
-        );
+        let sibling2 =
+            Page::new_with_parent(root_id, "sibling2".to_string(), "Sibling 2".to_string());
         let sibling2_id = repo.create(&sibling2).await?;
 
         // Siblings are not descendants of each other
@@ -3790,7 +3496,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page with no children
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -3810,23 +3516,13 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create children under root
-        let child1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
+        let child1 = Page::new_with_parent(root_id, "child1".to_string(), "Child 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
-        let child2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
+        let child2 = Page::new_with_parent(root_id, "child2".to_string(), "Child 2".to_string());
         let child2_id = repo.create(&child2).await?;
 
         // Get descendants of root
@@ -3848,7 +3544,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a deep hierarchy
         // root
@@ -3858,44 +3554,21 @@ mod tests {
         //   │   └── level2b
         //   └── sibling
 
-        let level1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "level1".to_string(),
-            "Level 1".to_string(),
-        );
+        let level1 = Page::new_with_parent(root_id, "level1".to_string(), "Level 1".to_string());
         let level1_id = repo.create(&level1).await?;
 
-        let sibling = Page::new_with_parent(
-            site_id,
-            root_id,
-            "sibling".to_string(),
-            "Sibling".to_string(),
-        );
+        let sibling = Page::new_with_parent(root_id, "sibling".to_string(), "Sibling".to_string());
         let sibling_id = repo.create(&sibling).await?;
 
-        let level2a = Page::new_with_parent(
-            site_id,
-            level1_id,
-            "level2a".to_string(),
-            "Level 2A".to_string(),
-        );
+        let level2a =
+            Page::new_with_parent(level1_id, "level2a".to_string(), "Level 2A".to_string());
         let level2a_id = repo.create(&level2a).await?;
 
-        let level2b = Page::new_with_parent(
-            site_id,
-            level1_id,
-            "level2b".to_string(),
-            "Level 2B".to_string(),
-        );
+        let level2b =
+            Page::new_with_parent(level1_id, "level2b".to_string(), "Level 2B".to_string());
         let level2b_id = repo.create(&level2b).await?;
 
-        let level3 = Page::new_with_parent(
-            site_id,
-            level2a_id,
-            "level3".to_string(),
-            "Level 3".to_string(),
-        );
+        let level3 = Page::new_with_parent(level2a_id, "level3".to_string(), "Level 3".to_string());
         let level3_id = repo.create(&level3).await?;
 
         // Get all descendants of root
@@ -3948,7 +3621,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create pages with specific positions
         let mut page1 =
@@ -3967,21 +3640,13 @@ mod tests {
         repo.create(&page3).await?;
 
         // Create children under page1
-        let mut child1 = Page::new_with_parent(
-            site_id,
-            page1_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
+        let mut child1 =
+            Page::new_with_parent(page1_id, "child1".to_string(), "Child 1".to_string());
         child1.position = 2;
         repo.create(&child1).await?;
 
-        let mut child2 = Page::new_with_parent(
-            site_id,
-            page1_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
+        let mut child2 =
+            Page::new_with_parent(page1_id, "child2".to_string(), "Child 2".to_string());
         child2.position = 1;
         repo.create(&child2).await?;
 
@@ -4057,7 +3722,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create siblings with initial positions
         let mut page1 =
@@ -4102,7 +3767,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create another page at root level (which shouldn't be possible, but for testing)
         // We'll test with pages under root instead
@@ -4133,32 +3798,17 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create two parent pages
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent1".to_string(),
-            "Parent 1".to_string(),
-        );
+        let parent1 = Page::new_with_parent(root_id, "parent1".to_string(), "Parent 1".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent2".to_string(),
-            "Parent 2".to_string(),
-        );
+        let parent2 = Page::new_with_parent(root_id, "parent2".to_string(), "Parent 2".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
         // Create child under parent1
-        let child = Page::new_with_parent(
-            site_id,
-            parent1_id,
-            "child".to_string(),
-            "Child".to_string(),
-        );
+        let child = Page::new_with_parent(parent1_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         // Try to reorder as if child belongs to parent2 - should fail
@@ -4181,7 +3831,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Try to reorder non-existent page
         let result = repo.reorder_siblings(Some(root_id), vec![(9999, 1)]).await;
@@ -4201,7 +3851,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Reorder with empty list - should succeed (no-op)
         repo.reorder_siblings(Some(root_id), vec![]).await?;
@@ -4216,7 +3866,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create three siblings
         let page1 =
@@ -4254,7 +3904,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create two siblings
         let page1 =
@@ -4291,7 +3941,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create structure:
         // root
@@ -4299,28 +3949,13 @@ mod tests {
         //   │   └── child
         //   └── parent2
 
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent1".to_string(),
-            "Parent 1".to_string(),
-        );
+        let parent1 = Page::new_with_parent(root_id, "parent1".to_string(), "Parent 1".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent2".to_string(),
-            "Parent 2".to_string(),
-        );
+        let parent2 = Page::new_with_parent(root_id, "parent2".to_string(), "Parent 2".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
-        let child = Page::new_with_parent(
-            site_id,
-            parent1_id,
-            "child".to_string(),
-            "Child".to_string(),
-        );
+        let child = Page::new_with_parent(parent1_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         // Move child from parent1 to parent2
@@ -4349,7 +3984,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -4373,7 +4008,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -4397,7 +4032,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create hierarchy: root -> parent -> child -> grandchild
         let parent =
@@ -4408,12 +4043,8 @@ mod tests {
             Page::new_with_parent(site_id, parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
-        let grandchild = Page::new_with_parent(
-            site_id,
-            child_id,
-            "grandchild".to_string(),
-            "Grandchild".to_string(),
-        );
+        let grandchild =
+            Page::new_with_parent(child_id, "grandchild".to_string(), "Grandchild".to_string());
         let grandchild_id = repo.create(&grandchild).await?;
 
         // Try to move parent to grandchild - should fail
@@ -4442,7 +4073,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page under root
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -4465,40 +4096,22 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create two parents
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent1".to_string(),
-            "Parent 1".to_string(),
-        );
+        let parent1 = Page::new_with_parent(root_id, "parent1".to_string(), "Parent 1".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent2".to_string(),
-            "Parent 2".to_string(),
-        );
+        let parent2 = Page::new_with_parent(root_id, "parent2".to_string(), "Parent 2".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
         // Create children with same slug under different parents
-        let child1 = Page::new_with_parent(
-            site_id,
-            parent1_id,
-            "sameslug".to_string(),
-            "Child 1".to_string(),
-        );
+        let child1 =
+            Page::new_with_parent(parent1_id, "sameslug".to_string(), "Child 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
-        let child2 = Page::new_with_parent(
-            site_id,
-            parent2_id,
-            "sameslug".to_string(),
-            "Child 2".to_string(),
-        );
+        let child2 =
+            Page::new_with_parent(parent2_id, "sameslug".to_string(), "Child 2".to_string());
         let _child2_id = repo.create(&child2).await?;
 
         // Try to move child1 to parent2 - should fail due to slug conflict
@@ -4551,38 +4164,25 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create parent with existing children
         let parent =
             Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let mut existing1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "existing1".to_string(),
-            "Existing 1".to_string(),
-        );
+        let mut existing1 =
+            Page::new_with_parent(parent_id, "existing1".to_string(), "Existing 1".to_string());
         existing1.position = 10;
         repo.create(&existing1).await?;
 
-        let mut existing2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "existing2".to_string(),
-            "Existing 2".to_string(),
-        );
+        let mut existing2 =
+            Page::new_with_parent(parent_id, "existing2".to_string(), "Existing 2".to_string());
         existing2.position = 20;
         repo.create(&existing2).await?;
 
         // Create page to move
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "moveme".to_string(),
-            "Move Me".to_string(),
-        );
+        let page = Page::new_with_parent(root_id, "moveme".to_string(), "Move Me".to_string());
         let page_id = repo.create(&page).await?;
 
         // Move page to parent
@@ -4602,7 +4202,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Try to move non-existent page
         let result = repo.move_page(9999, root_id).await;
@@ -4622,7 +4222,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
         let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
@@ -4646,7 +4246,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create structure:
         // root
@@ -4656,44 +4256,19 @@ mod tests {
         //   │       └── leaf2
         //   └── parent2
 
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent1".to_string(),
-            "Parent 1".to_string(),
-        );
+        let parent1 = Page::new_with_parent(root_id, "parent1".to_string(), "Parent 1".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent2".to_string(),
-            "Parent 2".to_string(),
-        );
+        let parent2 = Page::new_with_parent(root_id, "parent2".to_string(), "Parent 2".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
-        let branch = Page::new_with_parent(
-            site_id,
-            parent1_id,
-            "branch".to_string(),
-            "Branch".to_string(),
-        );
+        let branch = Page::new_with_parent(parent1_id, "branch".to_string(), "Branch".to_string());
         let branch_id = repo.create(&branch).await?;
 
-        let leaf1 = Page::new_with_parent(
-            site_id,
-            branch_id,
-            "leaf1".to_string(),
-            "Leaf 1".to_string(),
-        );
+        let leaf1 = Page::new_with_parent(branch_id, "leaf1".to_string(), "Leaf 1".to_string());
         let leaf1_id = repo.create(&leaf1).await?;
 
-        let leaf2 = Page::new_with_parent(
-            site_id,
-            branch_id,
-            "leaf2".to_string(),
-            "Leaf 2".to_string(),
-        );
+        let leaf2 = Page::new_with_parent(branch_id, "leaf2".to_string(), "Leaf 2".to_string());
         let leaf2_id = repo.create(&leaf2).await?;
 
         // Move branch (with children) from parent1 to parent2
@@ -4721,7 +4296,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create test pages
         let page1 =
@@ -4758,7 +4333,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Create hierarchy: parent -> child -> grandchild
         let parent =
@@ -4769,21 +4344,12 @@ mod tests {
             Page::new_with_parent(site_id, parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
-        let grandchild = Page::new_with_parent(
-            site_id,
-            child_id,
-            "grandchild".to_string(),
-            "Grandchild".to_string(),
-        );
+        let grandchild =
+            Page::new_with_parent(child_id, "grandchild".to_string(), "Grandchild".to_string());
         let grandchild_id = repo.create(&grandchild).await?;
 
         // Create a sibling to parent
-        let sibling = Page::new_with_parent(
-            site_id,
-            root_id,
-            "sibling".to_string(),
-            "Sibling".to_string(),
-        );
+        let sibling = Page::new_with_parent(root_id, "sibling".to_string(), "Sibling".to_string());
         let sibling_id = repo.create(&sibling).await?;
 
         // Get valid move targets for parent
@@ -4808,7 +4374,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         // Root page should have no valid move targets
         let targets = repo.get_valid_move_targets(root_id).await?;
@@ -4868,7 +4434,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
-        let root = repo.get_root_page(site_id).await?.unwrap();
+        let root = repo.get_root_page().await?.unwrap();
         let root_id = root.id.unwrap();
 
         // Create page1 under root
@@ -4901,29 +4467,20 @@ mod tests {
     async fn test_has_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create a parent page
-        let parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         let parent_id = repo.create(&parent).await?;
 
         // Parent should have no children initially
         assert!(!repo.has_children(parent_id).await?);
 
         // Create a child page
-        let child = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child".to_string(),
-            "Child Page".to_string(),
-        );
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child Page".to_string());
         let _child_id = repo.create(&child).await?;
 
         // Now parent should have children
@@ -4936,17 +4493,12 @@ mod tests {
     async fn test_delete_page_success() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create a page
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "test-page".to_string(),
-            "Test Page".to_string(),
-        );
+        let page = Page::new_with_parent(root_id, "test-page".to_string(), "Test Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Verify page exists
@@ -4965,7 +4517,7 @@ mod tests {
     async fn test_delete_page_with_versions_and_components() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let page_repo = PageRepository::new(pool.clone());
         let version_repo =
@@ -4974,12 +4526,7 @@ mod tests {
             crate::repositories::component_repository::ComponentRepository::new(pool.clone());
 
         // Create a page
-        let page = Page::new_with_parent(
-            site_id,
-            root_id,
-            "test-page".to_string(),
-            "Test Page".to_string(),
-        );
+        let page = Page::new_with_parent(root_id, "test-page".to_string(), "Test Page".to_string());
         let page_id = page_repo.create(&page).await?;
 
         // Create a version
@@ -5016,14 +4563,12 @@ mod tests {
     async fn test_generate_unique_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // First slug should remain unchanged
-        let slug1 = repo
-            .generate_unique_slug(site_id, Some(root_id), "about-us")
-            .await?;
+        let slug1 = repo.generate_unique_slug(Some(root_id), "about-us").await?;
         assert_eq!(slug1, "about-us");
 
         // Create a page with that slug
@@ -5031,9 +4576,7 @@ mod tests {
         repo.create(&page1).await?;
 
         // Next slug with same base should get suffix
-        let slug2 = repo
-            .generate_unique_slug(site_id, Some(root_id), "about-us")
-            .await?;
+        let slug2 = repo.generate_unique_slug(Some(root_id), "about-us").await?;
         assert_eq!(slug2, "about-us-2");
 
         // Create another page
@@ -5041,9 +4584,7 @@ mod tests {
         repo.create(&page2).await?;
 
         // Third slug should get suffix 3
-        let slug3 = repo
-            .generate_unique_slug(site_id, Some(root_id), "about-us")
-            .await?;
+        let slug3 = repo.generate_unique_slug(Some(root_id), "about-us").await?;
         assert_eq!(slug3, "about-us-3");
 
         Ok(())
@@ -5053,17 +4594,13 @@ mod tests {
     async fn test_create_with_auto_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create page with explicit slug
-        let mut page1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "custom-slug".to_string(),
-            "My Page".to_string(),
-        );
+        let mut page1 =
+            Page::new_with_parent(root_id, "custom-slug".to_string(), "My Page".to_string());
         let id1 = repo.create_with_auto_slug(&mut page1).await?;
         assert_eq!(page1.slug, "custom-slug");
 
@@ -5091,40 +4628,26 @@ mod tests {
     async fn test_generate_unique_slug_different_parents() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create two parent pages
-        let parent1 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent1".to_string(),
-            "Parent 1".to_string(),
-        );
+        let parent1 = Page::new_with_parent(root_id, "parent1".to_string(), "Parent 1".to_string());
         let parent1_id = repo.create(&parent1).await?;
 
-        let parent2 = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent2".to_string(),
-            "Parent 2".to_string(),
-        );
+        let parent2 = Page::new_with_parent(root_id, "parent2".to_string(), "Parent 2".to_string());
         let parent2_id = repo.create(&parent2).await?;
 
         // Same slug should be allowed under different parents
-        let slug1 = repo
-            .generate_unique_slug(site_id, Some(parent1_id), "about")
-            .await?;
+        let slug1 = repo.generate_unique_slug(Some(parent1_id), "about").await?;
         assert_eq!(slug1, "about");
 
         let page1 = Page::new_with_parent(site_id, parent1_id, slug1, "About".to_string());
         repo.create(&page1).await?;
 
         // Same slug under different parent should also work
-        let slug2 = repo
-            .generate_unique_slug(site_id, Some(parent2_id), "about")
-            .await?;
+        let slug2 = repo.generate_unique_slug(Some(parent2_id), "about").await?;
         assert_eq!(slug2, "about");
 
         Ok(())
@@ -5134,47 +4657,31 @@ mod tests {
     async fn test_list_children_sorted() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         let site_id = setup_test_db(&pool).await?;
-        let root_id = get_root_page_id(&pool, site_id).await?;
+        let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
         // Create parent page with manual sort mode
-        let mut parent = Page::new_with_parent(
-            site_id,
-            root_id,
-            "parent".to_string(),
-            "Parent Page".to_string(),
-        );
+        let mut parent =
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent Page".to_string());
         parent.sort_mode = "manual".to_string();
         let parent_id = repo.create(&parent).await?;
 
         // Create child pages with different positions and creation times
-        let mut child1 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child1".to_string(),
-            "B Child".to_string(),
-        );
+        let mut child1 =
+            Page::new_with_parent(parent_id, "child1".to_string(), "B Child".to_string());
         child1.position = 2;
         child1.created_at = chrono::Utc::now() - chrono::Duration::days(2);
         let id1 = repo.create(&child1).await?;
 
-        let mut child2 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child2".to_string(),
-            "A Child".to_string(),
-        );
+        let mut child2 =
+            Page::new_with_parent(parent_id, "child2".to_string(), "A Child".to_string());
         child2.position = 1;
         child2.created_at = chrono::Utc::now() - chrono::Duration::days(1);
         let id2 = repo.create(&child2).await?;
 
-        let mut child3 = Page::new_with_parent(
-            site_id,
-            parent_id,
-            "child3".to_string(),
-            "C Child".to_string(),
-        );
+        let mut child3 =
+            Page::new_with_parent(parent_id, "child3".to_string(), "C Child".to_string());
         child3.position = 0;
         child3.created_at = chrono::Utc::now();
         let id3 = repo.create(&child3).await?;

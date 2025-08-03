@@ -19,7 +19,7 @@ use crate::{autoreload_templates::TemplateEngine, AppState};
 #[cfg(test)]
 use doxyde_core::models::{session::Session, site::Site, user::User};
 #[cfg(test)]
-use doxyde_db::repositories::{SessionRepository, SiteRepository, UserRepository};
+use doxyde_db::repositories::{SessionRepository, UserRepository};
 #[cfg(test)]
 use sqlx::SqlitePool;
 #[cfg(test)]
@@ -36,17 +36,19 @@ pub fn create_test_config() -> crate::config::Config {
         session_secret: "test-secret".to_string(),
         development_mode: false,
         uploads_dir: "/tmp/doxyde-test-uploads".to_string(),
-        max_upload_size: 1048576,      // 1MB for tests
-        secure_cookies: false,         // Disable for tests
-        session_timeout_minutes: 1440, // 24 hours
-        login_attempts_per_minute: 5,  // Test default
-        api_requests_per_minute: 60,   // Test default
-        csrf_enabled: true,            // Enable CSRF for tests
-        csrf_token_expiry_hours: 24,   // Test default
-        csrf_token_length: 32,         // Test default
+        max_upload_size: 1048576,                     // 1MB for tests
+        secure_cookies: false,                        // Disable for tests
+        session_timeout_minutes: 1440,                // 24 hours
+        login_attempts_per_minute: 5,                 // Test default
+        api_requests_per_minute: 60,                  // Test default
+        csrf_enabled: true,                           // Enable CSRF for tests
+        csrf_token_expiry_hours: 24,                  // Test default
+        csrf_token_length: 32,                        // Test default
         csrf_header_name: "X-CSRF-Token".to_string(), // Test default
-        static_files_max_age: 3600,    // 1 hour for tests
-        oauth_token_expiry: 3600,      // 1 hour for tests
+        static_files_max_age: 3600,                   // 1 hour for tests
+        oauth_token_expiry: 3600,                     // 1 hour for tests
+        sites_directory: "./test-sites".to_string(),  // Test sites directory
+        multi_site_mode: false,                       // Single database for tests
     }
 }
 
@@ -58,17 +60,15 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     // Create minimal schema for tests
     sqlx::query(
         r#"
-        CREATE TABLE sites (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            domain TEXT NOT NULL UNIQUE,
-            title TEXT NOT NULL,
-            created_at TEXT NOT NULL DEFAULT (datetime('now')),
-            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        CREATE TABLE site_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            title TEXT NOT NULL
         );
+        
+        INSERT INTO site_config (id, title) VALUES (1, 'Test Site');
         
         CREATE TABLE pages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            site_id INTEGER NOT NULL,
             parent_page_id INTEGER,
             slug TEXT NOT NULL,
             title TEXT NOT NULL,
@@ -83,12 +83,10 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
             sort_mode TEXT NOT NULL DEFAULT 'position',
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
             FOREIGN KEY (parent_page_id) REFERENCES pages(id) ON DELETE CASCADE,
-            UNIQUE(site_id, parent_page_id, slug)
+            UNIQUE(parent_page_id, slug)
         );
         
-        CREATE INDEX idx_pages_site_id ON pages(site_id);
         CREATE INDEX idx_pages_parent_page_id ON pages(parent_page_id);
         
         CREATE TABLE users (
@@ -112,14 +110,14 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         
         CREATE TABLE site_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            site_id INTEGER NOT NULL,
+            site_id INTEGER NOT NULL DEFAULT 1,
             user_id INTEGER NOT NULL,
             role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-            FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE(site_id, user_id)
+            UNIQUE(site_id, user_id),
+            CHECK (site_id = 1)
         );
 
         CREATE TABLE page_versions (
@@ -230,14 +228,19 @@ pub async fn create_test_site(
     domain: &str,
     title: &str,
 ) -> Result<Site, anyhow::Error> {
-    let site_repo = SiteRepository::new(pool.clone());
-    let site = Site::new(domain.to_string(), title.to_string());
+    // Update the site_config table with the provided title
+    sqlx::query!("UPDATE site_config SET title = ? WHERE id = 1", title)
+        .execute(pool)
+        .await?;
 
-    let site_id = site_repo.create(&site).await?;
-
-    let site = site_repo.find_by_id(site_id).await?.unwrap();
-
-    Ok(site)
+    // Return a Site object with the configuration
+    Ok(Site {
+        id: Some(1),
+        domain: domain.to_string(),
+        title: title.to_string(),
+        created_at: chrono::Utc::now(),
+        updated_at: chrono::Utc::now(),
+    })
 }
 
 #[cfg(test)]

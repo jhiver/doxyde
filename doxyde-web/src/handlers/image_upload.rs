@@ -25,10 +25,12 @@ use doxyde_core::models::{component::Component, site::Site};
 use doxyde_db::repositories::ComponentRepository;
 use serde::Deserialize;
 use serde_json::json;
+use sqlx::SqlitePool;
 use std::path::PathBuf;
 
 use crate::{
     auth::CurrentUser,
+    db_middleware::SiteDatabase,
     draft::get_or_create_draft,
     state::AppState,
     uploads::{
@@ -42,7 +44,7 @@ use doxyde_db::repositories::{PageRepository, SiteUserRepository};
 
 /// Check if user can edit the page
 async fn can_edit_page(
-    state: &AppState,
+    db: &SqlitePool,
     site: &Site,
     user: &CurrentUser,
 ) -> Result<bool, StatusCode> {
@@ -52,7 +54,7 @@ async fn can_edit_page(
     }
 
     // Check site permissions
-    let site_user_repo = SiteUserRepository::new(state.db.clone());
+    let site_user_repo = SiteUserRepository::new(db.clone());
     let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
     let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
     let site_user = site_user_repo
@@ -69,14 +71,14 @@ async fn can_edit_page(
 
 /// Build the full path to a page
 async fn build_page_path(
-    state: &AppState,
+    db: &SqlitePool,
     page: &doxyde_core::models::page::Page,
 ) -> Result<String, StatusCode> {
     if page.parent_page_id.is_none() {
         return Ok("/".to_string());
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
     let breadcrumb = page_repo
         .get_breadcrumb_trail(page_id)
@@ -107,9 +109,10 @@ pub async fn upload_image_handler(
     page: doxyde_core::models::page::Page,
     user: CurrentUser,
     mut multipart: Multipart,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -195,12 +198,12 @@ pub async fn upload_image_handler(
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get current components to determine position
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
     let draft_version_id = draft_version.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
     let components = component_repo
         .list_by_page_version(draft_version_id)
@@ -240,7 +243,7 @@ pub async fn upload_image_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Redirect back to edit page
-    let redirect_path = build_page_path(&state, &page).await?;
+    let redirect_path = build_page_path(&db, &page).await?;
     let edit_path = if redirect_path == "/" {
         "/.edit".to_string()
     } else {
@@ -256,9 +259,10 @@ pub async fn upload_image_ajax_handler(
     _page: doxyde_core::models::page::Page,
     user: CurrentUser,
     mut multipart: Multipart,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -350,11 +354,12 @@ pub async fn upload_component_image_handler(
     page: doxyde_core::models::page::Page,
     user: CurrentUser,
     mut multipart: Multipart,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     tracing::debug!("Starting upload_component_image_handler");
 
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&db, &site, &user).await? {
         tracing::warn!(
             "User {} does not have permission to edit page",
             user.user.username
@@ -485,11 +490,11 @@ pub async fn upload_component_image_handler(
     tracing::debug!("Saved file to: {:?}", file_path);
 
     // Update the component with the new image data
-    let component_repo = ComponentRepository::new(state.db.clone());
+    let component_repo = ComponentRepository::new(db.clone());
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    let draft_version = get_or_create_draft(&state.db, page_id, Some(user.user.username.clone()))
+    let draft_version = get_or_create_draft(&db, page_id, Some(user.user.username.clone()))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 

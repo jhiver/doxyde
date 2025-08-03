@@ -17,7 +17,7 @@
 use anyhow::Result;
 use doxyde_web::{
     config::Config,
-    db::init_database,
+    db_router::DatabaseRouter,
     rate_limit::{create_api_rate_limiter, create_login_rate_limiter},
     routes,
     state::AppState,
@@ -42,9 +42,12 @@ async fn main() -> Result<()> {
     let config = Config::from_env()?;
     info!("Starting Doxyde web server");
 
-    // Initialize database
-    info!("Initializing database: {}", config.database_url);
-    let db = init_database(&config.database_url).await?;
+    // Initialize database router for multi-site support
+    info!(
+        "Initializing database router with sites directory: {}",
+        config.sites_directory
+    );
+    let db_router = DatabaseRouter::new(config.clone()).await?;
 
     // Initialize templates
     info!("Loading templates from: {}", config.templates_dir);
@@ -60,7 +63,7 @@ async fn main() -> Result<()> {
 
     // Create application state
     let state = AppState::new(
-        db,
+        db_router,
         templates,
         config.clone(),
         login_rate_limiter,

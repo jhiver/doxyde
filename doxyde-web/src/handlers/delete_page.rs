@@ -36,13 +36,14 @@ pub struct DeletePageForm {
 /// Display page delete confirmation
 pub async fn delete_page_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Check permissions
     if !user.user.is_admin {
-        let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_user_repo = SiteUserRepository::new(db.clone());
         let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
         let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo.find_by_site_and_user(site_id, user_id).await {
@@ -55,7 +56,7 @@ pub async fn delete_page_handler(
     }
 
     let page_id = page.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
     // Root pages cannot be deleted
     if page.parent_page_id.is_none() {
@@ -91,7 +92,7 @@ pub async fn delete_page_handler(
     let mut context = Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut context, &state, &site, Some(&page))
+    add_base_context(&mut context, &db, &site, Some(&page))
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     context.insert("page", &page);
@@ -99,7 +100,7 @@ pub async fn delete_page_handler(
     context.insert("user", &user.user);
 
     // Add all action bar context variables
-    add_action_bar_context(&mut context, &state, &page, &user, ".delete").await?;
+    add_action_bar_context(&mut context, &state, &db, &page, &user, ".delete").await?;
 
     let html = state
         .templates
@@ -111,7 +112,8 @@ pub async fn delete_page_handler(
 
 /// Handle page delete confirmation
 pub async fn do_delete_page_handler(
-    state: AppState,
+    _state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
@@ -125,7 +127,7 @@ pub async fn do_delete_page_handler(
 
     // Check permissions again
     if !user.user.is_admin {
-        let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_user_repo = SiteUserRepository::new(db.clone());
         let site_id = site.id.ok_or(StatusCode::NOT_FOUND)?;
         let user_id = user.user.id.ok_or(StatusCode::UNAUTHORIZED)?;
         if let Ok(Some(site_user)) = site_user_repo.find_by_site_and_user(site_id, user_id).await {
@@ -138,7 +140,7 @@ pub async fn do_delete_page_handler(
     }
 
     let page_id = page.id.ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
     // Root pages cannot be deleted
     if page.parent_page_id.is_none() {
@@ -201,14 +203,14 @@ mod tests {
     use doxyde_core::models::permission::SiteUser;
 
     async fn setup_test_pages(
-        state: &AppState,
+        pool: &sqlx::SqlitePool,
         site_id: i64,
     ) -> Result<(Page, Page), anyhow::Error> {
-        let page_repo = PageRepository::new(state.db.clone());
+        let page_repo = PageRepository::new(pool.clone());
 
         // Get root page (created with site)
         let root = page_repo
-            .get_root_page(site_id)
+            .get_root_page()
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
@@ -226,30 +228,36 @@ mod tests {
         Ok((root, page))
     }
 
-    #[tokio::test]
-    async fn test_delete_page_handler_shows_confirmation() -> Result<()> {
+    #[sqlx::test]
+    async fn test_delete_page_handler_shows_confirmation(pool: sqlx::SqlitePool) -> Result<()> {
         let state = create_test_app_state().await?;
-        let user = create_test_user(&state.db, "testuser", "test@example.com", false).await?;
-        let site = create_test_site(&state.db, "localhost", "Test Site").await?;
+        let user = create_test_user(&pool, "testuser", "test@example.com", false).await?;
+        let site = create_test_site(&pool, "localhost", "Test Site").await?;
 
         // Grant editor permission
-        let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_user_repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
-        let (_root, page) = setup_test_pages(&state, site.id.unwrap()).await?;
+        let (_root, page) = setup_test_pages(&pool, site.id.unwrap()).await?;
 
         // Create current user with session
-        let session = create_test_session(&state.db, user.id.unwrap()).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser {
             user: user.clone(),
             session,
         };
 
         // Call the handler
-        let response = delete_page_handler(state.clone(), site.clone(), page.clone(), current_user)
-            .await
-            .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
+        let response = delete_page_handler(
+            state.clone(),
+            pool.clone(),
+            site.clone(),
+            page.clone(),
+            current_user,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
         // Check response is HTML
         let response = response.into_response();
@@ -275,24 +283,24 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_delete_page_handler_blocked_for_root() -> Result<()> {
+    #[sqlx::test]
+    async fn test_delete_page_handler_blocked_for_root(pool: sqlx::SqlitePool) -> Result<()> {
         let state = create_test_app_state().await?;
-        let user = create_test_user(&state.db, "admin", "admin@example.com", true).await?;
-        let site = create_test_site(&state.db, "localhost", "Test Site").await?;
+        let user = create_test_user(&pool, "admin", "admin@example.com", true).await?;
+        let site = create_test_site(&pool, "localhost", "Test Site").await?;
 
-        let page_repo = PageRepository::new(state.db.clone());
+        let page_repo = PageRepository::new(pool.clone());
         let root = page_repo
-            .get_root_page(site.id.unwrap())
+            .get_root_page()
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create current user with session
-        let session = create_test_session(&state.db, user.id.unwrap()).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser { user, session };
 
         // Call the handler with root page - should return forbidden
-        let result = delete_page_handler(state, site, root, current_user).await;
+        let result = delete_page_handler(state, pool, site, root, current_user).await;
 
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), StatusCode::FORBIDDEN);
@@ -300,16 +308,16 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_delete_page_handler_blocked_with_children() -> Result<()> {
+    #[sqlx::test]
+    async fn test_delete_page_handler_blocked_with_children(pool: sqlx::SqlitePool) -> Result<()> {
         let state = create_test_app_state().await?;
-        let user = create_test_user(&state.db, "admin", "admin@example.com", true).await?;
-        let site = create_test_site(&state.db, "localhost", "Test Site").await?;
+        let user = create_test_user(&pool, "admin", "admin@example.com", true).await?;
+        let site = create_test_site(&pool, "localhost", "Test Site").await?;
 
-        let (_root, parent) = setup_test_pages(&state, site.id.unwrap()).await?;
+        let (_root, parent) = setup_test_pages(&pool, site.id.unwrap()).await?;
 
         // Create a child page
-        let page_repo = PageRepository::new(state.db.clone());
+        let page_repo = PageRepository::new(pool.clone());
         let child = Page::new_with_parent(
             site.id.unwrap(),
             parent.id.unwrap(),
@@ -319,11 +327,11 @@ mod tests {
         page_repo.create(&child).await?;
 
         // Create current user with session
-        let session = create_test_session(&state.db, user.id.unwrap()).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser { user, session };
 
         // Call the handler - should redirect since page has children
-        let response = delete_page_handler(state, site, parent.clone(), current_user)
+        let response = delete_page_handler(state, pool, site, parent.clone(), current_user)
             .await
             .map_err(|e| anyhow::anyhow!("Handler failed with status: {:?}", e))?;
 
@@ -341,22 +349,22 @@ mod tests {
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_do_delete_page_handler() -> Result<()> {
+    #[sqlx::test]
+    async fn test_do_delete_page_handler(pool: sqlx::SqlitePool) -> Result<()> {
         let state = create_test_app_state().await?;
-        let user = create_test_user(&state.db, "editor", "editor@example.com", false).await?;
-        let site = create_test_site(&state.db, "localhost", "Test Site").await?;
+        let user = create_test_user(&pool, "editor", "editor@example.com", false).await?;
+        let site = create_test_site(&pool, "localhost", "Test Site").await?;
 
         // Grant editor permission
-        let site_user_repo = SiteUserRepository::new(state.db.clone());
+        let site_user_repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
-        let (_root, page) = setup_test_pages(&state, site.id.unwrap()).await?;
+        let (_root, page) = setup_test_pages(&pool, site.id.unwrap()).await?;
         let page_id = page.id.unwrap();
 
         // Create current user with session
-        let session = create_test_session(&state.db, user.id.unwrap()).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser { user, session };
 
         // Create form with proper confirmation
@@ -367,6 +375,7 @@ mod tests {
         // Call the handler
         let response = do_delete_page_handler(
             state.clone(),
+            pool.clone(),
             site.clone(),
             page.clone(),
             current_user,
@@ -384,24 +393,24 @@ mod tests {
         }
 
         // Verify page was actually deleted
-        let page_repo = PageRepository::new(state.db);
+        let page_repo = PageRepository::new(pool);
         let deleted_page = page_repo.find_by_id(page_id).await?;
         assert!(deleted_page.is_none());
 
         Ok(())
     }
 
-    #[tokio::test]
-    async fn test_do_delete_page_requires_confirmation() -> Result<()> {
+    #[sqlx::test]
+    async fn test_do_delete_page_requires_confirmation(pool: sqlx::SqlitePool) -> Result<()> {
         let state = create_test_app_state().await?;
-        let user = create_test_user(&state.db, "admin", "admin@example.com", true).await?;
-        let site = create_test_site(&state.db, "localhost", "Test Site").await?;
+        let user = create_test_user(&pool, "admin", "admin@example.com", true).await?;
+        let site = create_test_site(&pool, "localhost", "Test Site").await?;
 
-        let (_root, page) = setup_test_pages(&state, site.id.unwrap()).await?;
+        let (_root, page) = setup_test_pages(&pool, site.id.unwrap()).await?;
         let page_id = page.id.unwrap();
 
         // Create current user with session
-        let session = create_test_session(&state.db, user.id.unwrap()).await?;
+        let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser { user, session };
 
         // Create form with wrong confirmation
@@ -412,6 +421,7 @@ mod tests {
         // Call the handler
         let response = do_delete_page_handler(
             state.clone(),
+            pool.clone(),
             site.clone(),
             page.clone(),
             current_user,
@@ -432,7 +442,7 @@ mod tests {
         }
 
         // Verify page was NOT deleted
-        let page_repo = PageRepository::new(state.db);
+        let page_repo = PageRepository::new(pool);
         let still_exists = page_repo.find_by_id(page_id).await?;
         assert!(still_exists.is_some());
 

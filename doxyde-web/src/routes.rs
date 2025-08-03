@@ -15,11 +15,20 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
-    auth::CurrentUser, content, debug_middleware::debug_form_middleware,
-    error_middleware::error_enhancer_middleware, handlers, rate_limit::login_rate_limit_middleware,
-    request_logging::request_logging_middleware, rmcp,
-    security_headers::create_security_headers_middleware, session_activity::update_session_activity,
-    AppState, configuration::Configuration,
+    auth::CurrentUser,
+    configuration::Configuration,
+    content,
+    db_middleware::{database_injection_middleware, SiteDatabase},
+    debug_middleware::debug_form_middleware,
+    error_middleware::error_enhancer_middleware,
+    handlers,
+    rate_limit::login_rate_limit_middleware,
+    request_logging::request_logging_middleware,
+    rmcp,
+    security_headers::create_security_headers_middleware,
+    session_activity::update_session_activity,
+    site_resolver::site_resolver_middleware,
+    AppState,
 };
 use axum::extract::{DefaultBodyLimit, Query, State};
 use axum::http::StatusCode;
@@ -30,7 +39,6 @@ use axum::{
     Router,
 };
 use axum_extra::extract::Host;
-use doxyde_db::repositories::SiteRepository;
 use std::sync::Arc;
 use tower::ServiceBuilder;
 use tower_http::services::ServeDir;
@@ -38,7 +46,7 @@ use tower_http::trace::TraceLayer;
 
 pub fn create_router(state: AppState) -> Router {
     let max_upload_size = state.config.max_upload_size;
-    
+
     // Load the configuration to get security headers config
     let config = Configuration::load().expect("Failed to load configuration");
     let headers_middleware = create_security_headers_middleware(config.security.headers);
@@ -109,6 +117,15 @@ pub fn create_router(state: AppState) -> Router {
             update_session_activity,
         ))
         .layer(middleware::from_fn(headers_middleware))
+        // Add site resolution and database injection middleware
+        .layer(middleware::from_fn_with_state(
+            state.db_router.clone(),
+            database_injection_middleware,
+        ))
+        .layer(middleware::from_fn_with_state(
+            state.config.clone(),
+            site_resolver_middleware,
+        ))
         .layer(
             ServiceBuilder::new()
                 .layer(DefaultBodyLimit::max(max_upload_size))
@@ -128,6 +145,7 @@ async fn image_preview(
     State(state): State<AppState>,
     Query(params): Query<handlers::image_serve::ImagePreviewQuery>,
     user: CurrentUser,
+    SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     // Use the full host as domain (including port)
     let domain = &host;
@@ -138,25 +156,17 @@ async fn image_preview(
         domain,
         params.component_id
     );
-
-    // Get the site
-    let site_repo = SiteRepository::new(state.db.clone());
-    let site = site_repo
-        .find_by_domain(domain)
+    let site = crate::site_config::get_site_config(&db, domain)
         .await
         .map_err(|e| {
-            tracing::error!("Failed to lookup site for domain '{}': {}", domain, e);
+            tracing::error!("Failed to get site config for domain '{}': {}", domain, e);
             StatusCode::INTERNAL_SERVER_ERROR
-        })?
-        .ok_or_else(|| {
-            tracing::warn!("Site not found for domain '{}'", domain);
-            StatusCode::NOT_FOUND
         })?;
 
     tracing::debug!("Site found: {:?}", site.id);
 
     // Call the actual handler
-    handlers::image_preview_handler(State(state), site, Query(params), user).await
+    handlers::image_preview_handler(State(state), site, Query(params), user, SiteDatabase(db)).await
 }
 
 #[cfg(test)]

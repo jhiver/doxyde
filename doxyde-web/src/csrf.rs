@@ -9,9 +9,10 @@ use axum::{
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use sqlx::SqlitePool;
 use std::sync::Arc;
 
-use crate::{auth::SessionUser, AppState};
+use crate::{auth::SessionUser, db_middleware::SiteDatabase, AppState};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CsrfToken {
@@ -49,15 +50,27 @@ where
             .await
             .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-        get_or_create_csrf_token(&app_state, &session_user.session_id)
-            .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
+        // Get site-specific database from request extensions
+        let site_db = parts
+            .extensions
+            .get::<SiteDatabase>()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
+        get_or_create_csrf_token(
+            &site_db.0,
+            &session_user.session_id,
+            app_state.config.csrf_token_length,
+        )
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
-pub async fn get_or_create_csrf_token(state: &AppState, session_id: &str) -> Result<CsrfToken> {
-    let pool = &state.db;
-
+pub async fn get_or_create_csrf_token(
+    pool: &SqlitePool,
+    session_id: &str,
+    token_length: usize,
+) -> Result<CsrfToken> {
     // Try to get existing token
     let existing = sqlx::query!(
         r#"
@@ -77,7 +90,7 @@ pub async fn get_or_create_csrf_token(state: &AppState, session_id: &str) -> Res
     }
 
     // Create new token using configured length
-    let csrf_token = CsrfToken::new(state.config.csrf_token_length);
+    let csrf_token = CsrfToken::new(token_length);
 
     sqlx::query!(
         r#"
@@ -113,10 +126,20 @@ pub async fn csrf_protection_middleware(
         None => return Ok(next.run(request).await), // No session to protect
     };
 
+    // Get site-specific database from request extensions
+    let site_db = request
+        .extensions()
+        .get::<SiteDatabase>()
+        .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+
     // Get the expected CSRF token from session
-    let expected_token = get_or_create_csrf_token(&state, &session_user.session_id)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let expected_token = get_or_create_csrf_token(
+        &site_db.0,
+        &session_user.session_id,
+        state.config.csrf_token_length,
+    )
+    .await
+    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Extract provided token from header or form using configured header name
     let provided_token = extract_csrf_token(&request, &state.config.csrf_header_name);

@@ -8,7 +8,7 @@ use axum::{
 use chrono::Utc;
 use std::sync::Arc;
 
-use crate::{auth::SessionUser, AppState};
+use crate::{auth::SessionUser, db_middleware::RequestDbExt, AppState};
 
 /// Middleware to update session last activity time
 pub async fn update_session_activity(
@@ -28,21 +28,24 @@ pub async fn update_session_activity(
 
     // Update last activity if user is authenticated
     if let Some(session_user) = session_user {
-        let now = Utc::now().to_rfc3339();
+        // Extract site-specific database from request
+        if let Some(site_db) = request.site_db() {
+            let now = Utc::now().to_rfc3339();
 
-        // Fire and forget - don't wait for update or handle errors
-        let pool = state.db.clone();
-        let session_id = session_user.session_id.clone();
+            // Fire and forget - don't wait for update or handle errors
+            let pool = site_db.0.clone();
+            let session_id = session_user.session_id.clone();
 
-        tokio::spawn(async move {
-            let _ = sqlx::query!(
-                "UPDATE sessions SET last_activity = ? WHERE id = ?",
-                now,
-                session_id
-            )
-            .execute(&pool)
-            .await;
-        });
+            tokio::spawn(async move {
+                let _ = sqlx::query!(
+                    "UPDATE sessions SET last_activity = ? WHERE id = ?",
+                    now,
+                    session_id
+                )
+                .execute(&pool)
+                .await;
+            });
+        }
     }
 
     Ok(next.run(request).await)

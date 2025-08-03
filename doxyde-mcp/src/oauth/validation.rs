@@ -22,7 +22,6 @@ use sqlx::SqlitePool;
 #[derive(Debug)]
 pub struct TokenInfo {
     pub id: i64,
-    pub site_id: i64,
     pub scopes: Option<String>,
 }
 
@@ -36,7 +35,7 @@ pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<Token
     let oauth_result = sqlx::query!(
         r#"
         SELECT oat.mcp_token_id as "mcp_token_id!", oat.scope, oat.expires_at,
-               mt.id as "id!: i64", mt.site_id as "site_id!: i64"
+               mt.id as "id!: i64"
         FROM oauth_access_tokens oat
         INNER JOIN mcp_tokens mt ON mt.id = CAST(oat.mcp_token_id AS INTEGER)
         WHERE oat.token_hash = ?
@@ -70,7 +69,6 @@ pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<Token
 
         return Ok(Some(TokenInfo {
             id: row.id,
-            site_id: row.site_id,
             scopes: row.scope,
         }));
     }
@@ -78,7 +76,7 @@ pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<Token
     // Fall back to checking MCP tokens directly
     let result = sqlx::query!(
         r#"
-        SELECT id, site_id, scopes, expires_at
+        SELECT id, scopes, expires_at
         FROM mcp_tokens
         WHERE token_hash = ?
         "#,
@@ -113,7 +111,6 @@ pub async fn validate_token(db: &SqlitePool, token: &str) -> Result<Option<Token
 
         Ok(Some(TokenInfo {
             id: row.id.unwrap_or(0),
-            site_id: row.site_id,
             scopes: row.scopes,
         }))
     } else {
@@ -143,11 +140,9 @@ mod tests {
     fn test_token_info_struct() {
         let token_info = TokenInfo {
             id: 1,
-            site_id: 2,
             scopes: Some("read write".to_string()),
         };
         assert_eq!(token_info.id, 1);
-        assert_eq!(token_info.site_id, 2);
         assert_eq!(token_info.scopes, Some("read write".to_string()));
     }
 

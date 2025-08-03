@@ -53,7 +53,7 @@ impl SiteRepository {
         let site_id = site_result.last_insert_rowid();
 
         // Create the root page for this site
-        let root_page = Page::new(site_id, "".to_string(), "Home".to_string());
+        let root_page = Page::new("".to_string(), "Home".to_string());
 
         sqlx::query(
             r#"

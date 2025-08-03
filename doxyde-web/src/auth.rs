@@ -28,7 +28,7 @@ use doxyde_core::models::{session::Session, user::User};
 use doxyde_db::repositories::{SessionRepository, UserRepository};
 use sqlx::SqlitePool;
 
-use crate::{session_activity::check_session_idle_timeout, AppState};
+use crate::{db_middleware::SiteDatabase, session_activity::check_session_idle_timeout, AppState};
 
 /// Current authenticated user, extracted from request
 #[derive(Debug, Clone)]
@@ -39,7 +39,6 @@ pub struct CurrentUser {
 
 impl<S> FromRequestParts<S> for CurrentUser
 where
-    SqlitePool: FromRef<S>,
     AppState: FromRef<S>,
     S: Send + Sync,
 {
@@ -49,8 +48,14 @@ where
         // Extract session ID from cookie or Authorization header
         let session_id = extract_session_id(parts).await?;
 
-        // Get database pool and app state
-        let pool = SqlitePool::from_ref(state);
+        // Get site-specific database from request extensions
+        let site_db = parts
+            .extensions
+            .get::<SiteDatabase>()
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Site database not found"))?;
+        let pool = site_db.0.clone();
+
+        // Get app state
         let app_state = AppState::from_ref(state);
 
         // Look up session
@@ -129,7 +134,6 @@ pub struct OptionalUser(pub Option<CurrentUser>);
 
 impl<S> FromRequestParts<S> for OptionalUser
 where
-    SqlitePool: FromRef<S>,
     AppState: FromRef<S>,
     S: Send + Sync,
 {

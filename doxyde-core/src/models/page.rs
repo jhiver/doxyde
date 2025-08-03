@@ -21,7 +21,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Page {
     pub id: Option<i64>,
-    pub site_id: i64,
     pub parent_page_id: Option<i64>,
     pub slug: String,
     pub title: String,
@@ -39,11 +38,10 @@ pub struct Page {
 }
 
 impl Page {
-    pub fn new(site_id: i64, slug: String, title: String) -> Self {
+    pub fn new(slug: String, title: String) -> Self {
         let now = Utc::now();
         Self {
             id: None,
-            site_id,
             parent_page_id: None,
             slug,
             title,
@@ -61,11 +59,10 @@ impl Page {
         }
     }
 
-    pub fn new_with_parent(site_id: i64, parent_page_id: i64, slug: String, title: String) -> Self {
+    pub fn new_with_parent(parent_page_id: i64, slug: String, title: String) -> Self {
         let now = Utc::now();
         Self {
             id: None,
-            site_id,
             parent_page_id: Some(parent_page_id),
             slug,
             title,
@@ -84,15 +81,15 @@ impl Page {
     }
 
     /// Create a new page with auto-generated slug from title
-    pub fn new_with_title(site_id: i64, title: String) -> Self {
+    pub fn new_with_title(title: String) -> Self {
         let slug = generate_slug_from_title(&title);
-        Self::new(site_id, slug, title)
+        Self::new(slug, title)
     }
 
     /// Create a new child page with auto-generated slug from title
-    pub fn new_with_parent_and_title(site_id: i64, parent_page_id: i64, title: String) -> Self {
+    pub fn new_with_parent_and_title(parent_page_id: i64, title: String) -> Self {
         let slug = generate_slug_from_title(&title);
-        Self::new_with_parent(site_id, parent_page_id, slug, title)
+        Self::new_with_parent(parent_page_id, slug, title)
     }
 
     pub fn validate_slug(&self) -> Result<(), String> {
@@ -296,17 +293,15 @@ mod tests {
 
     #[test]
     fn test_new_creates_page_with_correct_fields() {
-        let site_id = 42;
         let slug = "about-us".to_string();
         let title = "About Us".to_string();
 
         let before_creation = Utc::now();
-        let page = Page::new(site_id, slug.clone(), title.clone());
+        let page = Page::new(slug.clone(), title.clone());
         let after_creation = Utc::now();
 
         // Check basic fields
         assert_eq!(page.id, None);
-        assert_eq!(page.site_id, site_id);
         assert_eq!(page.parent_page_id, None);
         assert_eq!(page.slug, slug);
         assert_eq!(page.title, title);
@@ -330,15 +325,13 @@ mod tests {
 
     #[test]
     fn test_new_with_parent_creates_page_with_parent() {
-        let site_id = 42;
         let parent_page_id = 10;
         let slug = "sub-page".to_string();
         let title = "Sub Page".to_string();
 
-        let page = Page::new_with_parent(site_id, parent_page_id, slug.clone(), title.clone());
+        let page = Page::new_with_parent(parent_page_id, slug.clone(), title.clone());
 
         assert_eq!(page.id, None);
-        assert_eq!(page.site_id, site_id);
         assert_eq!(page.parent_page_id, Some(parent_page_id));
         assert_eq!(page.slug, slug);
         assert_eq!(page.title, title);
@@ -347,10 +340,9 @@ mod tests {
 
     #[test]
     fn test_new_with_empty_strings() {
-        let page = Page::new(1, String::new(), String::new());
+        let page = Page::new(String::new(), String::new());
 
         assert_eq!(page.id, None);
-        assert_eq!(page.site_id, 1);
         assert_eq!(page.slug, "");
         assert_eq!(page.title, "");
 
@@ -360,12 +352,13 @@ mod tests {
     }
 
     #[test]
-    fn test_new_with_various_site_ids() {
-        let test_cases = vec![0, 1, -1, i64::MAX, i64::MIN];
+    fn test_new_with_various_slugs() {
+        let test_cases = vec!["test", "about-us", "products/list", "2024-blog"];
 
-        for site_id in test_cases {
-            let page = Page::new(site_id, "test".to_string(), "Test".to_string());
-            assert_eq!(page.site_id, site_id);
+        for slug in test_cases {
+            let page = Page::new(slug.to_string(), "Test".to_string());
+            assert_eq!(page.slug, slug);
+            assert_eq!(page.title, "Test");
         }
     }
 
@@ -374,7 +367,7 @@ mod tests {
         let slug = "プロフィール".to_string();
         let title = "私たちについて".to_string();
 
-        let page = Page::new(1, slug.clone(), title.clone());
+        let page = Page::new(slug.clone(), title.clone());
 
         assert_eq!(page.slug, slug);
         assert_eq!(page.title, title);
@@ -391,7 +384,7 @@ mod tests {
         ];
 
         for (slug, title) in test_cases {
-            let page = Page::new(1, slug.to_string(), title.to_string());
+            let page = Page::new(slug.to_string(), title.to_string());
             assert_eq!(page.slug, slug);
             assert_eq!(page.title, title);
         }
@@ -414,7 +407,7 @@ mod tests {
         ];
 
         for slug in test_cases {
-            let page = Page::new(1, slug.to_string(), "Test".to_string());
+            let page = Page::new(slug.to_string(), "Test".to_string());
             assert!(
                 page.validate_slug().is_ok(),
                 "Slug '{}' should be valid",
@@ -426,12 +419,12 @@ mod tests {
     #[test]
     fn test_validate_slug_empty() {
         // Empty slug is valid for root pages (no parent)
-        let root_page = Page::new(1, String::new(), "Test".to_string());
+        let root_page = Page::new(String::new(), "Test".to_string());
         let result = root_page.validate_slug();
         assert!(result.is_ok());
 
         // Empty slug is invalid for child pages
-        let child_page = Page::new_with_parent(1, 10, String::new(), "Test".to_string());
+        let child_page = Page::new_with_parent(10, String::new(), "Test".to_string());
         let result = child_page.validate_slug();
         assert!(result.is_err());
         assert_eq!(
@@ -443,7 +436,7 @@ mod tests {
     #[test]
     fn test_validate_slug_too_long() {
         let slug = "a".repeat(256);
-        let page = Page::new(1, slug, "Test".to_string());
+        let page = Page::new(slug, "Test".to_string());
         let result = page.validate_slug();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Slug cannot exceed 255 characters");
@@ -451,7 +444,7 @@ mod tests {
 
     #[test]
     fn test_validate_slug_with_spaces() {
-        let page = Page::new(1, "about us".to_string(), "Test".to_string());
+        let page = Page::new("about us".to_string(), "Test".to_string());
         let result = page.validate_slug();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Slug cannot contain spaces");
@@ -483,7 +476,7 @@ mod tests {
         ];
 
         for (slug, expected_error) in test_cases {
-            let page = Page::new(1, slug.to_string(), "Test".to_string());
+            let page = Page::new(slug.to_string(), "Test".to_string());
             let result = page.validate_slug();
             assert!(result.is_err());
             assert_eq!(result.unwrap_err(), expected_error);
@@ -492,7 +485,7 @@ mod tests {
 
     #[test]
     fn test_validate_slug_starts_with_slash() {
-        let page = Page::new(1, "/about".to_string(), "Test".to_string());
+        let page = Page::new("/about".to_string(), "Test".to_string());
         let result = page.validate_slug();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Slug cannot start or end with a slash");
@@ -500,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_validate_slug_ends_with_slash() {
-        let page = Page::new(1, "about/".to_string(), "Test".to_string());
+        let page = Page::new("about/".to_string(), "Test".to_string());
         let result = page.validate_slug();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Slug cannot start or end with a slash");
@@ -508,7 +501,7 @@ mod tests {
 
     #[test]
     fn test_validate_slug_consecutive_slashes() {
-        let page = Page::new(1, "about//us".to_string(), "Test".to_string());
+        let page = Page::new("about//us".to_string(), "Test".to_string());
         let result = page.validate_slug();
         assert!(result.is_err());
         assert_eq!(
@@ -530,7 +523,7 @@ mod tests {
         ];
 
         for title in test_cases {
-            let page = Page::new(1, "test".to_string(), title.to_string());
+            let page = Page::new("test".to_string(), title.to_string());
             assert!(
                 page.validate_title().is_ok(),
                 "Title '{}' should be valid",
@@ -541,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_validate_title_empty() {
-        let page = Page::new(1, "test".to_string(), String::new());
+        let page = Page::new("test".to_string(), String::new());
         let result = page.validate_title();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Title cannot be empty");
@@ -550,7 +543,7 @@ mod tests {
     #[test]
     fn test_validate_title_too_long() {
         let title = "a".repeat(256);
-        let page = Page::new(1, "test".to_string(), title);
+        let page = Page::new("test".to_string(), title);
         let result = page.validate_title();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Title cannot exceed 255 characters");
@@ -561,7 +554,7 @@ mod tests {
         let test_cases = vec![" ", "  ", "\t", "\n", "   \t\n  "];
 
         for title in test_cases {
-            let page = Page::new(1, "test".to_string(), title.to_string());
+            let page = Page::new("test".to_string(), title.to_string());
             let result = page.validate_title();
             assert!(result.is_err());
             assert_eq!(result.unwrap_err(), "Title cannot be only whitespace");
@@ -570,19 +563,19 @@ mod tests {
 
     #[test]
     fn test_validate_title_with_leading_trailing_spaces() {
-        let page = Page::new(1, "test".to_string(), "  Valid Title  ".to_string());
+        let page = Page::new("test".to_string(), "  Valid Title  ".to_string());
         assert!(page.validate_title().is_ok());
     }
 
     #[test]
     fn test_is_valid_with_valid_page() {
-        let page = Page::new(1, "about-us".to_string(), "About Us".to_string());
+        let page = Page::new("about-us".to_string(), "About Us".to_string());
         assert!(page.is_valid().is_ok());
     }
 
     #[test]
     fn test_is_valid_with_invalid_slug() {
-        let page = Page::new(1, "invalid slug".to_string(), "Valid Title".to_string());
+        let page = Page::new("invalid slug".to_string(), "Valid Title".to_string());
         let result = page.is_valid();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Slug cannot contain spaces");
@@ -590,7 +583,7 @@ mod tests {
 
     #[test]
     fn test_is_valid_with_invalid_title() {
-        let page = Page::new(1, "valid-slug".to_string(), "".to_string());
+        let page = Page::new("valid-slug".to_string(), "".to_string());
         let result = page.is_valid();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Title cannot be empty");
@@ -599,12 +592,12 @@ mod tests {
     #[test]
     fn test_is_valid_with_both_invalid() {
         // Root page with empty slug is valid if title is provided
-        let root_page = Page::new(1, "".to_string(), "Valid Title".to_string());
+        let root_page = Page::new("".to_string(), "Valid Title".to_string());
         let result = root_page.is_valid();
         assert!(result.is_ok());
 
         // Root page with empty slug and empty title should fail on title validation
-        let page = Page::new(1, "".to_string(), "".to_string());
+        let page = Page::new("".to_string(), "".to_string());
         let result = page.is_valid();
         assert!(result.is_err());
         // Should fail on title validation since empty slug is valid for root pages
@@ -622,7 +615,7 @@ mod tests {
         ];
 
         for (slug, title) in test_cases {
-            let page = Page::new(1, slug.to_string(), title.to_string());
+            let page = Page::new(slug.to_string(), title.to_string());
             assert!(
                 page.is_valid().is_ok(),
                 "Page with slug '{}' and title '{}' should be valid",
@@ -644,7 +637,7 @@ mod tests {
         ];
 
         for template in valid_templates {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.template = template.to_string();
             assert!(
                 page.validate_template().is_ok(),
@@ -656,7 +649,7 @@ mod tests {
 
     #[test]
     fn test_validate_template_invalid() {
-        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         page.template = "".to_string();
 
         let result = page.validate_template();
@@ -684,7 +677,7 @@ mod tests {
         ];
 
         for desc in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.description = desc.map(|s| s.to_string());
             assert!(page.validate_description().is_ok());
         }
@@ -692,7 +685,7 @@ mod tests {
 
     #[test]
     fn test_validate_description_too_long() {
-        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         page.description = Some("a".repeat(501));
 
         let result = page.validate_description();
@@ -713,7 +706,7 @@ mod tests {
         ];
 
         for keywords in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.keywords = keywords.map(|s| s.to_string());
             assert!(page.validate_keywords().is_ok());
         }
@@ -721,7 +714,7 @@ mod tests {
 
     #[test]
     fn test_validate_keywords_too_long() {
-        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         page.keywords = Some("a".repeat(256));
 
         let result = page.validate_keywords();
@@ -734,7 +727,7 @@ mod tests {
 
     #[test]
     fn test_validate_keywords_real_world_example() {
-        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         // This is the exact keywords string that caused the 400 error
         page.keywords = Some("About Doxyde, Doxyde CMS, CMS in Rust, open source CMS, AI-native CMS, Jean-Michel Hiver, software origin story, Rust web development, Model Context Protocol, MCP integration, Cloud Code, LLM-generated code, AI and CMS, developer tools, clean architecture, CMS history, open source philosophy, AGPL CMS".to_string());
 
@@ -760,7 +753,7 @@ mod tests {
         ];
 
         for robots in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.meta_robots = robots.to_string();
             assert!(
                 page.validate_meta_robots().is_ok(),
@@ -775,7 +768,7 @@ mod tests {
         let test_cases = vec!["index,invalid", "badrobot", "index,follow,badbot"];
 
         for robots in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.meta_robots = robots.to_string();
             let result = page.validate_meta_robots();
             assert!(result.is_err(), "Robots '{}' should be invalid", robots);
@@ -796,7 +789,7 @@ mod tests {
         ];
 
         for data_type in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.structured_data_type = data_type.to_string();
             assert!(
                 page.validate_structured_data_type().is_ok(),
@@ -811,7 +804,7 @@ mod tests {
         let test_cases = vec!["InvalidType", "webpage", "article", ""];
 
         for data_type in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.structured_data_type = data_type.to_string();
             let result = page.validate_structured_data_type();
             assert!(result.is_err(), "Type '{}' should be invalid", data_type);
@@ -820,7 +813,7 @@ mod tests {
 
     #[test]
     fn test_new_page_has_default_metadata() {
-        let page = Page::new(1, "test".to_string(), "Test".to_string());
+        let page = Page::new("test".to_string(), "Test".to_string());
 
         assert_eq!(page.description, None);
         assert_eq!(page.keywords, None);
@@ -843,7 +836,7 @@ mod tests {
         ];
 
         for mode in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.sort_mode = mode.to_string();
             assert!(
                 page.validate_sort_mode().is_ok(),
@@ -858,7 +851,7 @@ mod tests {
         let test_cases = vec!["invalid", "created_asc", "manual_sort", ""];
 
         for mode in test_cases {
-            let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+            let mut page = Page::new("test".to_string(), "Test".to_string());
             page.sort_mode = mode.to_string();
             let result = page.validate_sort_mode();
             assert!(result.is_err(), "Sort mode '{}' should be invalid", mode);
@@ -867,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_is_valid_with_all_metadata() {
-        let mut page = Page::new(1, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         page.description = Some("A test page description".to_string());
         page.keywords = Some("test, validation, metadata".to_string());
         page.template = "blog".to_string();
@@ -891,10 +884,9 @@ mod tests {
         ];
 
         for (title, expected_slug) in test_cases {
-            let page = Page::new_with_title(1, title.to_string());
+            let page = Page::new_with_title(title.to_string());
             assert_eq!(page.slug, expected_slug);
             assert_eq!(page.title, title);
-            assert_eq!(page.site_id, 1);
             assert_eq!(page.parent_page_id, None);
         }
     }
@@ -908,10 +900,9 @@ mod tests {
         ];
 
         for (title, expected_slug) in test_cases {
-            let page = Page::new_with_parent_and_title(1, 10, title.to_string());
+            let page = Page::new_with_parent_and_title(10, title.to_string());
             assert_eq!(page.slug, expected_slug);
             assert_eq!(page.title, title);
-            assert_eq!(page.site_id, 1);
             assert_eq!(page.parent_page_id, Some(10));
         }
     }
@@ -919,18 +910,18 @@ mod tests {
     #[test]
     fn test_new_with_title_handles_edge_cases() {
         // Empty title should generate "untitled" slug
-        let page = Page::new_with_title(1, "".to_string());
+        let page = Page::new_with_title("".to_string());
         assert_eq!(page.slug, "untitled");
         assert_eq!(page.title, "");
 
         // Only special characters should generate "untitled" slug
-        let page = Page::new_with_title(1, "!!!".to_string());
+        let page = Page::new_with_title("!!!".to_string());
         assert_eq!(page.slug, "untitled");
         assert_eq!(page.title, "!!!");
 
         // Very long title should be truncated
         let long_title = "This is a very long title that exceeds one hundred characters and should be truncated to ensure reasonable URL length for better usability and SEO";
-        let page = Page::new_with_title(1, long_title.to_string());
+        let page = Page::new_with_title(long_title.to_string());
         assert!(page.slug.len() <= 100);
         assert!(!page.slug.ends_with('-'));
         assert_eq!(page.title, long_title);

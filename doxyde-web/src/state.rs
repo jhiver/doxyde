@@ -16,13 +16,12 @@
 
 use crate::autoreload_templates::TemplateEngine;
 use crate::config::Config;
+use crate::db_router::DatabaseRouter;
 use crate::rate_limit::SharedRateLimiter;
-use axum::extract::FromRef;
-use sqlx::SqlitePool;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: SqlitePool,
+    pub db_router: DatabaseRouter,
     pub templates: TemplateEngine,
     pub config: Config,
     pub login_rate_limiter: SharedRateLimiter,
@@ -31,24 +30,33 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(
-        db: SqlitePool,
+        db_router: DatabaseRouter,
         templates: TemplateEngine,
         config: Config,
         login_rate_limiter: SharedRateLimiter,
         api_rate_limiter: SharedRateLimiter,
     ) -> Self {
         Self {
-            db,
+            db_router,
             templates,
             config,
             login_rate_limiter,
             api_rate_limiter,
         }
     }
-}
 
-impl FromRef<AppState> for SqlitePool {
-    fn from_ref(state: &AppState) -> Self {
-        state.db.clone()
+    /// Get a database pool for cross-site operations like OAuth
+    /// For now, this returns a pool for site_id 1, but in the future
+    /// we might want a dedicated central database for OAuth tokens
+    pub async fn get_oauth_db(&self) -> anyhow::Result<sqlx::SqlitePool> {
+        use crate::site_resolver::SiteContext;
+
+        // Create a context for the default site (site_id 1)
+        let context = SiteContext::new("default".to_string(), &self.config.get_sites_directory()?);
+
+        self.db_router.get_pool(&context).await
     }
 }
+
+// Note: SqlitePool is no longer directly extractable from AppState.
+// Handlers must use the request extensions to get the site-specific database pool.

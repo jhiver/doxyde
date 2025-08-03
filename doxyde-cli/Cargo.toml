@@ -9,6 +9,10 @@ license.workspace = true
 name = "doxyde"
 path = "src/main.rs"
 
+[[bin]]
+name = "doxyde-multidb-migrate"
+path = "src/bin/doxyde-multidb-migrate.rs"
+
 [dependencies]
 doxyde-core = { path = "../doxyde-core" }
 doxyde-db = { path = "../doxyde-db" }
@@ -19,6 +23,9 @@ tokio.workspace = true
 sqlx.workspace = true
 dotenvy = "0.15"
 rpassword = "7.3"
+sha2 = "0.10"
+hex = "0.4"
+serde_json.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

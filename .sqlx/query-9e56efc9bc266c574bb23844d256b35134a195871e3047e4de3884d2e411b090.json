@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT id as \"id: i64\", site_id as \"site_id: i64\", name, scopes, created_by as \"created_by: i64\",\n               expires_at, created_at, last_used_at\n        FROM mcp_tokens\n        WHERE site_id = ?\n        ORDER BY created_at DESC\n        ",
+  "query": "\n        SELECT id as \"id: i64\", name, scopes, created_by as \"created_by: i64\",\n               expires_at, created_at, last_used_at\n        FROM mcp_tokens\n        ORDER BY created_at DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -9,46 +9,40 @@
         "type_info": "Integer"
       },
       {
-        "name": "site_id: i64",
-        "ordinal": 1,
-        "type_info": "Integer"
-      },
-      {
         "name": "name",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Text"
       },
       {
         "name": "scopes",
-        "ordinal": 3,
+        "ordinal": 2,
         "type_info": "Text"
       },
       {
         "name": "created_by: i64",
-        "ordinal": 4,
+        "ordinal": 3,
         "type_info": "Integer"
       },
       {
         "name": "expires_at",
-        "ordinal": 5,
+        "ordinal": 4,
         "type_info": "Text"
       },
       {
         "name": "created_at",
-        "ordinal": 6,
+        "ordinal": 5,
         "type_info": "Text"
       },
       {
         "name": "last_used_at",
-        "ordinal": 7,
+        "ordinal": 6,
         "type_info": "Text"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
-      false,
       false,
       false,
       true,
@@ -58,5 +52,5 @@
       true
     ]
   },
-  "hash": "e36657e5a2c7f6d1a8e6650d5633374a1edae6be5a9a33571dc09480bfa19056"
+  "hash": "9e56efc9bc266c574bb23844d256b35134a195871e3047e4de3884d2e411b090"
 }

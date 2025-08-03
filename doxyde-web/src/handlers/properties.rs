@@ -50,16 +50,17 @@ pub struct PagePropertiesForm {
 /// Display page properties form
 pub async fn page_properties_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
 
     // Get breadcrumb for navigation
@@ -96,7 +97,7 @@ pub async fn page_properties_handler(
     let mut context = Context::new();
 
     // Add base context (site_title, root_page_title, logo data, navigation)
-    add_base_context(&mut context, &state, &site, Some(&page))
+    add_base_context(&mut context, &db, &site, Some(&page))
         .await
         .map_err(|e| {
             tracing::error!(error = %e, "Failed to add base context");
@@ -108,7 +109,7 @@ pub async fn page_properties_handler(
     context.insert("user", &user.user);
 
     // Add all action bar context variables
-    add_action_bar_context(&mut context, &state, &page, &user, ".properties").await?;
+    add_action_bar_context(&mut context, &state, &db, &page, &user, ".properties").await?;
 
     // Discover available templates dynamically
     let templates_path = std::path::Path::new(&state.config.templates_dir);
@@ -152,13 +153,14 @@ pub async fn page_properties_handler(
 /// Handle page properties update
 pub async fn update_page_properties_handler(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     mut page: Page,
     user: CurrentUser,
     Form(form): Form<PagePropertiesForm>,
 ) -> Result<Response, StatusCode> {
     // Check permissions
-    if !can_edit_page(&state, &site, &user).await? {
+    if !can_edit_page(&state, &db, &site, &user).await? {
         return Err(StatusCode::FORBIDDEN);
     }
 
@@ -228,7 +230,7 @@ pub async fn update_page_properties_handler(
     }
 
     // Save to database
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
     page_repo.update(&page).await.map_err(|e| {
         tracing::error!(error = %e, "Failed to update page in database");
         StatusCode::INTERNAL_SERVER_ERROR

@@ -24,12 +24,13 @@ use crate::{auth::CurrentUser, AppState};
 /// Add all necessary context variables for the action bar template
 pub async fn add_action_bar_context(
     context: &mut Context,
-    state: &AppState,
+    _state: &AppState,
+    db: &sqlx::SqlitePool,
     page: &Page,
     _user: &CurrentUser,
     action: &str,
 ) -> Result<(), StatusCode> {
-    let page_repo = PageRepository::new(state.db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
     // Set the current action
     context.insert("action", action);

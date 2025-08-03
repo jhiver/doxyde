@@ -8,7 +8,6 @@ use sqlx::SqlitePool;
 #[derive(Clone)]
 pub struct McpService {
     pool: SqlitePool,
-    site_id: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,14 +51,14 @@ pub struct DraftInfo {
 }
 
 impl McpService {
-    pub fn new(pool: SqlitePool, site_id: i64) -> Self {
-        Self { pool, site_id }
+    pub fn new(pool: SqlitePool) -> Self {
+        Self { pool }
     }
 
     /// List all pages in the site with hierarchy
     pub async fn list_pages(&self) -> Result<Vec<PageHierarchy>> {
         let page_repo = PageRepository::new(self.pool.clone());
-        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         // Build hierarchy
         let mut hierarchy = Vec::new();
@@ -108,9 +107,6 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         // Verify page belongs to this site
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         Ok(page)
     }
@@ -118,7 +114,7 @@ impl McpService {
     /// Find page by URL path
     pub async fn get_page_by_path(&self, path: &str) -> Result<Page> {
         let page_repo = PageRepository::new(self.pool.clone());
-        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         // Split path into segments
         let segments: Vec<&str> = path
@@ -253,7 +249,7 @@ impl McpService {
     /// Search pages by title or content
     pub async fn search_pages(&self, query: &str) -> Result<Vec<PageInfo>> {
         let page_repo = PageRepository::new(self.pool.clone());
-        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         let query_lower = query.to_lowercase();
         let mut results = Vec::new();
@@ -309,9 +305,6 @@ impl McpService {
                 .find_by_id(parent_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Parent page not found"))?;
-            if parent.site_id != self.site_id {
-                return Err(anyhow::anyhow!("Parent page does not belong to this site"));
-            }
         }
 
         // Calculate position for new page
@@ -322,13 +315,19 @@ impl McpService {
         // Create the page object
         let mut new_page = match (parent_page_id, slug) {
             (Some(parent_id), Some(slug)) => {
-                Page::new_with_parent(self.site_id, parent_id, slug, title)
+                Page::new_with_parent(parent_id, slug, title)
             }
             (Some(parent_id), None) => {
-                Page::new_with_parent_and_title(self.site_id, parent_id, title)
+                // Generate slug from title when not provided
+                let generated_slug = doxyde_core::utils::slug::generate_slug_from_title(&title);
+                Page::new_with_parent(parent_id, generated_slug, title)
             }
-            (None, Some(slug)) => Page::new(self.site_id, slug, title),
-            (None, None) => Page::new_with_title(self.site_id, title),
+            (None, Some(slug)) => Page::new(slug, title),
+            (None, None) => {
+                // Generate slug from title when not provided
+                let generated_slug = doxyde_core::utils::slug::generate_slug_from_title(&title);
+                Page::new(generated_slug, title)
+            }
         };
 
         // Set template, position, description, and keywords
@@ -350,7 +349,7 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("Failed to retrieve created page"))?;
 
         // Get all pages to build path
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
 
         // Return page info
         Ok(PageInfo {
@@ -384,9 +383,6 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         // Verify page belongs to this site
-        if page.site_id != self.site_id {
-            return Err(anyhow::anyhow!("Page does not belong to this site"));
-        }
 
         // Update fields if provided
         if let Some(new_title) = title {
@@ -419,7 +415,7 @@ impl McpService {
         page_repo.update(&page).await?;
 
         // Get all pages to build info
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
 
         // Return updated page info
         self.page_to_info(&all_pages, &page).await
@@ -467,7 +463,7 @@ impl McpService {
         }
 
         // Get all pages to build info
-        let all_pages = page_repo.list_by_site_id(self.site_id).await?;
+        let all_pages = page_repo.list_all().await?;
         let moved_page = page_repo
             .find_by_id(page_id)
             .await?
@@ -935,7 +931,7 @@ impl McpService {
         page_repo: &PageRepository,
         parent_page_id: Option<i64>,
     ) -> Result<i32> {
-        let pages = page_repo.list_by_site_id(self.site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         let position = if let Some(parent_id) = parent_page_id {
             // Get max position among siblings
@@ -1023,17 +1019,19 @@ mod tests {
     use doxyde_core::models::version::PageVersion;
     use serde_json::json;
 
-    async fn create_test_service() -> Result<(McpService, i64)> {
+    async fn create_test_service() -> Result<McpService> {
         let state = create_test_app_state().await?;
-        let site = create_test_site(&state.db, "test.com", "Test Site").await?;
-        let service = McpService::new(state.db, site.id.unwrap());
+        let pool = sqlx::SqlitePool::connect(":memory:").await?;
+        sqlx::migrate!("../migrations").run(&pool).await?;
+        let _site = create_test_site(&pool, "test.com", "Test Site").await?;
+        let service = McpService::new(pool);
 
-        Ok((service, site.id.unwrap()))
+        Ok(service)
     }
 
     #[tokio::test]
     async fn test_list_pages_with_root() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let pages = service.list_pages().await?;
         // Site creation creates a root page
         assert_eq!(pages.len(), 1);
@@ -1044,7 +1042,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_page_not_found() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let result = service.get_page(999).await;
         assert!(result.is_err());
         Ok(())
@@ -1052,7 +1050,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_page_as_child_of_root() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page
         let pages = service.list_pages().await?;
@@ -1084,7 +1082,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_page_with_parent() -> Result<()> {
-        let (service, _site_id) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page to use as parent
         let pages = service.list_pages().await?;
@@ -1115,7 +1113,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_page_validation_errors() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page to use as parent
         let pages = service.list_pages().await?;
@@ -1184,7 +1182,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_root_page_not_allowed() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Try to create a root page (without parent)
         let result = service
@@ -1206,7 +1204,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_page_with_invalid_parent() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Try to create page with non-existent parent
         let result = service
@@ -1231,7 +1229,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_create_page_default_template() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page
         let pages = service.list_pages().await?;
@@ -1257,7 +1255,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_calculate_page_position() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
 
         // Test position for root page (should be based on existing root pages)
@@ -1279,9 +1277,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_page_to_info() -> Result<()> {
-        let (service, site_id) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
-        let pages = page_repo.list_by_site_id(site_id).await?;
+        let pages = page_repo.list_all().await?;
 
         assert!(!pages.is_empty());
         let page = &pages[0];
@@ -1301,7 +1299,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_page_content_matches() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get a page
         let pages = service.list_pages().await?;
@@ -1324,7 +1322,7 @@ mod tests {
         use chrono::Utc;
         use doxyde_core::models::Component;
 
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         let components = vec![
             Component {
@@ -1374,7 +1372,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_page_success() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page
         let pages = service.list_pages().await?;
@@ -1404,13 +1402,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_page_wrong_site() -> Result<()> {
-        let state = create_test_app_state().await?;
-        let other_site = create_test_site(&state.db, "other.com", "Other Site").await?;
-        let service = McpService::new(state.db.clone(), other_site.id.unwrap());
+        let pool = sqlx::SqlitePool::connect(":memory:").await?;
+        sqlx::migrate!("../migrations").run(&pool).await?;
+        let other_site = create_test_site(&pool, "other.com", "Other Site").await?;
+        let service = McpService::new(pool.clone(), other_site.id.unwrap());
 
         // Create a page in a different site
-        let main_site = create_test_site(&state.db, "main.com", "Main Site").await?;
-        let main_service = McpService::new(state.db.clone(), main_site.id.unwrap());
+        let main_site = create_test_site(&pool, "main.com", "Main Site").await?;
+        let main_service = McpService::new(pool.clone(), main_site.id.unwrap());
 
         // Get root page of main site
         let pages = main_service.list_pages().await?;
@@ -1441,7 +1440,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_nonexistent_page() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Try to delete a non-existent page
         let result = service.delete_page(9999).await;
@@ -1452,7 +1451,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_page_success() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page
         let pages = service.list_pages().await?;
@@ -1495,7 +1494,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_page_with_position() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
 
         // Get the root page
         let pages = service.list_pages().await?;
@@ -1573,12 +1572,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_page_wrong_site() -> Result<()> {
-        let state = create_test_app_state().await?;
-        let site1 = create_test_site(&state.db, "site1.com", "Site 1").await?;
-        let site2 = create_test_site(&state.db, "site2.com", "Site 2").await?;
+        let pool = sqlx::SqlitePool::connect(":memory:").await?;
+        sqlx::migrate!("../migrations").run(&pool).await?;
+        let site1 = create_test_site(&pool, "site1.com", "Site 1").await?;
+        let site2 = create_test_site(&pool, "site2.com", "Site 2").await?;
 
-        let service1 = McpService::new(state.db.clone(), site1.id.unwrap());
-        let service2 = McpService::new(state.db.clone(), site2.id.unwrap());
+        let service1 = McpService::new(pool.clone(), site1.id.unwrap());
+        let service2 = McpService::new(pool.clone(), site2.id.unwrap());
 
         // Get root pages
         let pages1 = service1.list_pages().await?;
@@ -1612,13 +1612,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_or_create_draft() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "draft-test".to_string(),
             "Draft Test".to_string(),
@@ -1645,15 +1644,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_update_component_markdown_draft_check() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
         let version_repo = PageVersionRepository::new(service.pool.clone());
         let component_repo = ComponentRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "update-test".to_string(),
             "Update Test".to_string(),
@@ -1688,15 +1686,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_delete_component_draft_check() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
         let version_repo = PageVersionRepository::new(service.pool.clone());
         let component_repo = ComponentRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "delete-test".to_string(),
             "Delete Test".to_string(),
@@ -1729,13 +1726,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_component_before() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "test-move".to_string(),
             "Test Move".to_string(),
@@ -1789,13 +1785,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_component_after() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "test-move-after".to_string(),
             "Test Move After".to_string(),
@@ -1849,15 +1844,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_component_published_version_error() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
         let version_repo = PageVersionRepository::new(service.pool.clone());
         let component_repo = ComponentRepository::new(service.pool.clone());
 
         // Create a test page
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "test-published".to_string(),
             "Test Published".to_string(),
@@ -1901,21 +1895,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_component_different_versions() -> Result<()> {
-        let (service, _) = create_test_service().await?;
+        let service = create_test_service().await?;
         let page_repo = PageRepository::new(service.pool.clone());
         let version_repo = PageVersionRepository::new(service.pool.clone());
         let component_repo = ComponentRepository::new(service.pool.clone());
 
         // Create two test pages
-        let root_page = page_repo.get_root_page(service.site_id).await?.unwrap();
+        let root_page = page_repo.get_root_page().await?.unwrap();
         let page1 = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "page1".to_string(),
             "Page 1".to_string(),
         );
         let page2 = Page::new_with_parent(
-            service.site_id,
             root_page.id.unwrap(),
             "page2".to_string(),
             "Page 2".to_string(),
@@ -1958,13 +1950,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_move_component_wrong_site() -> Result<()> {
-        let state = create_test_app_state().await?;
-        let other_site = create_test_site(&state.db, "other.com", "Other Site").await?;
-        let service = McpService::new(state.db.clone(), other_site.id.unwrap());
+        let pool = sqlx::SqlitePool::connect(":memory:").await?;
+        sqlx::migrate!("../migrations").run(&pool).await?;
+        let other_site = create_test_site(&pool, "other.com", "Other Site").await?;
+        let service = McpService::new(pool.clone(), other_site.id.unwrap());
 
         // Create a page in a different site
-        let main_site = create_test_site(&state.db, "main.com", "Main Site").await?;
-        let main_service = McpService::new(state.db.clone(), main_site.id.unwrap());
+        let main_site = create_test_site(&pool, "main.com", "Main Site").await?;
+        let main_service = McpService::new(pool.clone(), main_site.id.unwrap());
 
         // Create page and components in main site
         let pages = main_service.list_pages().await?;
@@ -1984,7 +1977,7 @@ mod tests {
         let draft_info = main_service.get_or_create_draft(page_info.id).await?;
         let draft_id = draft_info["draft"]["version_id"].as_i64().unwrap();
 
-        let component_repo = ComponentRepository::new(state.db.clone());
+        let component_repo = ComponentRepository::new(pool.clone());
         let comp1 = Component::new(
             draft_id,
             "markdown".to_string(),

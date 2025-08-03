@@ -23,14 +23,14 @@ pub type LogoData = (String, Option<String>, Option<String>);
 
 /// Get logo data for a site if a logo component exists
 /// Returns (logo_url, logo_width, logo_height) or None if no logo
-pub async fn get_logo_data(db: &SqlitePool, site_id: i64) -> Result<Option<LogoData>> {
+pub async fn get_logo_data(db: &SqlitePool, _site_id: i64) -> Result<Option<LogoData>> {
     let page_repo = PageRepository::new(db.clone());
     let version_repo = PageVersionRepository::new(db.clone());
     let component_repo = ComponentRepository::new(db.clone());
 
     // Get the root page
     let root_page = page_repo
-        .get_root_page(site_id)
+        .get_root_page()
         .await
         .context("Failed to get root page")?;
 

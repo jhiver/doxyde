@@ -25,8 +25,11 @@ pub fn extract_base_domain(domain: &str) -> String {
         domain_no_port
     };
 
+    // Convert to lowercase for consistency
+    let domain_lower = domain_no_prefix.to_lowercase();
+
     // Split by dots
-    let parts: Vec<&str> = domain_no_prefix.split('.').collect();
+    let parts: Vec<&str> = domain_lower.split('.').collect();
 
     // If we have at least 2 parts, take the last 2 as the base domain
     // This handles most common cases like example.com, example.org, etc.
@@ -35,7 +38,7 @@ pub fn extract_base_domain(domain: &str) -> String {
         base
     } else {
         // For single-part domains (like "localhost"), return as-is
-        domain_no_prefix.to_string()
+        domain_lower
     }
 }
 
@@ -104,6 +107,11 @@ mod tests {
         // Single part (localhost)
         assert_eq!(extract_base_domain("localhost"), "localhost");
         assert_eq!(extract_base_domain("localhost:3000"), "localhost");
+
+        // Uppercase domains (should be converted to lowercase)
+        assert_eq!(extract_base_domain("EXAMPLE.COM"), "example.com");
+        assert_eq!(extract_base_domain("WWW.EXAMPLE.COM"), "example.com");
+        assert_eq!(extract_base_domain("Site1.Example.Com:8080"), "example.com");
     }
 
     #[test]

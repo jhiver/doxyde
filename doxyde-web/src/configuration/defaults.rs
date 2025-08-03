@@ -155,6 +155,11 @@ pub fn default_development_mode() -> bool {
     false
 }
 
+// Multi-site mode default
+pub fn default_multi_site_mode() -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

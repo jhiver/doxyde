@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT id, site_id, scopes, expires_at\n        FROM mcp_tokens\n        WHERE token_hash = ?\n        ",
+  "query": "\n        SELECT id, scopes, expires_at\n        FROM mcp_tokens\n        WHERE token_hash = ?\n        ",
   "describe": {
     "columns": [
       {
@@ -9,18 +9,13 @@
         "type_info": "Integer"
       },
       {
-        "name": "site_id",
-        "ordinal": 1,
-        "type_info": "Integer"
-      },
-      {
         "name": "scopes",
-        "ordinal": 2,
+        "ordinal": 1,
         "type_info": "Text"
       },
       {
         "name": "expires_at",
-        "ordinal": 3,
+        "ordinal": 2,
         "type_info": "Text"
       }
     ],
@@ -29,10 +24,9 @@
     },
     "nullable": [
       true,
-      false,
       true,
       true
     ]
   },
-  "hash": "db0e1da6be8e6e826e79f7d27f6f86c7f15661f71c1b5a1c3e137198c29ec836"
+  "hash": "43f6e1d337e189d2c46344ee60f25b30287128f82c42f6e18ba9fea460c24b0e"
 }

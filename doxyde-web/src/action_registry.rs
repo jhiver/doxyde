@@ -21,12 +21,14 @@ use axum::{
 };
 use doxyde_core::models::{page::Page, site::Site};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::{auth::OptionalUser, error::AppError, AppState};
 
 /// Type for action handler functions
 type ActionHandlerFn = fn(
     AppState,
+    sqlx::SqlitePool,
     Site,
     Page,
     OptionalUser,
@@ -91,12 +93,13 @@ impl ActionRegistry {
 
 fn handle_display_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
-        crate::handlers::pages::show_page_handler(state, site, page, user)
+        crate::handlers::pages::show_page_handler(state, db, site, page, user)
             .await
             .map(|r| r.into_response())
             .map_err(|e| {
@@ -108,13 +111,15 @@ fn handle_display_page(
 
 fn handle_edit_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
-            match crate::handlers::edit_page_content_handler(state, site, page, current_user).await
+            match crate::handlers::edit_page_content_handler(state, db, site, page, current_user)
+                .await
             {
                 Ok(response) => Ok(response),
                 Err(status) => {
@@ -139,13 +144,16 @@ fn handle_edit_page(
 
 fn handle_properties(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
-            match crate::handlers::page_properties_handler(state, site, page, current_user).await {
+            match crate::handlers::page_properties_handler(state, db, site, page, current_user)
+                .await
+            {
                 Ok(response) => Ok(response),
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render properties page");
@@ -169,13 +177,14 @@ fn handle_properties(
 
 fn handle_new_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
-            match crate::handlers::new_page_handler(state, site, page, current_user).await {
+            match crate::handlers::new_page_handler(state, db, site, page, current_user).await {
                 Ok(response) => Ok(response),
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render new page form");
@@ -199,13 +208,14 @@ fn handle_new_page(
 
 fn handle_move_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
-            match crate::handlers::move_page_handler(state, site, page, current_user).await {
+            match crate::handlers::move_page_handler(state, db, site, page, current_user).await {
                 Ok(response) => Ok(response),
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render move page form");
@@ -229,6 +239,7 @@ fn handle_move_page(
 
 fn handle_reorder(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
@@ -236,7 +247,8 @@ fn handle_reorder(
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
             match crate::handlers::reorder_page_handler(
-                State(state.clone().into()),
+                State(Arc::new(state.clone())),
+                db,
                 site,
                 page,
                 current_user,
@@ -266,13 +278,14 @@ fn handle_reorder(
 
 fn handle_delete_page(
     state: AppState,
+    db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, AppError>> + Send>> {
     Box::pin(async move {
         if let OptionalUser(Some(current_user)) = user {
-            match crate::handlers::delete_page_handler(state, site, page, current_user).await {
+            match crate::handlers::delete_page_handler(state, db, site, page, current_user).await {
                 Ok(response) => Ok(response),
                 Err(status) => {
                     tracing::error!(status = ?status, "Failed to render delete page");
@@ -296,6 +309,7 @@ fn handle_delete_page(
 
 fn handle_add_component(
     _state: AppState,
+    _db: sqlx::SqlitePool,
     _site: Site,
     _page: Page,
     user: OptionalUser,
@@ -315,6 +329,7 @@ fn handle_add_component(
 
 fn handle_upload(
     _state: AppState,
+    _db: sqlx::SqlitePool,
     _site: Site,
     _page: Page,
     user: OptionalUser,

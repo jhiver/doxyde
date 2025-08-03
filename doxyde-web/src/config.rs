@@ -38,6 +38,8 @@ pub struct Config {
     pub csrf_header_name: String,
     pub static_files_max_age: u64,
     pub oauth_token_expiry: u64,
+    pub sites_directory: String,
+    pub multi_site_mode: bool,
 }
 
 impl Config {
@@ -68,11 +70,17 @@ impl Config {
             csrf_header_name: config.security.csrf.header_name,
             static_files_max_age: config.cache.static_files_max_age,
             oauth_token_expiry: config.mcp.oauth_token_expiry,
+            sites_directory: config.path.sites,
+            multi_site_mode: config.multi_site_mode,
         })
     }
 
     pub fn bind_addr(&self) -> String {
         format!("{}:{}", self.host, self.port)
+    }
+
+    pub fn get_sites_directory(&self) -> Result<std::path::PathBuf> {
+        Ok(std::path::PathBuf::from(&self.sites_directory))
     }
 }
 

@@ -30,7 +30,6 @@ use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info};
 
-use super::oauth::validate_token;
 use crate::AppState;
 use doxyde_mcp::mcp::DoxydeRmcpService;
 
@@ -48,15 +47,19 @@ pub async fn handle_sse(
     headers: HeaderMap,
     _req: Request,
 ) -> Result<Response, StatusCode> {
+    // For OAuth token validation, we need to determine which database to use
+    // Since tokens can be used across sites, we'll use a central approach
+    // TODO: In a true multi-tenant system, OAuth tokens might need special handling
+
     // Validate OAuth token and get site_id
-    let site_id = if let Some(token) = extract_bearer_token(&headers) {
-        match validate_token(&state.db, token).await {
-            Ok(Some(token_info)) => {
-                info!(
-                    "Valid OAuth token for SSE connection: site_id={}",
-                    token_info.site_id
-                );
-                token_info.site_id
+    let (_site_id, db) = if let Some(token) = extract_bearer_token(&headers) {
+        // First, we need to find which site this token belongs to
+        // For now, we'll check all databases (this is a temporary solution)
+        match state.db_router.validate_token_and_get_db(token).await {
+            Ok(Some((_token_info, database))) => {
+                info!("Valid OAuth token for SSE connection");
+                // In multi-database architecture, site_id is not needed as each DB represents one site
+                (1, database)
             }
             Ok(None) => {
                 error!("Invalid OAuth token");
@@ -87,9 +90,8 @@ pub async fn handle_sse(
     let (sse_server, _router) = SseServer::new(config);
 
     // Spawn a task to handle the service with the validated site_id
-    let db_clone = state.db.clone();
     let _service_handle =
-        sse_server.with_service(move || DoxydeRmcpService::new(db_clone.clone(), site_id));
+        sse_server.with_service(move || DoxydeRmcpService::new(db.clone()));
 
     // SSE handler integration pending - returning not implemented status
     // The proper implementation would need to extract the SSE handler from the router
@@ -127,15 +129,14 @@ pub async fn handle_http(
         Json(response)
     };
 
-    // Validate OAuth token and get site_id
-    let site_id = if let Some(token) = extract_bearer_token(&headers) {
-        match validate_token(&state.db, token).await {
-            Ok(Some(token_info)) => {
-                debug!(
-                    "Valid OAuth token for HTTP request: site_id={}",
-                    token_info.site_id
-                );
-                token_info.site_id
+    // For OAuth token validation, we need to determine which database to use
+    // Since tokens can be used across sites, we'll use the database router
+    let (_site_id, db) = if let Some(token) = extract_bearer_token(&headers) {
+        match state.db_router.validate_token_and_get_db(token).await {
+            Ok(Some((_token_info, database))) => {
+                debug!("Valid OAuth token for HTTP request");
+                // In multi-database architecture, site_id is not needed as each DB represents one site
+                (1, database)
             }
             Ok(None) => {
                 return Ok(create_error_response(-32603, "Invalid token"));
@@ -156,7 +157,7 @@ pub async fn handle_http(
     debug!("MCP HTTP request: method={}", method);
 
     // Create the service with database pool and site_id
-    let service = DoxydeRmcpService::new(state.db.clone(), site_id);
+    let service = DoxydeRmcpService::new(db);
 
     // Handle different methods
     match method {

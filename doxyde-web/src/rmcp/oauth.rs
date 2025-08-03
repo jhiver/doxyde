@@ -34,7 +34,6 @@ use crate::{error::AppError, session::get_current_user, AppState};
 #[derive(Debug, Serialize)]
 pub struct McpToken {
     pub id: i64,
-    pub site_id: i64,
     pub name: String,
     pub scopes: Option<String>,
     pub created_by: i64,
@@ -58,7 +57,7 @@ pub struct CreateTokenResponse {
 
 #[derive(Debug, Deserialize)]
 pub struct ListTokensQuery {
-    pub site_id: Option<i64>,
+    // No site_id needed in multi-database architecture
 }
 
 pub use doxyde_mcp::oauth::{validate_token, TokenInfo};
@@ -68,7 +67,11 @@ pub async fn create_token(
     session: axum_extra::extract::CookieJar,
     Json(request): Json<CreateTokenRequest>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_current_user(&state.db, &session)
+    let db = state
+        .get_oauth_db()
+        .await
+        .map_err(|_| AppError::internal_server_error("Failed to get database"))?;
+    let user = get_current_user(&db, &session)
         .await?
         .ok_or_else(|| AppError::unauthorized("Not logged in"))?;
 
@@ -92,22 +95,20 @@ pub async fn create_token(
         .expires_in_days
         .map(|days| (Utc::now() + Duration::days(days)).to_rfc3339());
 
-    // Insert token (use site_id 1 for now - TODO: implement proper multi-site support)
-    let site_id = 1i64;
+    // Insert token (no site_id needed in multi-database architecture)
     let user_id = user.id.unwrap_or(0);
     let result = sqlx::query!(
         r#"
-        INSERT INTO mcp_tokens (site_id, token_hash, name, scopes, created_by, expires_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO mcp_tokens (token_hash, name, scopes, created_by, expires_at)
+        VALUES (?, ?, ?, ?, ?)
         "#,
-        site_id,
         token_hash,
         request.name,
         request.scopes,
         user_id,
         expires_at
     )
-    .execute(&state.db)
+    .execute(&db)
     .await
     .context("Failed to create token")?;
 
@@ -117,14 +118,14 @@ pub async fn create_token(
     let token_info = sqlx::query_as!(
         McpToken,
         r#"
-        SELECT id as "id: i64", site_id as "site_id: i64", name, scopes, created_by as "created_by: i64",
+        SELECT id as "id: i64", name, scopes, created_by as "created_by: i64",
                expires_at, created_at, last_used_at
         FROM mcp_tokens
         WHERE id = ?
         "#,
         token_id
     )
-    .fetch_one(&state.db)
+    .fetch_one(&db)
     .await
     .context("Failed to fetch created token")?;
 
@@ -134,9 +135,13 @@ pub async fn create_token(
 pub async fn list_tokens(
     State(state): State<AppState>,
     session: axum_extra::extract::CookieJar,
-    Query(query): Query<ListTokensQuery>,
+    Query(_query): Query<ListTokensQuery>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_current_user(&state.db, &session)
+    let db = state
+        .get_oauth_db()
+        .await
+        .map_err(|_| AppError::internal_server_error("Failed to get database"))?;
+    let user = get_current_user(&db, &session)
         .await?
         .ok_or_else(|| AppError::unauthorized("Not logged in"))?;
 
@@ -145,20 +150,17 @@ pub async fn list_tokens(
         return Err(AppError::forbidden("Only admins can list MCP tokens"));
     }
 
-    let site_id = query.site_id.unwrap_or(1); // TODO: implement proper multi-site support
-
+    // In multi-database architecture, all tokens in this database belong to this site
     let tokens = sqlx::query_as!(
         McpToken,
         r#"
-        SELECT id as "id: i64", site_id as "site_id: i64", name, scopes, created_by as "created_by: i64",
+        SELECT id as "id: i64", name, scopes, created_by as "created_by: i64",
                expires_at, created_at, last_used_at
         FROM mcp_tokens
-        WHERE site_id = ?
         ORDER BY created_at DESC
-        "#,
-        site_id
+        "#
     )
-    .fetch_all(&state.db)
+    .fetch_all(&db)
     .await
     .context("Failed to list tokens")?;
 
@@ -170,7 +172,11 @@ pub async fn revoke_token(
     session: axum_extra::extract::CookieJar,
     Path(token_id): Path<i64>,
 ) -> Result<impl IntoResponse, AppError> {
-    let user = get_current_user(&state.db, &session)
+    let db = state
+        .get_oauth_db()
+        .await
+        .map_err(|_| AppError::internal_server_error("Failed to get database"))?;
+    let user = get_current_user(&db, &session)
         .await?
         .ok_or_else(|| AppError::unauthorized("Not logged in"))?;
 
@@ -179,17 +185,15 @@ pub async fn revoke_token(
         return Err(AppError::forbidden("Only admins can revoke MCP tokens"));
     }
 
-    // Delete token (use site_id 1 for now - TODO: implement proper multi-site support)
-    let site_id = 1i64;
+    // Delete token (no site_id needed in multi-database architecture)
     let result = sqlx::query!(
         r#"
         DELETE FROM mcp_tokens
-        WHERE id = ? AND site_id = ?
+        WHERE id = ?
         "#,
-        token_id,
-        site_id
+        token_id
     )
-    .execute(&state.db)
+    .execute(&db)
     .await
     .context("Failed to revoke token")?;
 
@@ -280,6 +284,12 @@ pub async fn register_client(
     State(state): State<AppState>,
     Json(request): Json<ClientRegistrationRequest>,
 ) -> Result<impl IntoResponse, StatusCode> {
+    // Get OAuth database
+    let db = match state.get_oauth_db().await {
+        Ok(db) => db,
+        Err(_) => return Err(StatusCode::INTERNAL_SERVER_ERROR),
+    };
+
     // Generate client credentials
     let client_id = format!("mcp_{}", uuid::Uuid::new_v4());
     let client_secret =
@@ -333,7 +343,7 @@ pub async fn register_client(
         scope,
         token_endpoint_auth_method
     )
-    .execute(&state.db)
+    .execute(&db)
     .await {
         Ok(_) => {
             let response = ClientRegistrationResponse {
@@ -369,6 +379,12 @@ pub async fn authorize(
     session: axum_extra::extract::CookieJar,
     Query(request): Query<AuthorizationRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    // Get OAuth database
+    let db = state
+        .get_oauth_db()
+        .await
+        .map_err(|_| AppError::internal_server_error("Failed to get database"))?;
+
     // Validate client_id exists
     let client = match sqlx::query!(
         r#"
@@ -378,7 +394,7 @@ pub async fn authorize(
         "#,
         request.client_id
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await
     .context("Failed to check client")?
     {
@@ -400,7 +416,7 @@ pub async fn authorize(
     }
 
     // Check if user is authenticated
-    let user = match get_current_user(&state.db, &session).await? {
+    let user = match get_current_user(&db, &session).await? {
         Some(user) => user,
         None => {
             // Redirect to login, preserving OAuth parameters
@@ -483,6 +499,28 @@ pub async fn token(
 }
 
 async fn handle_authorization_code_grant(state: AppState, request: TokenRequest) -> Response<Body> {
+    // Get OAuth database
+    let db = match state.get_oauth_db().await {
+        Ok(db) => db,
+        Err(_) => {
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Database error"
+            });
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                Json(error_response),
+            )
+                .into_response();
+        }
+    };
+
     let code = match &request.code {
         Some(code) => code,
         None => {
@@ -510,7 +548,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         "#,
         code
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await {
         Ok(Some(row)) => row,
         Ok(None) => {
@@ -646,7 +684,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         "UPDATE oauth_authorization_codes SET used_at = datetime('now') WHERE code = ?",
         code
     )
-    .execute(&state.db)
+    .execute(&db)
     .await;
 
     // Generate access token
@@ -679,7 +717,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
         auth_code.scope,
         expires_at
     )
-    .execute(&state.db)
+    .execute(&db)
     .await
     {
         Ok(_) => {
@@ -697,7 +735,7 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
                 auth_code.scope,
                 refresh_expires_at
             )
-            .execute(&state.db)
+            .execute(&db)
             .await
             {
                 Ok(_) => {
@@ -763,6 +801,28 @@ async fn handle_authorization_code_grant(state: AppState, request: TokenRequest)
 }
 
 async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> Response<Body> {
+    // Get OAuth database
+    let db = match state.get_oauth_db().await {
+        Ok(db) => db,
+        Err(_) => {
+            let error_response = serde_json::json!({
+                "error": "server_error",
+                "error_description": "Database error"
+            });
+            let mut headers = HeaderMap::new();
+            add_cors_headers(&mut headers, state.config.static_files_max_age);
+            if let Ok(value) = "application/json".parse() {
+                headers.insert(header::CONTENT_TYPE, value);
+            };
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                headers,
+                Json(error_response),
+            )
+                .into_response();
+        }
+    };
+
     let refresh_token = match &request.refresh_token {
         Some(token) => token,
         None => {
@@ -795,7 +855,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
         "#,
         refresh_token_hash
     )
-    .fetch_optional(&state.db)
+    .fetch_optional(&db)
     .await
     {
         Ok(Some(row)) => row,
@@ -892,7 +952,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
         stored_refresh.scope,
         expires_at
     )
-    .execute(&state.db)
+    .execute(&db)
     .await
     {
         Ok(_) => {
@@ -901,7 +961,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                 "UPDATE oauth_refresh_tokens SET used_at = datetime('now') WHERE token_hash = ?",
                 refresh_token_hash
             )
-            .execute(&state.db)
+            .execute(&db)
             .await;
 
             // Generate new refresh token (refresh token rotation)
@@ -926,7 +986,7 @@ async fn handle_refresh_token_grant(state: AppState, request: TokenRequest) -> R
                 stored_refresh.scope,
                 refresh_expires_at
             )
-            .execute(&state.db)
+            .execute(&db)
             .await
             {
                 Ok(_) => {
@@ -1013,6 +1073,12 @@ pub async fn authorize_consent(
     session: axum_extra::extract::CookieJar,
     Form(request): Form<AuthorizeConsentRequest>,
 ) -> Result<impl IntoResponse, AppError> {
+    // Get OAuth database
+    let db = state
+        .get_oauth_db()
+        .await
+        .map_err(|_| AppError::internal_server_error("Failed to get database"))?;
+
     // Validate CSRF token
     let stored_csrf = session.get("oauth_csrf").map(|c| c.value().to_string());
 
@@ -1030,7 +1096,7 @@ pub async fn authorize_consent(
     }
 
     // Get current user
-    let user = get_current_user(&state.db, &session)
+    let user = get_current_user(&db, &session)
         .await?
         .ok_or_else(|| AppError::unauthorized("Not authenticated"))?;
 
@@ -1045,14 +1111,14 @@ pub async fn authorize_consent(
 
     let mcp_token_id = match sqlx::query!(
         r#"
-        INSERT INTO mcp_tokens (site_id, token_hash, name, created_by)
-        VALUES (1, ?, ?, ?)
+        INSERT INTO mcp_tokens (token_hash, name, created_by)
+        VALUES (?, ?, ?)
         "#,
         token_hash,
         token_name,
         user_id
     )
-    .execute(&state.db)
+    .execute(&db)
     .await
     {
         Ok(result) => result.last_insert_rowid(),
@@ -1085,7 +1151,7 @@ pub async fn authorize_consent(
         request.code_challenge_method,
         expires_at
     )
-    .execute(&state.db)
+    .execute(&db)
     .await {
         Ok(_) => {
             // Redirect back to client with authorization code

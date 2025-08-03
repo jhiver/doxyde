@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT domain FROM sites WHERE id = 1",
+  "query": "SELECT title FROM site_config WHERE id = 1",
   "describe": {
     "columns": [
       {
-        "name": "domain",
+        "name": "title",
         "ordinal": 0,
         "type_info": "Text"
       }
@@ -16,5 +16,5 @@
       false
     ]
   },
-  "hash": "6bb11502dcf4e24c498b228123d4d4e86b83134a1ba88def9b044e9e1246b441"
+  "hash": "9aa5257af6954d750a6543f82341b7a03fa4cbb7fdb18971232168c1e9993042"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "\n        SELECT oat.mcp_token_id as \"mcp_token_id!\", oat.scope, oat.expires_at,\n               mt.id as \"id!: i64\", mt.site_id as \"site_id!: i64\"\n        FROM oauth_access_tokens oat\n        INNER JOIN mcp_tokens mt ON mt.id = CAST(oat.mcp_token_id AS INTEGER)\n        WHERE oat.token_hash = ?\n        ",
+  "query": "\n        SELECT oat.mcp_token_id as \"mcp_token_id!\", oat.scope, oat.expires_at,\n               mt.id as \"id!: i64\"\n        FROM oauth_access_tokens oat\n        INNER JOIN mcp_tokens mt ON mt.id = CAST(oat.mcp_token_id AS INTEGER)\n        WHERE oat.token_hash = ?\n        ",
   "describe": {
     "columns": [
       {
@@ -22,11 +22,6 @@
         "name": "id!: i64",
         "ordinal": 3,
         "type_info": "Integer"
-      },
-      {
-        "name": "site_id!: i64",
-        "ordinal": 4,
-        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -36,9 +31,8 @@
       false,
       true,
       false,
-      true,
-      false
+      true
     ]
   },
-  "hash": "64fd6d6772b213c75dcc4d6991a519fe6c24282f9558bc99482fef08fcfefd77"
+  "hash": "ff9c834ec224db785f43c078fee8aaaebc78be2203ccbf0f654cecbeae4bd73d"
 }

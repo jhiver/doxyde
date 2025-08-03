@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use crate::AppState;
-use anyhow::Context;
+use crate::{db_middleware::SiteDatabase, AppState};
 use axum::{
     extract::State,
     http::{header, HeaderMap, StatusCode},
@@ -24,7 +23,6 @@ use axum::{
 };
 use axum_extra::extract::Host;
 use serde::{Deserialize, Serialize};
-use sqlx;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuthorizationServerMetadata {
@@ -93,19 +91,11 @@ pub async fn oauth_authorization_server_metadata(
     State(state): State<AppState>,
     Host(host): Host,
     headers: HeaderMap,
+    SiteDatabase(_db): SiteDatabase,
 ) -> impl IntoResponse {
-    // Get site domain from database (use site_id 1 for now)
-    let site_domain = match sqlx::query!("SELECT domain FROM sites WHERE id = 1")
-        .fetch_one(&state.db)
-        .await
-        .context("Failed to fetch site domain")
-    {
-        Ok(row) => row.domain,
-        Err(_) => {
-            // Fallback to the Host header if no site exists
-            host.clone()
-        }
-    };
+    // In multi-database architecture, get site domain from Host header
+    // Each database represents exactly one site
+    let site_domain = host.clone();
 
     let protocol = determine_protocol(&headers, &site_domain);
     let base_url = format!("{}://{}", protocol, site_domain);
@@ -150,19 +140,11 @@ pub async fn oauth_protected_resource_metadata(
     State(state): State<AppState>,
     Host(host): Host,
     headers: HeaderMap,
+    SiteDatabase(_db): SiteDatabase,
 ) -> impl IntoResponse {
-    // Get site domain from database (use site_id 1 for now)
-    let site_domain = match sqlx::query!("SELECT domain FROM sites WHERE id = 1")
-        .fetch_one(&state.db)
-        .await
-        .context("Failed to fetch site domain")
-    {
-        Ok(row) => row.domain,
-        Err(_) => {
-            // Fallback to the Host header if no site exists
-            host.clone()
-        }
-    };
+    // In multi-database architecture, get site domain from Host header
+    // Each database represents exactly one site
+    let site_domain = host.clone();
 
     let protocol = determine_protocol(&headers, &site_domain);
     let base_url = format!("{}://{}", protocol, site_domain);
@@ -194,8 +176,9 @@ pub async fn oauth_protected_resource_mcp_metadata(
     State(state): State<AppState>,
     Host(host): Host,
     headers: HeaderMap,
+    SiteDatabase(db): SiteDatabase,
 ) -> impl IntoResponse {
-    oauth_protected_resource_metadata(State(state), Host(host), headers).await
+    oauth_protected_resource_metadata(State(state), Host(host), headers, SiteDatabase(db)).await
 }
 
 pub async fn options_handler(State(state): State<AppState>) -> impl IntoResponse {
@@ -232,10 +215,15 @@ mod tests {
             .expect("Failed to create test state");
 
         let headers = HeaderMap::new();
+        let db = state
+            .get_oauth_db()
+            .await
+            .expect("Failed to get OAuth database");
         let response = oauth_authorization_server_metadata(
             State(state),
             Host("localhost:3000".to_string()),
             headers,
+            SiteDatabase(db),
         )
         .await
         .into_response();
@@ -260,10 +248,15 @@ mod tests {
             .expect("Failed to create test state");
 
         let headers = HeaderMap::new();
+        let db = state
+            .get_oauth_db()
+            .await
+            .expect("Failed to get OAuth database");
         let response = oauth_protected_resource_metadata(
             State(state),
             Host("localhost:3000".to_string()),
             headers,
+            SiteDatabase(db),
         )
         .await
         .into_response();
@@ -286,7 +279,9 @@ mod tests {
         let state = test_helpers::create_test_app_state()
             .await
             .expect("Failed to create test state");
-        let response = options_handler(axum::extract::State(state)).await.into_response();
+        let response = options_handler(axum::extract::State(state))
+            .await
+            .into_response();
 
         assert_eq!(response.status(), StatusCode::NO_CONTENT);
 
