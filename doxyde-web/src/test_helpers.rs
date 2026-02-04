@@ -189,6 +189,26 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     "#,
     )?;
 
+    tera.add_raw_template(
+        "login.html",
+        r#"
+        <!DOCTYPE html>
+        <html>
+        <head><title>Login</title></head>
+        <body>
+            <h1>Login to {{ site_title | default(value="Doxyde") }}</h1>
+            {% if error %}<p class="error">{{ error }}</p>{% endif %}
+            <form method="post" action="/.login">
+                <input type="text" name="username" placeholder="Username or Email">
+                <input type="password" name="password" placeholder="Password">
+                {% if return_to %}<input type="hidden" name="return_to" value="{{ return_to }}">{% endif %}
+                <button type="submit">Login</button>
+            </form>
+        </body>
+        </html>
+    "#,
+    )?;
+
     // Create a test config
     let config = create_test_config();
 
@@ -196,13 +216,110 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     let login_rate_limiter = crate::rate_limit::create_login_rate_limiter(5);
     let api_rate_limiter = crate::rate_limit::create_api_rate_limiter(60);
 
+    // Create a test database router with the pool already registered
+    let db_router = crate::db_router::DatabaseRouter::new_for_test(config.clone(), pool);
+
     Ok(AppState {
-        db: pool,
+        db_router,
         templates: TemplateEngine::Static(Arc::new(tera)),
         config,
         login_rate_limiter,
         api_rate_limiter,
     })
+}
+
+/// Initialize the test schema on an existing pool (for use with #[sqlx::test])
+#[cfg(test)]
+pub async fn setup_test_schema(pool: &SqlitePool) -> Result<(), anyhow::Error> {
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS site_config (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            title TEXT NOT NULL
+        );
+
+        INSERT OR IGNORE INTO site_config (id, title) VALUES (1, 'Test Site');
+
+        CREATE TABLE IF NOT EXISTS pages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            parent_page_id INTEGER,
+            slug TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            keywords TEXT,
+            template TEXT DEFAULT 'default',
+            meta_robots TEXT DEFAULT 'index,follow',
+            canonical_url TEXT,
+            og_image_url TEXT,
+            structured_data_type TEXT DEFAULT 'WebPage',
+            position INTEGER NOT NULL DEFAULT 0,
+            sort_mode TEXT NOT NULL DEFAULT 'position',
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (parent_page_id) REFERENCES pages(id) ON DELETE CASCADE,
+            UNIQUE(parent_page_id, slug)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_pages_parent_page_id ON pages(parent_page_id);
+
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL UNIQUE,
+            username TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            is_admin INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS sessions (
+            id TEXT PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            expires_at TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS site_users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'viewer')),
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            UNIQUE(user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS page_versions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            page_id INTEGER NOT NULL,
+            version_number INTEGER NOT NULL,
+            created_by TEXT,
+            is_published BOOLEAN NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
+            UNIQUE(page_id, version_number)
+        );
+
+        CREATE TABLE IF NOT EXISTS components (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            page_version_id INTEGER NOT NULL,
+            component_type TEXT NOT NULL,
+            position INTEGER NOT NULL,
+            title TEXT,
+            template TEXT DEFAULT 'default',
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (page_version_id) REFERENCES page_versions(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -212,6 +329,9 @@ pub async fn create_test_user(
     email: &str,
     is_admin: bool,
 ) -> Result<User, anyhow::Error> {
+    // Ensure schema exists
+    setup_test_schema(pool).await?;
+
     let user_repo = UserRepository::new(pool.clone());
     let mut user = User::new(email.to_string(), username.to_string(), "password123")?;
     user.is_admin = is_admin;
@@ -228,10 +348,29 @@ pub async fn create_test_site(
     domain: &str,
     title: &str,
 ) -> Result<Site, anyhow::Error> {
+    use doxyde_db::repositories::PageRepository;
+
+    // Ensure schema exists
+    setup_test_schema(pool).await?;
+
     // Update the site_config table with the provided title
     sqlx::query!("UPDATE site_config SET title = ? WHERE id = 1", title)
         .execute(pool)
         .await?;
+
+    // Create root page if it doesn't exist (use raw SQL to bypass validation)
+    let page_repo = PageRepository::new(pool.clone());
+    if page_repo.get_root_page().await?.is_none() {
+        sqlx::query(
+            r#"
+            INSERT INTO pages (parent_page_id, slug, title, position)
+            VALUES (NULL, '', ?, 0)
+            "#,
+        )
+        .bind(title)
+        .execute(pool)
+        .await?;
+    }
 
     // Return a Site object with the configuration
     Ok(Site {

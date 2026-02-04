@@ -308,7 +308,7 @@ pub async fn logout(
 #[cfg(test)]
 mod _disabled_tests {
     use super::*;
-    use crate::{templates::init_templates, AppState};
+    
     use doxyde_core::models::user::User;
     use sqlx::SqlitePool;
 
@@ -318,6 +318,16 @@ mod _disabled_tests {
         // Run migrations inline for tests
         sqlx::query(
             r#"
+            CREATE TABLE site_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                title TEXT NOT NULL,
+                description TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            );
+
+            INSERT INTO site_config (id, title) VALUES (1, 'Test Site');
+
             CREATE TABLE users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
@@ -328,7 +338,7 @@ mod _disabled_tests {
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             );
-            
+
             CREATE TABLE sessions (
                 id TEXT PRIMARY KEY,
                 user_id INTEGER NOT NULL,
@@ -347,20 +357,13 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_form_renders() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool,
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         let response = login_form(
             Host("localhost:3000".to_string()),
             State(state),
             Query(LoginQuery { return_to: None }),
+            crate::db_middleware::SiteDatabase(pool),
         )
         .await;
         assert!(response.is_ok());
@@ -371,15 +374,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_success() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -401,6 +396,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -418,15 +414,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_with_email() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -448,6 +436,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -460,15 +449,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_invalid_password() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create test user
         let user_repo = UserRepository::new(pool.clone());
@@ -490,6 +471,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -507,15 +489,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_nonexistent_user() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         let form = LoginForm {
             username: "nonexistent".to_string(),
@@ -527,6 +501,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -542,15 +517,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_inactive_user() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create inactive user
         let user_repo = UserRepository::new(pool.clone());
@@ -572,6 +539,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -589,15 +557,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_login_starred_password() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create user with starred password
         let user_repo = UserRepository::new(pool.clone());
@@ -626,6 +586,7 @@ mod _disabled_tests {
         let response = login(
             Host("localhost:3000".to_string()),
             State(state),
+            crate::db_middleware::SiteDatabase(pool.clone()),
             jar,
             Form(form),
         )
@@ -643,15 +604,7 @@ mod _disabled_tests {
     #[tokio::test]
     async fn test_logout() -> Result<()> {
         let pool = create_test_db().await?;
-        let templates = init_templates("templates", false)?;
-        let config = crate::test_helpers::create_test_config();
-        let state = AppState::new(
-            pool.clone(),
-            templates,
-            config,
-            crate::rate_limit::create_login_rate_limiter(5),
-            crate::rate_limit::create_api_rate_limiter(60),
-        );
+        let state = crate::test_helpers::create_test_app_state().await?;
 
         // Create test session
         let user_repo = UserRepository::new(pool.clone());
@@ -674,7 +627,7 @@ mod _disabled_tests {
             .build();
         let jar = jar.add(cookie);
 
-        let response = logout(State(state), jar).await;
+        let response = logout(State(state), jar, crate::db_middleware::SiteDatabase(pool.clone())).await;
         assert!(response.is_ok());
 
         // Verify session was deleted

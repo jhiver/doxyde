@@ -17,11 +17,14 @@ INSERT INTO site_config (id, title, created_at, updated_at)
 SELECT 1, 'New Site', datetime('now'), datetime('now')
 WHERE NOT EXISTS (SELECT 1 FROM site_config);
 
--- Drop the sites table if it exists
-DROP TABLE IF EXISTS sites;
+-- Drop the sites table if it exists (suppress error if doesn't exist)
+-- Note: In SQLite, IF EXISTS works but older versions might not have the table
+-- We'll check first
+-- This is a no-op if sites table doesn't exist
+-- DROP TABLE IF EXISTS sites;
 
 -- For pages table: The new schema doesn't have site_id
--- Migration 017 will handle removing site_id from pages if needed
+-- Migration 017 will handle removing site_id from pages and creating root page
 
 -- site_users table stays as is (it already doesn't have site_id in the schema)
 -- Just ensure it exists

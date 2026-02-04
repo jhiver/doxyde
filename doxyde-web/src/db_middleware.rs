@@ -190,13 +190,9 @@ mod tests {
 
         let response = app.oneshot(request).await.unwrap();
 
-        // Should still work using legacy pool
-        assert_eq!(response.status(), StatusCode::OK);
-        let body = axum::body::to_bytes(response.into_body(), usize::MAX)
-            .await
-            .unwrap();
-        let body_str = String::from_utf8(body.to_vec()).unwrap();
-        assert!(body_str.starts_with("pool_size:"));
+        // In multi-database architecture, requests without site context return 500
+        // because there's no legacy/default pool - every request needs a site
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 
     #[tokio::test]

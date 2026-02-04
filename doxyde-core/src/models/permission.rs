@@ -58,7 +58,6 @@ impl SiteRole {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SiteUser {
-    pub site_id: i64,
     pub user_id: i64,
     pub role: SiteRole,
     pub created_at: DateTime<Utc>,
@@ -66,9 +65,9 @@ pub struct SiteUser {
 
 impl SiteUser {
     /// Create a new site-user association
-    pub fn new(site_id: i64, user_id: i64, role: SiteRole) -> Self {
+    /// In multi-database architecture, each database represents one site
+    pub fn new(user_id: i64, role: SiteRole) -> Self {
         Self {
-            site_id,
             user_id,
             role,
             created_at: Utc::now(),
@@ -143,15 +142,13 @@ mod tests {
 
     #[test]
     fn test_new_site_user() {
-        let site_id = 123;
         let user_id = 456;
         let role = SiteRole::Editor;
 
         let before = Utc::now();
-        let site_user = SiteUser::new(site_id, user_id, role);
+        let site_user = SiteUser::new(user_id, role);
         let after = Utc::now();
 
-        assert_eq!(site_user.site_id, site_id);
         assert_eq!(site_user.user_id, user_id);
         assert_eq!(site_user.role, role);
         assert!(site_user.created_at >= before);
@@ -160,7 +157,7 @@ mod tests {
 
     #[test]
     fn test_site_user_serialization() {
-        let site_user = SiteUser::new(1, 2, SiteRole::Owner);
+        let site_user = SiteUser::new(2, SiteRole::Owner);
 
         // Serialize to JSON
         let json = serde_json::to_string(&site_user).unwrap();

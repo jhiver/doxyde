@@ -204,7 +204,7 @@ mod tests {
 
     async fn setup_test_pages(
         pool: &sqlx::SqlitePool,
-        site_id: i64,
+        _site_id: i64,
     ) -> Result<(Page, Page), anyhow::Error> {
         let page_repo = PageRepository::new(pool.clone());
 
@@ -216,8 +216,7 @@ mod tests {
 
         // Create test page
         let page = Page::new_with_parent(
-            site_id,
-            root.id.unwrap(),
+                root.id.unwrap(),
             "test-page".to_string(),
             "Test Page".to_string(),
         );
@@ -236,7 +235,7 @@ mod tests {
 
         // Grant editor permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         let (_root, page) = setup_test_pages(&pool, site.id.unwrap()).await?;
@@ -319,7 +318,6 @@ mod tests {
         // Create a child page
         let page_repo = PageRepository::new(pool.clone());
         let child = Page::new_with_parent(
-            site.id.unwrap(),
             parent.id.unwrap(),
             "child".to_string(),
             "Child Page".to_string(),
@@ -357,7 +355,7 @@ mod tests {
 
         // Grant editor permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         let (_root, page) = setup_test_pages(&pool, site.id.unwrap()).await?;

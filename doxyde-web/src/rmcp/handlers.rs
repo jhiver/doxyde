@@ -175,28 +175,52 @@ pub async fn handle_http(
             })))
         }
         "tools/list" => {
-            // Tools list is dynamically populated from registered handlers
+            let tools = service.http_list_tools();
             Ok(Json(json!({
                 "jsonrpc": "2.0",
                 "result": {
-                    "tools": []
+                    "tools": tools
                 },
                 "id": id
             })))
         }
         "tools/call" => {
-            // No tools implemented yet
             let params = body.get("params").cloned().unwrap_or(json!({}));
             let tool_name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
+            let arguments = params.get("arguments").cloned();
 
-            Ok(Json(json!({
-                "jsonrpc": "2.0",
-                "error": {
-                    "code": -32601,
-                    "message": format!("Unknown tool: {}", tool_name)
-                },
-                "id": id
-            })))
+            match service.http_call_tool(tool_name, arguments).await {
+                Ok(result) => {
+                    // Parse the result as JSON if possible, otherwise wrap as text
+                    let content = if let Ok(json_result) = serde_json::from_str::<Value>(&result) {
+                        json!([{
+                            "type": "text",
+                            "text": serde_json::to_string_pretty(&json_result).unwrap_or(result)
+                        }])
+                    } else {
+                        json!([{
+                            "type": "text",
+                            "text": result
+                        }])
+                    };
+
+                    Ok(Json(json!({
+                        "jsonrpc": "2.0",
+                        "result": {
+                            "content": content
+                        },
+                        "id": id
+                    })))
+                }
+                Err(e) => Ok(Json(json!({
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32602,
+                        "message": e
+                    },
+                    "id": id
+                }))),
+            }
         }
         _ => Ok(Json(json!({
             "jsonrpc": "2.0",

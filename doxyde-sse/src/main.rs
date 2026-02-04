@@ -351,8 +351,8 @@ mod tests {
             match validate_token(&state.db, token).await {
                 Ok(Some(token_info)) => {
                     debug!(
-                        "Valid OAuth token for SSE connection: site_id={}",
-                        token_info.site_id
+                        "Valid OAuth token for SSE connection: token_id={}",
+                        token_info.id
                     );
                     Ok(())
                 }

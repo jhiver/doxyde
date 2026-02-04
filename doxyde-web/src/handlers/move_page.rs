@@ -268,7 +268,7 @@ mod tests {
 
     async fn setup_test_pages(
         pool: &sqlx::SqlitePool,
-        site_id: i64,
+        _site_id: i64,
     ) -> Result<(Page, Page, Page), anyhow::Error> {
         let page_repo = PageRepository::new(pool.clone());
 
@@ -280,8 +280,7 @@ mod tests {
 
         // Create test pages
         let page1 = Page::new_with_parent(
-            site_id,
-            root.id.unwrap(),
+                root.id.unwrap(),
             "page1".to_string(),
             "Page 1".to_string(),
         );
@@ -290,8 +289,7 @@ mod tests {
         page1.id = Some(page1_id);
 
         let page2 = Page::new_with_parent(
-            site_id,
-            root.id.unwrap(),
+                root.id.unwrap(),
             "page2".to_string(),
             "Page 2".to_string(),
         );
@@ -310,7 +308,7 @@ mod tests {
 
         // Grant editor permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         let (_root, page1, page2) = setup_test_pages(&pool, site.id.unwrap()).await?;
@@ -364,7 +362,7 @@ mod tests {
 
         // Grant editor permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         // Get the root page (which cannot be moved)
@@ -400,7 +398,7 @@ mod tests {
 
         // Grant only viewer permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Viewer);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Viewer);
         site_user_repo.create(&site_user).await?;
 
         let (_root, page1, _page2) = setup_test_pages(&pool, site.id.unwrap()).await?;
@@ -426,7 +424,7 @@ mod tests {
 
         // Grant editor permission
         let site_user_repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(site.id.unwrap(), user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         let (_root, page1, page2) = setup_test_pages(&pool, site.id.unwrap()).await?;

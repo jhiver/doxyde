@@ -172,6 +172,9 @@ pub fn get_config_file_paths() -> Vec<PathBuf> {
         paths.push(PathBuf::from(home).join(".doxyde.conf"));
     }
 
+    // Current directory configuration (highest precedence)
+    paths.push(PathBuf::from("./doxyde.toml"));
+
     paths
 }
 

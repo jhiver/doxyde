@@ -997,7 +997,7 @@ pub async fn move_component_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::{create_test_app_state, create_test_session, create_test_user};
+    use crate::test_helpers::{create_test_app_state, create_test_session, create_test_user, setup_test_schema};
     use doxyde_core::{PageVersion, SiteUser};
     use doxyde_db::repositories::{
         ComponentRepository, PageRepository, PageVersionRepository,
@@ -1008,6 +1008,9 @@ mod tests {
     async fn test_save_and_publish_with_deleted_components(
         pool: sqlx::SqlitePool,
     ) -> anyhow::Result<()> {
+        // Setup schema on the test pool
+        setup_test_schema(&pool).await?;
+
         // Create test app state which includes creating the schema
         let test_state = create_test_app_state().await?;
         // Setup test data
@@ -1016,16 +1019,13 @@ mod tests {
         let component_repo = ComponentRepository::new(pool.clone());
         let site_user_repo = SiteUserRepository::new(pool.clone());
 
-        // Get the root page (or create one if it doesn't exist)
-        let root_page = match page_repo.get_root_page().await? {
-            Some(page) => page,
-            None => {
-                // Create a root page
-                let root = Page::new("".to_string(), "Home".to_string());
-                let page_id = page_repo.create(&root).await?;
-                page_repo.find_by_id(page_id).await?.unwrap()
-            }
-        };
+        // Create root page using raw SQL (bypass validation)
+        sqlx::query("INSERT INTO pages (parent_page_id, slug, title, position) VALUES (NULL, '', 'Home', 0)")
+            .execute(&pool)
+            .await?;
+
+        // Get the root page
+        let root_page = page_repo.get_root_page().await?.ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with 3 components
@@ -1090,7 +1090,7 @@ mod tests {
 
         // Create a user with edit permissions
         let user = create_test_user(&pool, "editor", "editor@test.com", false).await?;
-        let site_user = SiteUser::new(site_id, user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
 
         // Use the test app state
@@ -1119,8 +1119,9 @@ mod tests {
         // Create current user
         let current_user = CurrentUser { user, session };
 
-        // Get the site object
-        let site = site_repo.find_by_id(site_id).await?.unwrap();
+        // In multi-database mode, create a dummy site object for testing
+        let mut site = doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
+        site.id = Some(1);
 
         // Call save_draft_handler (this is where the bug was)
         let result = save_draft_handler(
@@ -1196,6 +1197,9 @@ mod tests {
 
     #[sqlx::test]
     async fn test_add_and_delete_component(pool: sqlx::SqlitePool) -> anyhow::Result<()> {
+        // Setup schema on the test pool
+        setup_test_schema(&pool).await?;
+
         // Create test app state
         let test_state = create_test_app_state().await?;
 
@@ -1205,16 +1209,13 @@ mod tests {
         let component_repo = ComponentRepository::new(pool.clone());
         let site_user_repo = SiteUserRepository::new(pool.clone());
 
-        // Get the root page (or create one if it doesn't exist)
-        let root_page = match page_repo.get_root_page().await? {
-            Some(page) => page,
-            None => {
-                // Create a root page
-                let root = Page::new("".to_string(), "Home".to_string());
-                let page_id = page_repo.create(&root).await?;
-                page_repo.find_by_id(page_id).await?.unwrap()
-            }
-        };
+        // Create root page using raw SQL (bypass validation)
+        sqlx::query("INSERT INTO pages (parent_page_id, slug, title, position) VALUES (NULL, '', 'Home', 0)")
+            .execute(&pool)
+            .await?;
+
+        // Get the root page
+        let root_page = page_repo.get_root_page().await?.ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with no components
@@ -1225,7 +1226,7 @@ mod tests {
 
         // Create a user with edit permissions
         let user = create_test_user(&pool, "editor", "editor@test.com", false).await?;
-        let site_user = SiteUser::new(site_id, user.id.unwrap(), SiteRole::Editor);
+        let site_user = SiteUser::new(user.id.unwrap(), SiteRole::Editor);
         site_user_repo.create(&site_user).await?;
         let session = create_test_session(&pool, user.id.unwrap()).await?;
         let current_user = CurrentUser {
@@ -1234,7 +1235,9 @@ mod tests {
         };
 
         let app_state = test_state;
-        let site = site_repo.find_by_id(site_id).await?.unwrap();
+        // In multi-database mode, create a dummy site object for testing
+        let mut site = doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
+        site.id = Some(1);
 
         // Add a component
         let add_form = AddComponentForm {

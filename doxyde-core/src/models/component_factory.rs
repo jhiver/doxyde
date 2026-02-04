@@ -78,9 +78,11 @@ mod tests {
     #[test]
     fn test_get_templates_for_text() {
         let templates = get_templates_for_type("text");
-        assert_eq!(templates.len(), 6);
+        // Templates: default, card, fullwidth, hidden, highlight, left, quote, welcome, with_title
+        assert_eq!(templates.len(), 9);
         assert!(templates.contains(&"default"));
         assert!(templates.contains(&"card"));
+        assert!(templates.contains(&"left"));
     }
 
     #[test]

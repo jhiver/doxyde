@@ -30,11 +30,10 @@ impl SiteUserRepository {
     pub async fn create(&self, site_user: &SiteUser) -> Result<()> {
         sqlx::query(
             r#"
-            INSERT INTO site_users (site_id, user_id, role, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO site_users (user_id, role, created_at)
+            VALUES (?, ?, ?)
             "#,
         )
-        .bind(site_user.site_id)
         .bind(site_user.user_id)
         .bind(site_user.role.as_str())
         .bind(site_user.created_at)
@@ -45,26 +44,21 @@ impl SiteUserRepository {
         Ok(())
     }
 
-    pub async fn find_by_site_and_user(
-        &self,
-        site_id: i64,
-        user_id: i64,
-    ) -> Result<Option<SiteUser>> {
-        let row = sqlx::query_as::<_, (i64, i64, String, String)>(
+    pub async fn find_by_user(&self, user_id: i64) -> Result<Option<SiteUser>> {
+        let row = sqlx::query_as::<_, (i64, String, String)>(
             r#"
-            SELECT site_id, user_id, role, created_at
+            SELECT user_id, role, created_at
             FROM site_users
-            WHERE site_id = ? AND user_id = ?
+            WHERE user_id = ?
             "#,
         )
-        .bind(site_id)
         .bind(user_id)
         .fetch_optional(&self.pool)
         .await
         .context("Failed to find site_user")?;
 
         match row {
-            Some((site_id, user_id, role_str, created_at_str)) => {
+            Some((user_id, role_str, created_at_str)) => {
                 // Parse role
                 let role = match role_str.as_str() {
                     "viewer" => doxyde_core::models::permission::SiteRole::Viewer,
@@ -85,7 +79,6 @@ impl SiteUserRepository {
                 };
 
                 Ok(Some(SiteUser {
-                    site_id,
                     user_id,
                     role,
                     created_at,
@@ -95,14 +88,22 @@ impl SiteUserRepository {
         }
     }
 
-    pub async fn list_by_site(&self, site_id: i64) -> Result<Vec<SiteUser>> {
-        let rows = sqlx::query_as::<_, (i64, i64, String, String)>(
+    // Legacy method for backward compatibility - redirects to find_by_user
+    pub async fn find_by_site_and_user(
+        &self,
+        _site_id: i64,
+        user_id: i64,
+    ) -> Result<Option<SiteUser>> {
+        self.find_by_user(user_id).await
+    }
+
+    pub async fn list_all(&self) -> Result<Vec<SiteUser>> {
+        let rows = sqlx::query_as::<_, (i64, String, String)>(
             r#"
-            SELECT site_id, user_id, role, created_at
+            SELECT user_id, role, created_at
             FROM site_users
-            WHERE site_id = ?
-            ORDER BY 
-                CASE role 
+            ORDER BY
+                CASE role
                     WHEN 'owner' THEN 3
                     WHEN 'editor' THEN 2
                     WHEN 'viewer' THEN 1
@@ -110,13 +111,12 @@ impl SiteUserRepository {
                 user_id ASC
             "#,
         )
-        .bind(site_id)
         .fetch_all(&self.pool)
         .await
-        .context("Failed to list site_users by site")?;
+        .context("Failed to list site_users")?;
 
         let mut site_users = Vec::new();
-        for (site_id, user_id, role_str, created_at_str) in rows {
+        for (user_id, role_str, created_at_str) in rows {
             // Parse role
             let role = match role_str.as_str() {
                 "viewer" => doxyde_core::models::permission::SiteRole::Viewer,
@@ -137,7 +137,6 @@ impl SiteUserRepository {
             };
 
             site_users.push(SiteUser {
-                site_id,
                 user_id,
                 role,
                 created_at,
@@ -147,61 +146,22 @@ impl SiteUserRepository {
         Ok(site_users)
     }
 
+    // Legacy method - in multi-database mode, there's only one site per database
+    // This method now just returns find_by_user as a single-element vector
     pub async fn list_by_user(&self, user_id: i64) -> Result<Vec<SiteUser>> {
-        let rows = sqlx::query_as::<_, (i64, i64, String, String)>(
-            r#"
-            SELECT site_id, user_id, role, created_at
-            FROM site_users
-            WHERE user_id = ?
-            ORDER BY 
-                CASE role 
-                    WHEN 'owner' THEN 3
-                    WHEN 'editor' THEN 2
-                    WHEN 'viewer' THEN 1
-                END DESC,
-                site_id ASC
-            "#,
-        )
-        .bind(user_id)
-        .fetch_all(&self.pool)
-        .await
-        .context("Failed to list site_users by user")?;
-
-        let mut site_users = Vec::new();
-        for (site_id, user_id, role_str, created_at_str) in rows {
-            // Parse role
-            let role = match role_str.as_str() {
-                "viewer" => doxyde_core::models::permission::SiteRole::Viewer,
-                "editor" => doxyde_core::models::permission::SiteRole::Editor,
-                "owner" => doxyde_core::models::permission::SiteRole::Owner,
-                _ => return Err(anyhow::anyhow!("Invalid role: {}", role_str)),
-            };
-
-            // Parse datetime
-            let created_at = if created_at_str.contains('T') {
-                chrono::DateTime::parse_from_rfc3339(&created_at_str)
-                    .context("Failed to parse created_at as RFC3339")?
-                    .with_timezone(&chrono::Utc)
-            } else {
-                chrono::NaiveDateTime::parse_from_str(&created_at_str, "%Y-%m-%d %H:%M:%S")
-                    .context("Failed to parse created_at as SQLite format")?
-                    .and_utc()
-            };
-
-            site_users.push(SiteUser {
-                site_id,
-                user_id,
-                role,
-                created_at,
-            });
+        match self.find_by_user(user_id).await? {
+            Some(site_user) => Ok(vec![site_user]),
+            None => Ok(vec![]),
         }
+    }
 
-        Ok(site_users)
+    // Legacy method for backward compatibility - redirects to list_all
+    pub async fn list_by_site(&self, _site_id: i64) -> Result<Vec<SiteUser>> {
+        self.list_all().await
     }
 
     pub async fn update_role(
         &self,
-        site_id: i64,
         user_id: i64,
         new_role: doxyde_core::models::permission::SiteRole,
     ) -> Result<()> {
@@ -209,11 +169,10 @@ impl SiteUserRepository {
             r#"
             UPDATE site_users
             SET role = ?
-            WHERE site_id = ? AND user_id = ?
+            WHERE user_id = ?
             "#,
         )
         .bind(new_role.as_str())
-        .bind(site_id)
         .bind(user_id)
         .execute(&self.pool)
         .await
@@ -227,9 +186,8 @@ impl SiteUserRepository {
         Ok(())
     }
 
-    pub async fn delete(&self, site_id: i64, user_id: i64) -> Result<()> {
-        let rows_affected = sqlx::query("DELETE FROM site_users WHERE site_id = ? AND user_id = ?")
-            .bind(site_id)
+    pub async fn delete(&self, user_id: i64) -> Result<()> {
+        let rows_affected = sqlx::query("DELETE FROM site_users WHERE user_id = ?")
             .bind(user_id)
             .execute(&self.pool)
             .await
@@ -268,13 +226,13 @@ mod tests {
         .execute(pool)
         .await?;
 
-        // Create sites table
+        // Create site_config table (single-database-per-site architecture)
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS sites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT NOT NULL UNIQUE,
+            CREATE TABLE IF NOT EXISTS site_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
                 title TEXT NOT NULL,
+                description TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -283,16 +241,19 @@ mod tests {
         .execute(pool)
         .await?;
 
-        // Create site_users table
+        // Initialize site_config
+        sqlx::query("INSERT INTO site_config (id, title) VALUES (1, 'Test Site')")
+            .execute(pool)
+            .await?;
+
+        // Create site_users table (no site_id - each database is one site)
         sqlx::query(
             r#"
             CREATE TABLE IF NOT EXISTS site_users (
-                site_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL UNIQUE,
                 role TEXT NOT NULL DEFAULT 'viewer',
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                PRIMARY KEY (site_id, user_id),
-                FOREIGN KEY (site_id) REFERENCES sites(id) ON DELETE CASCADE,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 CHECK (role IN ('viewer', 'editor', 'owner'))
             )
@@ -328,27 +289,15 @@ mod tests {
         Ok(result.last_insert_rowid())
     }
 
-    async fn create_test_site(pool: &SqlitePool) -> Result<i64> {
-        let result = sqlx::query("INSERT INTO sites (domain, title) VALUES (?, ?)")
-            .bind("example.com")
-            .bind("Example Site")
-            .execute(pool)
-            .await?;
-
-        Ok(result.last_insert_rowid())
-    }
-
     #[sqlx::test]
     async fn test_create_site_user_success() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -357,8 +306,7 @@ mod tests {
 
         // Verify it was created
         let count: (i64,) =
-            sqlx::query_as("SELECT COUNT(*) FROM site_users WHERE site_id = ? AND user_id = ?")
-                .bind(site_id)
+            sqlx::query_as("SELECT COUNT(*) FROM site_users WHERE user_id = ?")
                 .bind(user_id)
                 .fetch_one(&pool)
                 .await?;
@@ -373,11 +321,9 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool);
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         );
@@ -385,43 +331,21 @@ mod tests {
         // First should succeed
         repo.create(&site_user).await?;
 
-        // Second should fail (duplicate primary key)
+        // Second should fail (duplicate user_id UNIQUE constraint)
         let result = repo.create(&site_user).await;
         assert!(result.is_err());
 
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_create_site_user_invalid_site_fails() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let user_id = create_test_user(&pool).await?;
-
-        let repo = SiteUserRepository::new(pool);
-        let site_user = SiteUser::new(
-            999,
-            user_id,
-            doxyde_core::models::permission::SiteRole::Owner,
-        ); // Non-existent site
-
-        let result = repo.create(&site_user).await;
-        assert!(result.is_err());
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_create_site_user_invalid_user_fails() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
 
-        let site_id = create_test_site(&pool).await?;
-
         let repo = SiteUserRepository::new(pool);
         let site_user = SiteUser::new(
-            site_id,
             999,
             doxyde_core::models::permission::SiteRole::Editor,
         ); // Non-existent user
@@ -436,8 +360,6 @@ mod tests {
     async fn test_create_site_user_all_roles() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
-
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
 
@@ -458,13 +380,12 @@ mod tests {
                     .await?;
             let user_id = result.last_insert_rowid();
 
-            let site_user = SiteUser::new(site_id, user_id, *role);
+            let site_user = SiteUser::new(user_id, *role);
             repo.create(&site_user).await?;
 
             // Verify role was saved correctly
             let saved_role: (String,) =
-                sqlx::query_as("SELECT role FROM site_users WHERE site_id = ? AND user_id = ?")
-                    .bind(site_id)
+                sqlx::query_as("SELECT role FROM site_users WHERE user_id = ?")
                     .bind(user_id)
                     .fetch_one(&pool)
                     .await?;
@@ -480,11 +401,9 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -492,12 +411,11 @@ mod tests {
         // Create the association
         repo.create(&site_user).await?;
 
-        // Find it
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        // Find it (site_id is ignored in single-database mode)
+        let found = repo.find_by_site_and_user(1, user_id).await?;
         assert!(found.is_some());
 
         let found_su = found.unwrap();
-        assert_eq!(found_su.site_id, site_id);
         assert_eq!(found_su.user_id, user_id);
         assert_eq!(
             found_su.role,
@@ -513,49 +431,16 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool);
 
-        // Try to find non-existing association
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        // Try to find non-existing association (site_id is ignored in single-database mode)
+        let found = repo.find_by_site_and_user(1, user_id).await?;
         assert!(found.is_none());
 
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_find_by_site_and_user_wrong_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
-
-        // Create second site
-        let result = sqlx::query("INSERT INTO sites (domain, title) VALUES (?, ?)")
-            .bind("other.com")
-            .bind("Other Site")
-            .execute(&pool)
-            .await?;
-        let other_site_id = result.last_insert_rowid();
-
-        let repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(
-            site_id,
-            user_id,
-            doxyde_core::models::permission::SiteRole::Owner,
-        );
-
-        // Create association with first site
-        repo.create(&site_user).await?;
-
-        // Try to find with wrong site
-        let found = repo.find_by_site_and_user(other_site_id, user_id).await?;
-        assert!(found.is_none());
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_find_by_site_and_user_wrong_user() -> Result<()> {
@@ -563,7 +448,6 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         // Create second user
         let result =
@@ -577,7 +461,6 @@ mod tests {
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         );
@@ -585,8 +468,8 @@ mod tests {
         // Create association with first user
         repo.create(&site_user).await?;
 
-        // Try to find with wrong user
-        let found = repo.find_by_site_and_user(site_id, other_user_id).await?;
+        // Try to find with wrong user (site_id is ignored in single-database mode)
+        let found = repo.find_by_site_and_user(1, other_user_id).await?;
         assert!(found.is_none());
 
         Ok(())
@@ -598,23 +481,21 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         // Insert with SQLite datetime format
         sqlx::query(
             r#"
-            INSERT INTO site_users (site_id, user_id, role, created_at)
-            VALUES (?, ?, ?, datetime('now'))
+            INSERT INTO site_users (user_id, role, created_at)
+            VALUES (?, ?, datetime('now'))
             "#,
         )
-        .bind(site_id)
         .bind(user_id)
         .bind("owner")
         .execute(&pool)
         .await?;
 
         let repo = SiteUserRepository::new(pool);
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        let found = repo.find_by_site_and_user(1, user_id).await?;
 
         assert!(found.is_some());
         let site_user = found.unwrap();
@@ -631,10 +512,8 @@ mod tests {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
 
-        let site_id = create_test_site(&pool).await?;
-
         let repo = SiteUserRepository::new(pool);
-        let users = repo.list_by_site(site_id).await?;
+        let users = repo.list_by_site(1).await?;
 
         assert_eq!(users.len(), 0);
 
@@ -647,17 +526,15 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
         repo.create(&site_user).await?;
 
-        let users = repo.list_by_site(site_id).await?;
+        let users = repo.list_by_site(1).await?;
 
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].user_id, user_id);
@@ -673,8 +550,6 @@ mod tests {
     async fn test_list_by_site_multiple_users_ordered() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
         setup_test_db(&pool).await?;
-
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
 
@@ -693,17 +568,14 @@ mod tests {
 
         // Add users with different roles
         let site_user1 = SiteUser::new(
-            site_id,
             user_ids[0],
             doxyde_core::models::permission::SiteRole::Viewer,
         );
         let site_user2 = SiteUser::new(
-            site_id,
             user_ids[1],
             doxyde_core::models::permission::SiteRole::Owner,
         );
         let site_user3 = SiteUser::new(
-            site_id,
             user_ids[2],
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -712,7 +584,7 @@ mod tests {
         repo.create(&site_user2).await?;
         repo.create(&site_user3).await?;
 
-        let users = repo.list_by_site(site_id).await?;
+        let users = repo.list_by_site(1).await?;
 
         assert_eq!(users.len(), 3);
 
@@ -733,64 +605,7 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_list_by_site_non_existent_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
 
-        let repo = SiteUserRepository::new(pool);
-        let users = repo.list_by_site(999).await?;
-
-        assert_eq!(users.len(), 0);
-
-        Ok(())
-    }
-
-    #[sqlx::test]
-    async fn test_list_by_site_excludes_other_sites() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let user_id = create_test_user(&pool).await?;
-        let site1_id = create_test_site(&pool).await?;
-
-        // Create second site
-        let result = sqlx::query("INSERT INTO sites (domain, title) VALUES (?, ?)")
-            .bind("other.com")
-            .bind("Other Site")
-            .execute(&pool)
-            .await?;
-        let site2_id = result.last_insert_rowid();
-
-        let repo = SiteUserRepository::new(pool.clone());
-
-        // Add user to both sites
-        let site_user1 = SiteUser::new(
-            site1_id,
-            user_id,
-            doxyde_core::models::permission::SiteRole::Owner,
-        );
-        let site_user2 = SiteUser::new(
-            site2_id,
-            user_id,
-            doxyde_core::models::permission::SiteRole::Viewer,
-        );
-
-        repo.create(&site_user1).await?;
-        repo.create(&site_user2).await?;
-
-        // List users for site1
-        let users = repo.list_by_site(site1_id).await?;
-
-        assert_eq!(users.len(), 1);
-        assert_eq!(users[0].site_id, site1_id);
-        assert_eq!(
-            users[0].role,
-            doxyde_core::models::permission::SiteRole::Owner
-        );
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_list_by_user_empty() -> Result<()> {
@@ -813,11 +628,9 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         );
@@ -826,7 +639,6 @@ mod tests {
         let sites = repo.list_by_user(user_id).await?;
 
         assert_eq!(sites.len(), 1);
-        assert_eq!(sites[0].site_id, site_id);
         assert_eq!(
             sites[0].role,
             doxyde_core::models::permission::SiteRole::Viewer
@@ -835,67 +647,6 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_list_by_user_multiple_sites_ordered() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let user_id = create_test_user(&pool).await?;
-
-        let repo = SiteUserRepository::new(pool.clone());
-
-        // Create multiple sites
-        let mut site_ids = Vec::new();
-        for i in 0..3 {
-            let result = sqlx::query("INSERT INTO sites (domain, title) VALUES (?, ?)")
-                .bind(format!("site{}.com", i))
-                .bind(format!("Site {}", i))
-                .execute(&pool)
-                .await?;
-            site_ids.push(result.last_insert_rowid());
-        }
-
-        // Add user to sites with different roles
-        let site_user1 = SiteUser::new(
-            site_ids[0],
-            user_id,
-            doxyde_core::models::permission::SiteRole::Editor,
-        );
-        let site_user2 = SiteUser::new(
-            site_ids[1],
-            user_id,
-            doxyde_core::models::permission::SiteRole::Viewer,
-        );
-        let site_user3 = SiteUser::new(
-            site_ids[2],
-            user_id,
-            doxyde_core::models::permission::SiteRole::Owner,
-        );
-
-        repo.create(&site_user1).await?;
-        repo.create(&site_user2).await?;
-        repo.create(&site_user3).await?;
-
-        let sites = repo.list_by_user(user_id).await?;
-
-        assert_eq!(sites.len(), 3);
-
-        // Should be ordered by role DESC (Owner > Editor > Viewer), then by site_id ASC
-        assert_eq!(
-            sites[0].role,
-            doxyde_core::models::permission::SiteRole::Owner
-        );
-        assert_eq!(
-            sites[1].role,
-            doxyde_core::models::permission::SiteRole::Editor
-        );
-        assert_eq!(
-            sites[2].role,
-            doxyde_core::models::permission::SiteRole::Viewer
-        );
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_list_by_user_excludes_other_users() -> Result<()> {
@@ -903,7 +654,6 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user1_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         // Create second user
         let result =
@@ -919,12 +669,10 @@ mod tests {
 
         // Add both users to the site
         let site_user1 = SiteUser::new(
-            site_id,
             user1_id,
             doxyde_core::models::permission::SiteRole::Owner,
         );
         let site_user2 = SiteUser::new(
-            site_id,
             user2_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -932,7 +680,7 @@ mod tests {
         repo.create(&site_user1).await?;
         repo.create(&site_user2).await?;
 
-        // List sites for user1
+        // List sites for user1 (returns single-element vector in single-database mode)
         let sites = repo.list_by_user(user1_id).await?;
 
         assert_eq!(sites.len(), 1);
@@ -951,13 +699,11 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
 
         // Create with viewer role
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         );
@@ -965,14 +711,13 @@ mod tests {
 
         // Update to editor role
         repo.update_role(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         )
         .await?;
 
         // Verify it was updated
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        let found = repo.find_by_site_and_user(1, user_id).await?;
         assert!(found.is_some());
         assert_eq!(
             found.unwrap().role,
@@ -988,15 +733,13 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool);
 
         // Try to update non-existing association
         let result = repo
             .update_role(
-                site_id,
-                user_id,
+            user_id,
                 doxyde_core::models::permission::SiteRole::Owner,
             )
             .await;
@@ -1012,13 +755,11 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
 
         // Start with viewer
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         );
@@ -1026,12 +767,11 @@ mod tests {
 
         // Viewer -> Editor
         repo.update_role(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         )
         .await?;
-        let found = repo.find_by_site_and_user(site_id, user_id).await?.unwrap();
+        let found = repo.find_by_site_and_user(1, user_id).await?.unwrap();
         assert_eq!(
             found.role,
             doxyde_core::models::permission::SiteRole::Editor
@@ -1039,22 +779,20 @@ mod tests {
 
         // Editor -> Owner
         repo.update_role(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Owner,
         )
         .await?;
-        let found = repo.find_by_site_and_user(site_id, user_id).await?.unwrap();
+        let found = repo.find_by_site_and_user(1, user_id).await?.unwrap();
         assert_eq!(found.role, doxyde_core::models::permission::SiteRole::Owner);
 
         // Owner -> Viewer (downgrade)
         repo.update_role(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Viewer,
         )
         .await?;
-        let found = repo.find_by_site_and_user(site_id, user_id).await?.unwrap();
+        let found = repo.find_by_site_and_user(1, user_id).await?.unwrap();
         assert_eq!(
             found.role,
             doxyde_core::models::permission::SiteRole::Viewer
@@ -1069,11 +807,9 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -1082,10 +818,10 @@ mod tests {
         repo.create(&site_user).await?;
 
         // Delete it
-        repo.delete(site_id, user_id).await?;
+        repo.delete(user_id).await?;
 
         // Verify it's gone
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        let found = repo.find_by_site_and_user(1, user_id).await?;
         assert!(found.is_none());
 
         Ok(())
@@ -1097,12 +833,11 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool);
 
         // Try to delete non-existing association
-        let result = repo.delete(site_id, user_id).await;
+        let result = repo.delete(user_id).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
 
@@ -1115,7 +850,6 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user1_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         // Create second user
         let result =
@@ -1131,12 +865,10 @@ mod tests {
 
         // Add both users to the site
         let site_user1 = SiteUser::new(
-            site_id,
             user1_id,
             doxyde_core::models::permission::SiteRole::Owner,
         );
         let site_user2 = SiteUser::new(
-            site_id,
             user2_id,
             doxyde_core::models::permission::SiteRole::Editor,
         );
@@ -1145,14 +877,14 @@ mod tests {
         repo.create(&site_user2).await?;
 
         // Delete only the first user
-        repo.delete(site_id, user1_id).await?;
+        repo.delete(user1_id).await?;
 
         // Verify first is gone
-        let found1 = repo.find_by_site_and_user(site_id, user1_id).await?;
+        let found1 = repo.find_by_site_and_user(1, user1_id).await?;
         assert!(found1.is_none());
 
         // Verify second still exists
-        let found2 = repo.find_by_site_and_user(site_id, user2_id).await?;
+        let found2 = repo.find_by_site_and_user(1, user2_id).await?;
         assert!(found2.is_some());
 
         Ok(())
@@ -1164,11 +896,9 @@ mod tests {
         setup_test_db(&pool).await?;
 
         let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
 
         let repo = SiteUserRepository::new(pool.clone());
         let site_user = SiteUser::new(
-            site_id,
             user_id,
             doxyde_core::models::permission::SiteRole::Owner,
         );
@@ -1183,40 +913,10 @@ mod tests {
             .await?;
 
         // Verify association is gone
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
+        let found = repo.find_by_site_and_user(1, user_id).await?;
         assert!(found.is_none());
 
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_delete_cascades_when_site_deleted() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let user_id = create_test_user(&pool).await?;
-        let site_id = create_test_site(&pool).await?;
-
-        let repo = SiteUserRepository::new(pool.clone());
-        let site_user = SiteUser::new(
-            site_id,
-            user_id,
-            doxyde_core::models::permission::SiteRole::Viewer,
-        );
-
-        // Create the association
-        repo.create(&site_user).await?;
-
-        // Delete the site (should cascade to site_users)
-        sqlx::query("DELETE FROM sites WHERE id = ?")
-            .bind(site_id)
-            .execute(&pool)
-            .await?;
-
-        // Verify association is gone
-        let found = repo.find_by_site_and_user(site_id, user_id).await?;
-        assert!(found.is_none());
-
-        Ok(())
-    }
 }

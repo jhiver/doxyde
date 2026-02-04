@@ -98,10 +98,18 @@ pub async fn serve_image_handler(
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
+                            // file_path is stored relative to working directory (e.g., sites/xxx/uploads/file.jpg)
+                            // Use sites directory parent as base for path validation
+                            let sites_dir = state.config.get_sites_directory().map_err(|e| {
+                                tracing::error!("Failed to get sites directory: {}", e);
+                                StatusCode::INTERNAL_SERVER_ERROR
+                            })?;
+                            let base_dir = sites_dir.parent().unwrap_or(&sites_dir);
+
                             return serve_image_file(
                                 file_path,
                                 &format,
-                                &state.config.uploads_dir,
+                                base_dir.to_str().unwrap_or("."),
                                 state.config.static_files_max_age,
                             )
                             .await;
@@ -195,17 +203,25 @@ pub async fn image_preview_handler(
     // Extract image data and serve
     let (file_path, format) = extract_image_data(&component)?;
 
+    // file_path is stored relative to working directory (e.g., sites/xxx/uploads/file.jpg)
+    // Use sites directory parent as base for path validation
+    let sites_dir = state.config.get_sites_directory().map_err(|e| {
+        tracing::error!("Failed to get sites directory: {}", e);
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    let base_dir = sites_dir.parent().unwrap_or(&sites_dir);
+
     tracing::debug!(
-        "Serving image preview - file_path: {}, format: {}, uploads_dir: {}",
+        "Serving image preview - file_path: {}, format: {}, base_dir: {:?}",
         file_path,
         format,
-        state.config.uploads_dir
+        base_dir
     );
 
     serve_image_file(
         file_path,
         format,
-        &state.config.uploads_dir,
+        base_dir.to_str().unwrap_or("."),
         state.config.static_files_max_age,
     )
     .await

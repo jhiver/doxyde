@@ -44,7 +44,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Montserrat:wght@400;500;600;700&family=Indie+Flower&display=swap" rel="stylesheet">
     
     <!-- Speculation Rules for instant navigation -->
     <script type="speculationrules">
@@ -120,8 +120,6 @@
                     <div class="auth-controls">
                         <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
                     </div>
-                {% else %}
-                    <a href="/.login" class="btn btn-sm btn-primary">Login</a>
                 {% endif %}
             </div>
         </div>
@@ -139,7 +137,7 @@
     </div>
 
     <footer>
-        <p>Powered by <a href="https://github.com/jhiver/doxyde">{% if root_page_title %}{{ root_page_title }}{% else %}{{ site_title | default(value="Doxyde") }}{% endif %}</a></p>
+        <p>Powered by <a href="https://github.com/jhiver/doxyde">Doxyde</a> · <a href="/.login">Login</a></p>
     </footer>
 
     <!-- Clipboard functionality for code blocks -->

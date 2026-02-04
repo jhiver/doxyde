@@ -312,7 +312,7 @@ async fn handle_user_command(command: UserCommands, pool: SqlitePool) -> Result<
             let site_user_repo = SiteUserRepository::new(pool);
             let user_id = found_user.id.ok_or_else(|| anyhow!("User has no ID"))?;
             let site_user =
-                doxyde_core::models::permission::SiteUser::new(1, user_id, site_role);
+                doxyde_core::models::permission::SiteUser::new(user_id, site_role);
 
             site_user_repo.create(&site_user).await?;
 

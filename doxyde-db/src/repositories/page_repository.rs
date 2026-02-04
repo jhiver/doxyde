@@ -1207,8 +1207,6 @@ impl PageRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::repositories::site_repository::SiteRepository;
-    use doxyde_core::models::site::Site;
 
     #[sqlx::test]
     async fn test_new_creates_repository() -> Result<(), sqlx::Error> {
@@ -1242,13 +1240,13 @@ mod tests {
             .execute(pool)
             .await?;
 
-        // Create sites table first
+        // Create site_config table (single-site architecture)
         sqlx::query(
             r#"
-            CREATE TABLE IF NOT EXISTS sites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT NOT NULL UNIQUE,
+            CREATE TABLE IF NOT EXISTS site_config (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
                 title TEXT NOT NULL,
+                description TEXT,
                 created_at TEXT NOT NULL DEFAULT (datetime('now')),
                 updated_at TEXT NOT NULL DEFAULT (datetime('now'))
             )
@@ -1256,6 +1254,11 @@ mod tests {
         )
         .execute(pool)
         .await?;
+
+        // Initialize site_config
+        sqlx::query("INSERT INTO site_config (id, title) VALUES (1, 'Test Site')")
+            .execute(pool)
+            .await?;
 
         // Create pages table
         sqlx::query(
@@ -1339,7 +1342,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_page_success() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
@@ -1370,7 +1373,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_page_with_all_fields() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
@@ -1387,10 +1390,10 @@ mod tests {
         let id = repo.create(&page).await?;
 
         // Verify the data was inserted correctly
-        let row: (i64, Option<i64>, String, String, i32, String, String) = sqlx::query_as(
+        let row: (Option<i64>, String, String, i32, String, String) = sqlx::query_as(
             r#"
-            SELECT site_id, parent_page_id, slug, title, position, created_at, updated_at 
-            FROM pages 
+            SELECT parent_page_id, slug, title, position, created_at, updated_at
+            FROM pages
             WHERE id = ?
             "#,
         )
@@ -1398,13 +1401,12 @@ mod tests {
         .fetch_one(&repo.pool)
         .await?;
 
-        assert_eq!(row.0, page.site_id);
-        assert_eq!(row.1, page.parent_page_id);
-        assert_eq!(row.2, page.slug);
-        assert_eq!(row.3, page.title);
-        assert_eq!(row.4, page.position);
+        assert_eq!(row.0, page.parent_page_id);
+        assert_eq!(row.1, page.slug);
+        assert_eq!(row.2, page.title);
+        assert_eq!(row.3, page.position);
+        assert!(!row.4.is_empty());
         assert!(!row.5.is_empty());
-        assert!(!row.6.is_empty());
 
         Ok(())
     }
@@ -1412,7 +1414,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_page_with_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -1434,10 +1436,10 @@ mod tests {
         let child_id = repo.create(&child_page).await?;
 
         // Verify the child page data
-        let row: (i64, Option<i64>, String, String, i32) = sqlx::query_as(
+        let row: (Option<i64>, String, String, i32) = sqlx::query_as(
             r#"
-            SELECT site_id, parent_page_id, slug, title, position
-            FROM pages 
+            SELECT parent_page_id, slug, title, position
+            FROM pages
             WHERE id = ?
             "#,
         )
@@ -1445,11 +1447,10 @@ mod tests {
         .fetch_one(&repo.pool)
         .await?;
 
-        assert_eq!(row.0, site_id);
-        assert_eq!(row.1, Some(parent_id));
-        assert_eq!(row.2, "child");
-        assert_eq!(row.3, "Child Page");
-        assert_eq!(row.4, 1);
+        assert_eq!(row.0, Some(parent_id));
+        assert_eq!(row.1, "child");
+        assert_eq!(row.2, "Child Page");
+        assert_eq!(row.3, 1);
 
         Ok(())
     }
@@ -1457,7 +1458,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_page_duplicate_slug_same_site_fails() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -1485,68 +1486,13 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_create_page_same_slug_different_sites_succeeds() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
 
-        // Create a second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get root pages for both sites
-        let root_id1 = get_root_page_id(&pool, site_id1).await?;
-        let root_id2 = get_root_page_id(&pool, site_id2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-        let page1 = Page::new_with_parent(
-            site_id1,
-            root_id1,
-            "about".to_string(),
-            "About Site 1".to_string(),
-        );
-        let page2 = Page::new_with_parent(
-            site_id2,
-            root_id2,
-            "about".to_string(),
-            "About Site 2".to_string(),
-        );
-
-        // Both inserts should succeed
-        let id1 = repo.create(&page1).await?;
-        let id2 = repo.create(&page2).await?;
-
-        assert!(id1 > 0);
-        assert!(id2 > 0);
-        assert_ne!(id1, id2);
-
-        Ok(())
-    }
-
-    #[sqlx::test]
-    async fn test_create_page_with_non_existent_site_fails() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
-
-        // Get the root page that was created automatically
-        let root_id = get_root_page_id(&pool).await?;
-
-        let repo = PageRepository::new(pool.clone());
-        // Try to create a page with non-existent site but valid parent
-        let page = Page::new_with_parent(999, root_id, "test".to_string(), "Test Page".to_string());
-
-        // Should fail due to foreign key constraint
-        let result = repo.create(&page).await;
-        assert!(result.is_err());
-
-        Ok(())
-    }
+    // Note: test_create_page_with_non_existent_site_fails removed - not applicable in single-database mode
 
     #[sqlx::test]
     async fn test_create_multiple_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -1587,7 +1533,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_id_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1604,7 +1550,6 @@ mod tests {
         assert!(found.is_some());
         let found_page = found.unwrap();
         assert_eq!(found_page.id, Some(id));
-        assert_eq!(found_page.site_id, page.site_id);
         assert_eq!(found_page.slug, page.slug);
         assert_eq!(found_page.title, page.title);
 
@@ -1629,7 +1574,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_id_with_timestamps() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1671,7 +1616,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_id_multiple_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1697,7 +1642,6 @@ mod tests {
 
             let found_page = found.unwrap();
             assert_eq!(found_page.id, Some(*id));
-            assert_eq!(found_page.site_id, pages[i].site_id);
             assert_eq!(found_page.slug, pages[i].slug);
             assert_eq!(found_page.title, pages[i].title);
         }
@@ -1726,7 +1670,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_id_after_delete() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1761,7 +1705,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_slug_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1779,7 +1723,6 @@ mod tests {
         assert!(found.is_some());
         let found_page = found.unwrap();
         assert_eq!(found_page.id, Some(id));
-        assert_eq!(found_page.site_id, page.site_id);
         assert_eq!(found_page.slug, page.slug);
         assert_eq!(found_page.title, page.title);
 
@@ -1789,7 +1732,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_slug_non_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
@@ -1801,87 +1744,12 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_find_by_slug_wrong_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
 
-        // Create a second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get the root page for site1
-        let root_id1 = get_root_page_id(&pool, site_id1).await?;
-
-        let repo = PageRepository::new(pool.clone());
-        let page = Page::new_with_parent(
-            site_id1,
-            root_id1,
-            "test-page".to_string(),
-            "Test Page".to_string(),
-        );
-
-        // Create the page for site1
-        repo.create(&page).await?;
-
-        // Try to find it with site2's ID
-        let found = repo.find_by_slug("test-page").await?;
-
-        assert!(found.is_none());
-
-        Ok(())
-    }
-
-    #[sqlx::test]
-    async fn test_find_by_slug_same_slug_different_sites() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create a second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get root pages for both sites
-        let root_id1 = get_root_page_id(&pool, site_id1).await?;
-        let root_id2 = get_root_page_id(&pool, site_id2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-        let page1 = Page::new_with_parent(
-            site_id1,
-            root_id1,
-            "about".to_string(),
-            "About Site 1".to_string(),
-        );
-        let page2 = Page::new_with_parent(
-            site_id2,
-            root_id2,
-            "about".to_string(),
-            "About Site 2".to_string(),
-        );
-
-        // Create both pages with same slug but different sites
-        let id1 = repo.create(&page1).await?;
-        let id2 = repo.create(&page2).await?;
-
-        // Find first page
-        let found1 = repo.find_by_slug("about").await?;
-        assert!(found1.is_some());
-        assert_eq!(found1.unwrap().id, Some(id1));
-
-        // Find second page
-        let found2 = repo.find_by_slug("about").await?;
-        assert!(found2.is_some());
-        assert_eq!(found2.unwrap().id, Some(id2));
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_find_by_slug_case_sensitive() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1910,7 +1778,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_slug_with_special_characters() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -1942,7 +1810,7 @@ mod tests {
     #[sqlx::test]
     async fn test_find_by_slug_empty_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
@@ -1973,7 +1841,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_all_no_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -1988,7 +1856,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_all_single_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2014,7 +1882,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_all_multiple_pages_ordered() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2030,7 +1898,7 @@ mod tests {
         ];
 
         for (slug, title) in &pages_data {
-            let page = Page::new_with_parent(site_id, root_id, slug.to_string(), title.to_string());
+            let page = Page::new_with_parent(root_id, slug.to_string(), title.to_string());
             repo.create(&page).await?;
         }
 
@@ -2049,103 +1917,13 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_list_all_multiple_sites() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
 
-        // Create a second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get root pages for both sites
-        let root1_id = get_root_page_id(&pool, site_id1).await?;
-        let root2_id = get_root_page_id(&pool, site_id2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Create child pages for site1
-        let site1_pages = vec![
-            Page::new_with_parent(
-                site_id1,
-                root1_id,
-                "page1".to_string(),
-                "Site 1 Page 1".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id1,
-                root1_id,
-                "page2".to_string(),
-                "Site 1 Page 2".to_string(),
-            ),
-        ];
-
-        // Create child pages for site2
-        let site2_pages = vec![
-            Page::new_with_parent(
-                site_id2,
-                root2_id,
-                "page1".to_string(),
-                "Site 2 Page 1".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id2,
-                root2_id,
-                "page2".to_string(),
-                "Site 2 Page 2".to_string(),
-            ),
-            Page::new_with_parent(
-                site_id2,
-                root2_id,
-                "page3".to_string(),
-                "Site 2 Page 3".to_string(),
-            ),
-        ];
-
-        for page in &site1_pages {
-            repo.create(page).await?;
-        }
-        for page in &site2_pages {
-            repo.create(page).await?;
-        }
-
-        // List pages for site1 (including root)
-        let pages1 = repo.list_all().await?;
-        assert_eq!(pages1.len(), 3); // 1 root + 2 child pages
-        for page in &pages1 {
-            assert_eq!(page.site_id, site_id1);
-        }
-
-        // List pages for site2 (including root)
-        let pages2 = repo.list_all().await?;
-        assert_eq!(pages2.len(), 4); // 1 root + 3 child pages
-        for page in &pages2 {
-            assert_eq!(page.site_id, site_id2);
-        }
-
-        Ok(())
-    }
-
-    #[sqlx::test]
-    async fn test_list_all_non_existent_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        setup_test_db(&pool).await?;
-
-        let repo = PageRepository::new(pool);
-
-        // List pages for non-existent site
-        let pages = repo.list_all(999).await?;
-
-        assert!(pages.is_empty());
-
-        Ok(())
-    }
+    // Note: test_list_all_non_existent_site removed - not applicable in single-database mode
 
     #[sqlx::test]
     async fn test_list_all_with_special_characters() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2162,7 +1940,7 @@ mod tests {
         ];
 
         for (slug, title) in &pages_data {
-            let page = Page::new_with_parent(site_id, root_id, slug.to_string(), title.to_string());
+            let page = Page::new_with_parent(root_id, slug.to_string(), title.to_string());
             repo.create(&page).await?;
         }
 
@@ -2184,7 +1962,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_all_after_delete() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2200,7 +1978,7 @@ mod tests {
 
         let mut ids = Vec::new();
         for (slug, title) in &pages_data {
-            let page = Page::new_with_parent(site_id, root_id, slug.to_string(), title.to_string());
+            let page = Page::new_with_parent(root_id, slug.to_string(), title.to_string());
             ids.push(repo.create(&page).await?);
         }
 
@@ -2224,7 +2002,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2264,7 +2042,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_page_with_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2298,10 +2076,10 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
-        let mut page = Page::new(site_id, "test".to_string(), "Test".to_string());
+        let mut page = Page::new("test".to_string(), "Test".to_string());
         page.id = Some(999); // Non-existent ID
 
         let result = repo.update(&page).await;
@@ -2317,10 +2095,10 @@ mod tests {
     #[sqlx::test]
     async fn test_update_page_without_id() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
-        let page = Page::new(site_id, "test".to_string(), "Test".to_string());
+        let page = Page::new("test".to_string(), "Test".to_string());
         // page.id is None
 
         let result = repo.update(&page).await;
@@ -2336,7 +2114,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_with_duplicate_slug_fails() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2345,9 +2123,9 @@ mod tests {
 
         // Create two child pages
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
 
         let _id1 = repo.create(&page1).await?;
         let id2 = repo.create(&page2).await?;
@@ -2374,7 +2152,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_preserves_created_at() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2408,7 +2186,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_parent_to_different_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2417,11 +2195,11 @@ mod tests {
 
         // Create three child pages
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let mut page3 =
-            Page::new_with_parent(site_id, root_id, "page3".to_string(), "Page 3".to_string());
+            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
 
         let id1 = repo.create(&page1).await?;
         let id2 = repo.create(&page2).await?;
@@ -2452,7 +2230,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_existing_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2504,7 +2282,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_page_cascades_to_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2552,7 +2330,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_child_page_keeps_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2580,7 +2358,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_multiple_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2616,7 +2394,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_already_deleted_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2666,7 +2444,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_no_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2686,7 +2464,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_single_child() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2716,7 +2494,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_multiple_children_ordered() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2760,7 +2538,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_same_position_ordered_by_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2799,7 +2577,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_only_direct_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2846,75 +2624,11 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_list_children_different_sites() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create a second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get root pages for both sites
-        let root_id1 = get_root_page_id(&pool, site_id1).await?;
-        let root_id2 = get_root_page_id(&pool, site_id2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Create parent pages on different sites
-        let parent1 = Page::new_with_parent(
-            site_id1,
-            root_id1,
-            "parent".to_string(),
-            "Parent 1".to_string(),
-        );
-        let parent_id1 = repo.create(&parent1).await?;
-
-        let parent2 = Page::new_with_parent(
-            site_id2,
-            root_id2,
-            "parent".to_string(),
-            "Parent 2".to_string(),
-        );
-        let parent_id2 = repo.create(&parent2).await?;
-
-        // Create children for each parent
-        let child1 = Page::new_with_parent(
-            site_id1,
-            parent_id1,
-            "child1".to_string(),
-            "Child of Parent 1".to_string(),
-        );
-        let child2 = Page::new_with_parent(
-            site_id2,
-            parent_id2,
-            "child2".to_string(),
-            "Child of Parent 2".to_string(),
-        );
-
-        repo.create(&child1).await?;
-        repo.create(&child2).await?;
-
-        // List children for parent1
-        let children1 = repo.list_children(parent_id1).await?;
-        assert_eq!(children1.len(), 1);
-        assert_eq!(children1[0].slug, "child1");
-        assert_eq!(children1[0].site_id, site_id1);
-
-        // List children for parent2
-        let children2 = repo.list_children(parent_id2).await?;
-        assert_eq!(children2.len(), 1);
-        assert_eq!(children2[0].slug, "child2");
-        assert_eq!(children2[0].site_id, site_id2);
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_breadcrumb_trail_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2935,7 +2649,7 @@ mod tests {
     #[sqlx::test]
     async fn test_breadcrumb_trail_one_level_deep() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -2962,7 +2676,7 @@ mod tests {
     #[sqlx::test]
     async fn test_breadcrumb_trail_multiple_levels() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3017,7 +2731,7 @@ mod tests {
     #[sqlx::test]
     async fn test_breadcrumb_trail_middle_of_hierarchy() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3026,11 +2740,11 @@ mod tests {
 
         // Create hierarchy
         let middle =
-            Page::new_with_parent(site_id, root_id, "middle".to_string(), "Middle".to_string());
+            Page::new_with_parent(root_id, "middle".to_string(), "Middle".to_string());
         let middle_id = repo.create(&middle).await?;
 
         let leaf =
-            Page::new_with_parent(site_id, middle_id, "leaf".to_string(), "Leaf".to_string());
+            Page::new_with_parent(middle_id, "leaf".to_string(), "Leaf".to_string());
         repo.create(&leaf).await?;
 
         // Get breadcrumb trail for middle page
@@ -3047,7 +2761,7 @@ mod tests {
     #[sqlx::test]
     async fn test_breadcrumb_trail_with_siblings() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3056,7 +2770,7 @@ mod tests {
 
         // Create hierarchy with siblings
         let parent =
-            Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let child1 = Page::new_with_parent(parent_id, "child1".to_string(), "Child 1".to_string());
@@ -3088,7 +2802,7 @@ mod tests {
     #[sqlx::test]
     async fn test_only_one_root_page_per_site() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool);
 
@@ -3111,7 +2825,7 @@ mod tests {
     #[sqlx::test]
     async fn test_cannot_delete_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3136,7 +2850,7 @@ mod tests {
     #[sqlx::test]
     async fn test_cannot_delete_page_with_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3169,7 +2883,7 @@ mod tests {
     #[sqlx::test]
     async fn test_slug_uniqueness_per_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3216,36 +2930,11 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_multiple_sites_each_with_root_page() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create second site using SiteRepository to ensure root page is created
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        // Get root pages for both sites
-        let root1_id = get_root_page_id(&pool, site_id1).await?;
-        let root2_id = get_root_page_id(&pool, site_id2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Both root pages should exist
-        assert!(repo.find_by_id(root1_id).await?.is_some());
-        assert!(repo.find_by_id(root2_id).await?.is_some());
-
-        // Root pages should be different
-        assert_ne!(root1_id, root2_id);
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_get_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
 
@@ -3263,7 +2952,7 @@ mod tests {
     #[sqlx::test]
     async fn test_unique_constraint_with_null_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
 
         // Get the root page that was created automatically
         let root_id = get_root_page_id(&pool).await?;
@@ -3271,7 +2960,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Try to create another root page - should fail due to our check
-        let root2 = Page::new(site_id, "".to_string(), "Home Page 2".to_string());
+        let root2 = Page::new("".to_string(), "Home Page 2".to_string());
         let result = repo.create(&root2).await;
         assert!(result.is_err());
         assert!(result
@@ -3281,7 +2970,7 @@ mod tests {
 
         // But pages with same slug under different parents should work
         let child1 =
-            Page::new_with_parent(site_id, root_id, "about".to_string(), "About 1".to_string());
+            Page::new_with_parent(root_id, "about".to_string(), "About 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
         let parent2 =
@@ -3301,7 +2990,7 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_direct_child() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3323,7 +3012,7 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_deep_hierarchy() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3357,14 +3046,14 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_same_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // A page is NOT a descendant of itself
@@ -3377,7 +3066,7 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_non_existent_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3398,7 +3087,7 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3406,7 +3095,7 @@ mod tests {
 
         // Create a child
         let child =
-            Page::new_with_parent(site_id, root_id, "child".to_string(), "Child".to_string());
+            Page::new_with_parent(root_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         // Root page is not a descendant of anything (it has no parent)
@@ -3420,7 +3109,7 @@ mod tests {
     #[sqlx::test]
     async fn test_is_descendant_of_sibling_pages() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3446,60 +3135,18 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_is_descendant_of_cross_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create second site
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Get root pages
-        let root1_id = get_root_page_id(&pool, site_id1).await?;
-        let root2_id = get_root_page_id(&pool, site_id2).await?;
-
-        // Create child in site1
-        let child1 = Page::new_with_parent(
-            site_id1,
-            root1_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
-        let child1_id = repo.create(&child1).await?;
-
-        // Create child in site2
-        let child2 = Page::new_with_parent(
-            site_id2,
-            root2_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
-        let child2_id = repo.create(&child2).await?;
-
-        // Pages from different sites are never descendants of each other
-        assert!(!repo.is_descendant_of(child1_id, root2_id).await?);
-        assert!(!repo.is_descendant_of(child2_id, root1_id).await?);
-        assert!(!repo.is_descendant_of(child1_id, child2_id).await?);
-        assert!(!repo.is_descendant_of(root1_id, root2_id).await?);
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_get_all_descendants_no_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page with no children
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Get descendants - should be empty
@@ -3512,7 +3159,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_all_descendants_direct_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3540,7 +3187,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_all_descendants_deep_hierarchy() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3617,7 +3264,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_all_descendants_ordering() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3625,17 +3272,17 @@ mod tests {
 
         // Create pages with specific positions
         let mut page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         page1.position = 2;
         let page1_id = repo.create(&page1).await?;
 
         let mut page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         page2.position = 1;
         let page2_id = repo.create(&page2).await?;
 
         let mut page3 =
-            Page::new_with_parent(site_id, root_id, "page3".to_string(), "Page 3".to_string());
+            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         page3.position = 3;
         repo.create(&page3).await?;
 
@@ -3672,53 +3319,11 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_get_all_descendants_cross_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create second site
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Get root pages
-        let root1_id = get_root_page_id(&pool, site_id1).await?;
-        let root2_id = get_root_page_id(&pool, site_id2).await?;
-
-        // Create children in both sites
-        let child1 = Page::new_with_parent(
-            site_id1,
-            root1_id,
-            "child1".to_string(),
-            "Child 1".to_string(),
-        );
-        repo.create(&child1).await?;
-
-        let child2 = Page::new_with_parent(
-            site_id2,
-            root2_id,
-            "child2".to_string(),
-            "Child 2".to_string(),
-        );
-        let child2_id = repo.create(&child2).await?;
-
-        // Get descendants of root1 - should not include pages from site2
-        let descendants = repo.get_all_descendants(root1_id).await?;
-        assert_eq!(descendants.len(), 1);
-
-        let descendant_ids: Vec<i64> = descendants.iter().filter_map(|p| p.id).collect();
-        assert!(!descendant_ids.contains(&child2_id));
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_reorder_siblings_basic() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3726,17 +3331,17 @@ mod tests {
 
         // Create siblings with initial positions
         let mut page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         page1.position = 1;
         let page1_id = repo.create(&page1).await?;
 
         let mut page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         page2.position = 2;
         let page2_id = repo.create(&page2).await?;
 
         let mut page3 =
-            Page::new_with_parent(site_id, root_id, "page3".to_string(), "Page 3".to_string());
+            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         page3.position = 3;
         let page3_id = repo.create(&page3).await?;
 
@@ -3763,7 +3368,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_root_level() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3772,11 +3377,11 @@ mod tests {
         // Create another page at root level (which shouldn't be possible, but for testing)
         // We'll test with pages under root instead
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Reorder
@@ -3794,7 +3399,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_wrong_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3827,7 +3432,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_non_existent_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3847,7 +3452,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_empty_list() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3862,7 +3467,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_partial_list() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3870,15 +3475,15 @@ mod tests {
 
         // Create three siblings
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         let page3 =
-            Page::new_with_parent(site_id, root_id, "page3".to_string(), "Page 3".to_string());
+            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         let page3_id = repo.create(&page3).await?;
 
         // Reorder only two of them
@@ -3900,7 +3505,7 @@ mod tests {
     #[sqlx::test]
     async fn test_reorder_siblings_duplicate_positions() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3908,11 +3513,11 @@ mod tests {
 
         // Create two siblings
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Set both to the same position (this is allowed, ordering will use slug as tiebreaker)
@@ -3937,7 +3542,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_basic() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -3980,14 +3585,14 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_cannot_move_root() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Try to move root page - should fail
@@ -4004,14 +3609,14 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_to_itself() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Try to move page to itself - should fail
@@ -4028,7 +3633,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_to_descendant() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4036,11 +3641,11 @@ mod tests {
 
         // Create hierarchy: root -> parent -> child -> grandchild
         let parent =
-            Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let child =
-            Page::new_with_parent(site_id, parent_id, "child".to_string(), "Child".to_string());
+            Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         let grandchild =
@@ -4069,14 +3674,14 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_same_parent_noop() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page under root
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Move page to same parent (root) - should be no-op
@@ -4092,7 +3697,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_slug_conflict() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4125,42 +3730,11 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_move_page_cross_site() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-        let site_id1 = setup_test_db(&pool).await?;
-
-        // Create second site
-        let site_repo = SiteRepository::new(pool.clone());
-        let site2 = Site::new("test-site-2.com".to_string(), "Test Site 2".to_string());
-        let site_id2 = site_repo.create(&site2).await?;
-
-        let repo = PageRepository::new(pool.clone());
-
-        // Get root pages
-        let root1_id = get_root_page_id(&pool, site_id1).await?;
-        let root2_id = get_root_page_id(&pool, site_id2).await?;
-
-        // Create page in site1
-        let page =
-            Page::new_with_parent(site_id1, root1_id, "page".to_string(), "Page".to_string());
-        let page_id = repo.create(&page).await?;
-
-        // Try to move to site2 - should fail
-        let result = repo.move_page(page_id, root2_id).await;
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("Cannot move page to a different site"));
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_move_page_position_updated() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4168,7 +3742,7 @@ mod tests {
 
         // Create parent with existing children
         let parent =
-            Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let mut existing1 =
@@ -4198,7 +3772,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_non_existent_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4218,14 +3792,14 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_non_existent_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a page
-        let page = Page::new_with_parent(site_id, root_id, "page".to_string(), "Page".to_string());
+        let page = Page::new_with_parent(root_id, "page".to_string(), "Page".to_string());
         let page_id = repo.create(&page).await?;
 
         // Try to move to non-existent parent
@@ -4242,7 +3816,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_page_with_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4292,7 +3866,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_valid_move_targets_basic() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4300,15 +3874,15 @@ mod tests {
 
         // Create test pages
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         let page3 =
-            Page::new_with_parent(site_id, root_id, "page3".to_string(), "Page 3".to_string());
+            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         let page3_id = repo.create(&page3).await?;
 
         // Get valid move targets for page1
@@ -4329,7 +3903,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_valid_move_targets_excludes_descendants() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4337,11 +3911,11 @@ mod tests {
 
         // Create hierarchy: parent -> child -> grandchild
         let parent =
-            Page::new_with_parent(site_id, root_id, "parent".to_string(), "Parent".to_string());
+            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let child =
-            Page::new_with_parent(site_id, parent_id, "child".to_string(), "Child".to_string());
+            Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         let grandchild =
@@ -4370,7 +3944,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_valid_move_targets_for_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4383,54 +3957,11 @@ mod tests {
         Ok(())
     }
 
-    #[sqlx::test]
-    async fn test_get_valid_move_targets_different_sites() -> Result<()> {
-        let pool = SqlitePool::connect(":memory:").await?;
-
-        // Setup the database schema first
-        let site1_id = setup_test_db(&pool).await?;
-
-        let site_repo = SiteRepository::new(pool.clone());
-        let page_repo = PageRepository::new(pool.clone());
-
-        // Create second site
-        let site2 = Site::new("site2.com".to_string(), "Site 2".to_string());
-        let site2_id = site_repo.create(&site2).await?;
-
-        // Get root pages
-        let root1_id = get_root_page_id(&pool, site1_id).await?;
-        let root2_id = get_root_page_id(&pool, site2_id).await?;
-
-        // Create pages in different sites
-        let page1 = Page::new_with_parent(
-            site1_id,
-            root1_id,
-            "page1".to_string(),
-            "Page 1".to_string(),
-        );
-        let page1_id = page_repo.create(&page1).await?;
-
-        let page2 = Page::new_with_parent(
-            site2_id,
-            root2_id,
-            "page2".to_string(),
-            "Page 2".to_string(),
-        );
-        page_repo.create(&page2).await?;
-
-        // Get valid move targets for page1 (should only include pages from site1)
-        let targets = page_repo.get_valid_move_targets(page1_id).await?;
-
-        // Should have no targets (root1 is current parent, no other pages in site1)
-        assert_eq!(targets.len(), 0);
-
-        Ok(())
-    }
 
     #[sqlx::test]
     async fn test_get_valid_move_targets_excludes_current_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let repo = PageRepository::new(pool.clone());
 
         // Get root page
@@ -4439,12 +3970,12 @@ mod tests {
 
         // Create page1 under root
         let page1 =
-            Page::new_with_parent(site_id, root_id, "page1".to_string(), "Page 1".to_string());
+            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         // Create page2 under root
         let page2 =
-            Page::new_with_parent(site_id, root_id, "page2".to_string(), "Page 2".to_string());
+            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Get valid move targets for page1 (which is currently under root)
@@ -4466,7 +3997,7 @@ mod tests {
     #[sqlx::test]
     async fn test_has_children() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
@@ -4492,7 +4023,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_page_success() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
@@ -4516,7 +4047,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_page_with_versions_and_components() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let page_repo = PageRepository::new(pool.clone());
@@ -4562,7 +4093,7 @@ mod tests {
     #[sqlx::test]
     async fn test_generate_unique_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
@@ -4572,7 +4103,7 @@ mod tests {
         assert_eq!(slug1, "about-us");
 
         // Create a page with that slug
-        let page1 = Page::new_with_parent(site_id, root_id, slug1, "About Us".to_string());
+        let page1 = Page::new_with_parent(root_id, slug1, "About Us".to_string());
         repo.create(&page1).await?;
 
         // Next slug with same base should get suffix
@@ -4580,7 +4111,7 @@ mod tests {
         assert_eq!(slug2, "about-us-2");
 
         // Create another page
-        let page2 = Page::new_with_parent(site_id, root_id, slug2, "About Us 2".to_string());
+        let page2 = Page::new_with_parent(root_id, slug2, "About Us 2".to_string());
         repo.create(&page2).await?;
 
         // Third slug should get suffix 3
@@ -4593,7 +4124,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_with_auto_slug() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
@@ -4606,13 +4137,13 @@ mod tests {
 
         // Create page with empty slug - should auto-generate
         let mut page2 =
-            Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+            Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
         let id2 = repo.create_with_auto_slug(&mut page2).await?;
         assert_eq!(page2.slug, "my-page");
 
         // Create another page with same title - should get suffix
         let mut page3 =
-            Page::new_with_parent(site_id, root_id, "".to_string(), "My Page".to_string());
+            Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
         let id3 = repo.create_with_auto_slug(&mut page3).await?;
         assert_eq!(page3.slug, "my-page-2");
 
@@ -4627,7 +4158,7 @@ mod tests {
     #[sqlx::test]
     async fn test_generate_unique_slug_different_parents() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());
@@ -4643,7 +4174,7 @@ mod tests {
         let slug1 = repo.generate_unique_slug(Some(parent1_id), "about").await?;
         assert_eq!(slug1, "about");
 
-        let page1 = Page::new_with_parent(site_id, parent1_id, slug1, "About".to_string());
+        let page1 = Page::new_with_parent(parent1_id, slug1, "About".to_string());
         repo.create(&page1).await?;
 
         // Same slug under different parent should also work
@@ -4656,7 +4187,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_children_sorted() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
-        let site_id = setup_test_db(&pool).await?;
+        let _site_id = setup_test_db(&pool).await?;
         let root_id = get_root_page_id(&pool).await?;
 
         let repo = PageRepository::new(pool.clone());

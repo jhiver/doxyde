@@ -1,3 +1,30 @@
-<div class="text-component">
-    {{ component.content.text }}
+{% set bg_class = "" %}
+{% set bg_style = "" %}
+{% set text_align = component.content.text_align | default(value="left") %}
+{% set text_padding = component.content.padding | default(value="medium") %}
+{% set align_class = "text-align-" ~ text_align %}
+{% set padding_class = "text-padding-" ~ text_padding %}
+
+{% if component.content.background_color %}
+    {% if component.content.background_color == "sand" %}
+        {% set bg_class = "bg-sand" %}
+    {% elif component.content.background_color == "sea" %}
+        {% set bg_class = "bg-sea" %}
+    {% elif component.content.background_color == "grass" %}
+        {% set bg_class = "bg-grass" %}
+    {% elif component.content.background_color == "white" %}
+        {% set bg_class = "bg-white" %}
+    {% elif component.content.background_color == "dark" %}
+        {% set bg_class = "bg-dark" %}
+    {% else %}
+        {% set bg_style = "background-color: " ~ component.content.background_color ~ ";" %}
+    {% endif %}
+{% endif %}
+
+{% if component.content.background_image %}
+    {% set bg_style = bg_style ~ "background-image: url('/" ~ component.content.background_image ~ "'); background-size: cover; background-position: center;" %}
+{% endif %}
+
+<div class="text-component {{ bg_class }} {{ align_class }} {{ padding_class }}" {% if bg_style %}style="{{ bg_style }}"{% endif %}>
+    {{ component.content.text | markdown | safe }}
 </div>

@@ -216,6 +216,17 @@ impl DatabaseRouter {
             pool.close().await;
         }
     }
+
+    /// Create a test database router with a pre-configured pool
+    #[cfg(test)]
+    pub fn new_for_test(config: Config, pool: SqlitePool) -> Self {
+        let mut pools = HashMap::new();
+        pools.insert("test.local".to_string(), pool);
+        Self {
+            _config: config,
+            site_pools: Arc::new(RwLock::new(pools)),
+        }
+    }
 }
 
 #[cfg(test)]

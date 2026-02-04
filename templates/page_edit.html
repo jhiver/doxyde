@@ -447,15 +447,21 @@ function submitComponentsForm(action) {
     const form = document.getElementById('components-form');
     const actionInput = form.querySelector('input[name="action"]');
     actionInput.value = action;
-    
-    // Debug: Log all form inputs before submission
-    console.log('=== FORM SUBMISSION DEBUG ===');
-    console.log('Action:', action);
-    
+
+    // Update all text component styles before submission
     const componentIds = form.querySelectorAll('input[name="component_ids"]');
-    
-    console.log('Component IDs found:', componentIds.length);
-    
+    const componentTypes = form.querySelectorAll('input[name="component_types"]');
+
+    componentIds.forEach((idInput, index) => {
+        const componentId = idInput.value;
+        const componentType = componentTypes[index]?.value;
+
+        // For text/markdown components, ensure styling is saved
+        if (componentType === 'text' || componentType === 'markdown') {
+            updateTextStyle(componentId);
+        }
+    });
+
     form.submit();
 }
 
@@ -749,6 +755,35 @@ function updateImageDisplaySize(componentId) {
             console.error('Failed to update display size:', e);
         }
     }
+}
+
+function updateTextStyle(componentId) {
+    const bgColorSelect = document.getElementById(`bg_color_${componentId}`);
+    const textAlignSelect = document.getElementById(`text_align_${componentId}`);
+    const paddingSelect = document.getElementById(`padding_${componentId}`);
+    const contentTextarea = document.getElementById(`content_${componentId}`);
+    const hiddenInput = document.getElementById(`content_json_${componentId}`);
+
+    if (!contentTextarea || !hiddenInput) {
+        console.error('Could not find content elements for component', componentId);
+        return;
+    }
+
+    // Get current values (use defaults if selects don't exist yet)
+    const bgColor = bgColorSelect?.value || '';
+    const textAlign = textAlignSelect?.value || 'left';
+    const padding = paddingSelect?.value || 'medium';
+    const text = contentTextarea.value;
+
+    // Create updated content object with styling
+    const updatedContent = {
+        text: text,
+        background_color: bgColor,
+        text_align: textAlign,
+        padding: padding
+    };
+
+    hiddenInput.value = JSON.stringify(updatedContent);
 }
 
 function updateImageComponent(componentId, imageData) {
@@ -1123,15 +1158,54 @@ function preventDefaults(e) {
                     <div class="form-group full-width">
                         <label for="content_{{ component.id }}">Content</label>
                         {% if component.component_type == "text" or component.component_type == "markdown" %}
-                            <textarea id="content_{{ component.id }}" 
-                                      name="component_contents" 
+                            <textarea id="content_{{ component.id }}"
+                                      oninput="updateTextStyle({{ component.id }})"
                                       required>{{ component.content.text|default(value='') }}</textarea>
+                            <input type="hidden"
+                                   id="content_json_{{ component.id }}"
+                                   name="component_contents"
+                                   value="{{ component.content | json_encode() }}">
                             <div class="help-text">
                                 {% if component.component_type == "markdown" %}
                                 Markdown formatting is supported
                                 {% else %}
                                 Plain text or HTML
                                 {% endif %}
+                            </div>
+
+                            <!-- Text styling options -->
+                            {% set bg_color = component.content.background_color | default(value="") %}
+                            {% set txt_align = component.content.text_align | default(value="left") %}
+                            {% set txt_padding = component.content.padding | default(value="medium") %}
+                            <div class="text-style-options" style="display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+                                <div class="form-group" style="margin: 0; flex: 1; min-width: 120px;">
+                                    <label style="font-size: 0.75rem;">Background</label>
+                                    <select id="bg_color_{{ component.id }}" onchange="updateTextStyle({{ component.id }})">
+                                        <option value="" {% if bg_color == "" %}selected{% endif %}>Aucun</option>
+                                        <option value="sand" {% if bg_color == "sand" %}selected{% endif %}>Sable</option>
+                                        <option value="sea" {% if bg_color == "sea" %}selected{% endif %}>Mer</option>
+                                        <option value="grass" {% if bg_color == "grass" %}selected{% endif %}>Herbe</option>
+                                        <option value="white" {% if bg_color == "white" %}selected{% endif %}>Blanc</option>
+                                        <option value="dark" {% if bg_color == "dark" %}selected{% endif %}>Sombre</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin: 0; flex: 1; min-width: 120px;">
+                                    <label style="font-size: 0.75rem;">Alignement</label>
+                                    <select id="text_align_{{ component.id }}" onchange="updateTextStyle({{ component.id }})">
+                                        <option value="left" {% if txt_align == "left" %}selected{% endif %}>Gauche</option>
+                                        <option value="center" {% if txt_align == "center" %}selected{% endif %}>Centré</option>
+                                        <option value="right" {% if txt_align == "right" %}selected{% endif %}>Droite</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin: 0; flex: 1; min-width: 120px;">
+                                    <label style="font-size: 0.75rem;">Padding</label>
+                                    <select id="padding_{{ component.id }}" onchange="updateTextStyle({{ component.id }})">
+                                        <option value="none" {% if txt_padding == "none" %}selected{% endif %}>Aucun</option>
+                                        <option value="small" {% if txt_padding == "small" %}selected{% endif %}>Petit</option>
+                                        <option value="medium" {% if txt_padding == "medium" %}selected{% endif %}>Moyen</option>
+                                        <option value="large" {% if txt_padding == "large" %}selected{% endif %}>Grand</option>
+                                    </select>
+                                </div>
                             </div>
                         {% elif component.component_type == "html" %}
                             <textarea id="content_{{ component.id }}" 
@@ -1147,8 +1221,8 @@ function preventDefaults(e) {
                             {% if component.content.slug %}
                                 <!-- New format with uploaded image -->
                                 <div class="image-preview" style="margin-bottom: 10px;">
-                                    <img src="/.image-preview?component_id={{ component.id }}" 
-                                         alt="{{ component.content.description|default(value=component.content.title) }}"
+                                    <img src="/.image-preview?component_id={{ component.id }}"
+                                         alt="{{ component.content.alt_text | default(value='') }}"
                                          style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
                                 </div>
                                 <input type="hidden" 
@@ -1160,12 +1234,12 @@ function preventDefaults(e) {
                                         <div class="form-group" style="margin: 0;">
                                             <label for="slug_{{ component.id }}" style="font-size: 0.75rem; margin-bottom: 4px;">Slug</label>
                                             <div style="display: flex; align-items: center; gap: 4px;">
-                                                <input type="text" 
-                                                       id="slug_{{ component.id }}" 
-                                                       value="{{ component.content.slug }}" 
+                                                <input type="text"
+                                                       id="slug_{{ component.id }}"
+                                                       value="{{ component.content.slug | default(value='') }}"
                                                        onchange="updateImageSlug({{ component.id }}, this.value)"
                                                        style="flex: 1;">
-                                                <span style="color: #6c757d; font-size: 0.875rem;">.{{ component.content.format }}</span>
+                                                <span style="color: #6c757d; font-size: 0.875rem;">.{{ component.content.format | default(value='') }}</span>
                                             </div>
                                         </div>
                                         <div class="form-group" style="margin: 0;">
@@ -1188,10 +1262,12 @@ function preventDefaults(e) {
                                         </div>
                                     </div>
                                     <div style="display: flex; gap: 20px; font-size: 0.75rem; color: #6c757d;">
-                                        <span><strong>Format:</strong> {{ component.content.format }}</span>
+                                        <span><strong>Format:</strong> {{ component.content.format | default(value='') }}</span>
+                                        {% if component.content.size %}
                                         <span><strong>Size:</strong> {{ (component.content.size / 1024)|round(precision=2) }} KB</span>
+                                        {% endif %}
                                         {% if component.content.width and component.content.height %}
-                                        <span><strong>Dimensions:</strong> {{ component.content.width }}×{{ component.content.height }}</span>
+                                        <span><strong>Dimensions:</strong> {{ component.content.width }}x{{ component.content.height }}</span>
                                         {% endif %}
                                     </div>
                                 </div>

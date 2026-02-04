@@ -124,6 +124,14 @@ impl ComponentHandler for TextComponentHandler {
     }
 
     fn parse_content(&self, raw_content: &str) -> Result<Value, String> {
+        // Try to parse as JSON first (for content with styling options)
+        if let Ok(json_content) = serde_json::from_str::<Value>(raw_content) {
+            // If it's a valid JSON object with a "text" field, use it directly
+            if json_content.is_object() && json_content.get("text").is_some() {
+                return Ok(json_content);
+            }
+        }
+        // Otherwise, wrap plain text in the default structure
         Ok(json!({
             "text": raw_content
         }))
@@ -143,6 +151,9 @@ impl ComponentHandler for TextComponentHandler {
             "highlight",
             "quote",
             "hidden",
+            "left",
+            "welcome",
+            "fullwidth",
         ]
     }
 
@@ -161,6 +172,14 @@ impl ComponentHandler for MarkdownComponentHandler {
     }
 
     fn parse_content(&self, raw_content: &str) -> Result<Value, String> {
+        // Try to parse as JSON first (for content with styling options)
+        if let Ok(json_content) = serde_json::from_str::<Value>(raw_content) {
+            // If it's a valid JSON object with a "text" field, use it directly
+            if json_content.is_object() && json_content.get("text").is_some() {
+                return Ok(json_content);
+            }
+        }
+        // Otherwise, wrap plain text in the default structure
         Ok(json!({
             "text": raw_content
         }))
@@ -358,6 +377,7 @@ impl ComponentHandler for BlogSummaryComponentHandler {
     fn available_templates(&self) -> Vec<&'static str> {
         vec![
             "cards",
+            "image_cards",
             "list",
             "definition",
             "compact",
