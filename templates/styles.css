@@ -2059,3 +2059,1277 @@ select:focus {
 .loading {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* ===== Tropical Beach Theme ===== */
+
+/* Tropical Color Palette */
+:root {
+    /* Theme Colors */
+    --tropical-sand: rgb(217, 203, 174);
+    --tropical-sea: rgb(193, 217, 228);
+    --tropical-grass: rgb(203, 217, 174);
+    --tropical-sunset: #ff6b35;
+    --tropical-ocean: #39f;
+    --tropical-palm: #2d5016;
+
+    /* Override fonts */
+    --font-heading: 'Indie Flower', cursive;
+    --font-body: 'Montserrat', sans-serif;
+}
+
+/* Apply Montserrat as body font */
+body {
+    font-family: var(--font-body);
+    font-size: 18px;
+}
+
+/* Apply Indie Flower to headings */
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+h1 {
+    font-size: 2.5rem;
+    color: var(--gray-800);
+}
+
+h2 {
+    font-size: 2rem;
+}
+
+h3 {
+    font-size: 1.75rem;
+}
+
+/* Header with tropical feel */
+.header-nav {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    box-shadow: 0 2px 15px rgba(0,0,0,0.3);
+}
+
+.header-nav-content {
+    padding: 0.75rem 2rem;
+}
+
+.site-logo {
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.site-logo:hover {
+    color: var(--tropical-sunset);
+}
+
+.top-nav .nav-item {
+    font-family: var(--font-body);
+    font-weight: 500;
+    text-transform: uppercase;
+    font-size: 0.9rem;
+    letter-spacing: 0.05em;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.top-nav .nav-item:hover {
+    background: rgba(255,255,255,0.1);
+    color: var(--tropical-sunset);
+}
+
+/* Landing page styles - full width, no sidebar */
+.content-landing {
+    background-color: white;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Ensure landing sections go full width */
+.landing-sections {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 0;
+}
+
+.hero-section {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+}
+
+/* Hide sidebar on landing pages */
+.content-landing ~ .sidebar,
+.main-container:has(.content-landing) .sidebar {
+    display: none;
+}
+
+/* Make main container full width for landing pages */
+.main-container:has(.content-landing) {
+    display: block;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.hero-section {
+    position: relative;
+    min-height: 50vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+.hero-section .image-component {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    margin: 0;
+}
+
+.hero-section .image-component img,
+.image-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.image-hero {
+    margin: 0;
+    width: 100%;
+    min-height: 50vh;
+    position: relative;
+    overflow: hidden;
+}
+
+.image-hero img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.image-hero .hero-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 70%, transparent 100%);
+    padding: 4rem 2rem 3rem;
+    color: #ffffff;
+    text-align: center;
+}
+
+.image-hero .hero-overlay .hero-title,
+.image-hero .hero-title {
+    font-family: var(--font-heading);
+    font-size: 3rem;
+    color: #ffffff !important;
+    text-shadow: 2px 2px 0 rgba(0,0,0,1), 4px 4px 8px rgba(0,0,0,0.9), 0 0 30px rgba(0,0,0,0.7);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    -webkit-text-stroke: 1px rgba(0,0,0,0.3);
+}
+
+/* ===== Text Component Styling Options ===== */
+
+/* Background colors */
+.text-component.bg-sand {
+    background-color: var(--tropical-sand);
+}
+
+.text-component.bg-sea {
+    background-color: var(--tropical-sea);
+}
+
+.text-component.bg-grass {
+    background-color: var(--tropical-grass);
+}
+
+.text-component.bg-white {
+    background-color: white;
+}
+
+.text-component.bg-dark {
+    background-color: var(--gray-900);
+    color: white;
+}
+
+.text-component.bg-dark h1,
+.text-component.bg-dark h2,
+.text-component.bg-dark h3,
+.text-component.bg-dark h4 {
+    color: white;
+}
+
+.text-component.bg-dark a {
+    color: var(--tropical-sunset);
+}
+
+/* Text alignment */
+.text-component.text-align-left {
+    text-align: left;
+}
+
+.text-component.text-align-center {
+    text-align: center;
+}
+
+.text-component.text-align-center p {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.text-component.text-align-right {
+    text-align: right;
+}
+
+/* Padding options */
+.text-component.text-padding-none {
+    padding: 0;
+}
+
+.text-component.text-padding-small {
+    padding: 1rem 2rem;
+}
+
+.text-component.text-padding-medium {
+    padding: 3rem 2rem;
+}
+
+.text-component.text-padding-large {
+    padding: 5rem 2rem;
+}
+
+/* Background image overlay for readability */
+.text-component[style*="background-image"] {
+    position: relative;
+}
+
+.text-component[style*="background-image"]::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    pointer-events: none;
+}
+
+.text-component[style*="background-image"] > * {
+    position: relative;
+    z-index: 1;
+    color: white;
+}
+
+.text-component[style*="background-image"] h1,
+.text-component[style*="background-image"] h2,
+.text-component[style*="background-image"] h3 {
+    color: white;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.hero-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.4) 50%, transparent 100%);
+    padding: 4rem 2rem 3rem;
+    color: white;
+    text-align: center;
+}
+
+.hero-overlay .hero-title {
+    font-family: var(--font-heading);
+    font-size: 4rem;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.6);
+    margin: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.hero-overlay .hero-subtitle {
+    font-family: var(--font-body);
+    font-size: 1.5rem;
+    margin-top: 1rem;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+    opacity: 0.95;
+}
+
+/* Landing sections with alternating backgrounds */
+.landing-sections {
+    background-color: white;
+}
+
+.landing-section {
+    padding: 0;
+    position: relative;
+}
+
+.landing-section:nth-child(odd) {
+    background-color: var(--tropical-sand);
+}
+
+.landing-section:nth-child(even) {
+    background-color: white;
+}
+
+.landing-section:nth-child(3n) {
+    background-color: var(--tropical-sea);
+}
+
+.landing-section-inner {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 5rem 2rem;
+    text-align: center;
+}
+
+.landing-section .text-component {
+    padding: 3rem;
+    border-radius: 20px;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+    font-size: 1.25rem;
+    line-height: 1.9;
+}
+
+/* Default white background only when no bg-* class is set */
+.landing-section .text-component:not([class*="bg-"]) {
+    background: rgba(255,255,255,0.90);
+}
+
+.landing-section .text-component h1,
+.landing-section .text-component h2,
+.landing-section .text-component h3 {
+    color: var(--gray-800);
+    margin-bottom: 1.5rem;
+}
+
+.landing-section .text-component p {
+    color: var(--gray-700);
+    margin-bottom: 1.25rem;
+}
+
+.landing-section .text-component p:last-child {
+    margin-bottom: 0;
+}
+
+/* Links within landing section text */
+.landing-section .text-component a {
+    color: var(--tropical-sunset);
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.2s ease;
+}
+
+.landing-section .text-component a:hover {
+    color: var(--tropical-ocean);
+}
+
+/* Images within landing sections */
+.landing-section .image-component {
+    margin: 0;
+    padding: 0;
+}
+
+.landing-section .image-component img {
+    width: 100%;
+    height: auto;
+    max-height: 60vh;
+    object-fit: cover;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Full-bleed image sections */
+.landing-section:has(.image-component) {
+    padding: 0;
+}
+
+.landing-section:has(.image-component) .landing-section-inner {
+    padding: 0;
+    max-width: none;
+}
+
+/* Sidebar with tropical colors - clean borderless design */
+.sidebar {
+    background: linear-gradient(180deg, var(--tropical-sea) 0%, white 100%);
+    border-right: none;
+    padding-left: 0;
+    padding-right: var(--space-md);
+}
+
+/* Full-width layout - no side margins */
+.main-container {
+    max-width: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-card {
+    background-color: rgba(255,255,255,0.95);
+    border: none;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+}
+
+.sidebar-card-header {
+    background: linear-gradient(135deg, var(--tropical-sand) 0%, var(--tropical-grass) 100%);
+    border-bottom: none;
+}
+
+.sidebar-card-header h3 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+    font-size: 1.1rem;
+}
+
+/* Links with ocean blue */
+a {
+    color: var(--tropical-ocean);
+}
+
+a:hover {
+    color: var(--tropical-sunset);
+}
+
+/* Buttons with tropical colors */
+.btn-primary {
+    background: linear-gradient(135deg, var(--tropical-ocean) 0%, #1e88e5 100%);
+    border: none;
+    font-family: var(--font-body);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.75rem 2rem;
+    border-radius: 50px;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #1e88e5 0%, var(--tropical-ocean) 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(51,153,255,0.4);
+}
+
+/* CTA button style for booking */
+.btn-cta, .btn-book {
+    background: linear-gradient(135deg, var(--tropical-sunset) 0%, #ff8c42 100%);
+    color: white;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 1rem 3rem;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.btn-cta:hover, .btn-book:hover {
+    background: linear-gradient(135deg, #ff8c42 0%, var(--tropical-sunset) 100%);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(255,107,53,0.4);
+    color: white;
+}
+
+/* Footer with sunset gradient */
+footer {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 2rem;
+    color: rgba(255,255,255,0.8);
+}
+
+footer a {
+    color: var(--tropical-sunset);
+}
+
+footer a:hover {
+    color: white;
+}
+
+/* Image components with beach feel */
+.image-component img {
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.image-component:hover img {
+    transform: scale(1.03);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+/* Content area */
+.content {
+    background: linear-gradient(180deg, white 0%, var(--gray-50) 100%);
+}
+
+/* Page title styling */
+.content h1:first-child {
+    color: var(--gray-800);
+    border-bottom: 3px solid var(--tropical-sunset);
+    padding-bottom: 0.5rem;
+    display: inline-block;
+}
+
+/* Breadcrumb styling */
+.breadcrumb a {
+    color: var(--tropical-ocean);
+}
+
+.breadcrumb a:hover {
+    background-color: var(--tropical-sea);
+}
+
+/* Navigation with tropical accent */
+.nav-item:hover {
+    color: var(--tropical-sunset);
+}
+
+.nav-item.nav-current {
+    color: white;
+    position: relative;
+}
+
+.nav-item.nav-current::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--tropical-sunset);
+}
+
+/* Card components */
+.card {
+    border: none;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.card-header {
+    background: linear-gradient(135deg, var(--tropical-sand) 0%, var(--tropical-sea) 100%);
+    border-bottom: none;
+}
+
+.card-header h3 {
+    font-family: var(--font-heading);
+}
+
+/* Quote component */
+.quote {
+    border-left-color: var(--tropical-sunset);
+    background: linear-gradient(90deg, rgba(255,107,53,0.05) 0%, transparent 100%);
+    padding: 1.5rem;
+}
+
+/* Highlight component */
+.highlight {
+    background: linear-gradient(135deg, var(--tropical-sand) 0%, rgba(255,255,255,0.8) 100%);
+    border-left-color: var(--tropical-palm);
+}
+
+/* Mobile header with tropical gradient */
+.mobile-header {
+    background: linear-gradient(135deg, var(--gray-900) 0%, #1a365d 100%);
+}
+
+/* Mobile nav drawer */
+.mobile-nav-drawer {
+    background: linear-gradient(180deg, white 0%, var(--tropical-sea) 100%);
+}
+
+.mobile-nav-section h3 {
+    font-family: var(--font-heading);
+    text-transform: uppercase;
+}
+
+/* Text components */
+.text-component {
+    font-size: 1.1rem;
+    line-height: 1.8;
+}
+
+/* ===== Split Layout (side-by-side) ===== */
+
+/* Layout split for side-by-side components */
+.split-section {
+    display: flex;
+    width: 100%;
+    min-height: 50vh;
+}
+
+.split-left, .split-right {
+    flex: 1 1 50%;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
+}
+
+/* Images in split take full space */
+.split-left .image-component,
+.split-right .image-component {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.split-left .image-component img,
+.split-right .image-component img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 0;
+    box-shadow: none;
+    display: block;
+}
+
+/* Text in split centered with padding */
+.split-left .text-component,
+.split-right .text-component {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem;
+    height: 100%;
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+/* Code in split */
+.split-left .code-component,
+.split-right .code-component {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 2rem;
+    height: 100%;
+    background: var(--gray-900);
+}
+
+/* HTML in split */
+.split-left .html-component,
+.split-right .html-component {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 3rem;
+    height: 100%;
+}
+
+/* Mobile: stack vertically */
+@media (max-width: 768px) {
+    .split-section {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .split-left, .split-right {
+        width: 100%;
+        position: static;
+    }
+
+    .split-left .image-component,
+    .split-right .image-component {
+        position: static;
+        height: auto;
+        min-height: 40vh;
+    }
+
+    .split-left .text-component,
+    .split-right .text-component {
+        padding: 2rem 1rem;
+        height: auto;
+    }
+}
+
+/* ===== Hero Booking Form ===== */
+
+.image-hero-booking {
+    position: relative;
+    width: 100%;
+    min-height: 60vh;
+    margin: 0;
+}
+
+.image-hero-booking img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.hero-booking-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+}
+
+.hero-booking-content {
+    text-align: center;
+    max-width: 900px;
+    width: 100%;
+}
+
+.hero-booking-title {
+    font-family: var(--font-heading);
+    font-size: 3.5rem;
+    color: white;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.5);
+    margin-bottom: 2rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.booking-form {
+    background: rgba(255,255,255,0.95);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    max-width: 100%;
+}
+
+.booking-fields {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.booking-field {
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    flex: 1;
+    min-width: 150px;
+}
+
+.booking-field label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-600);
+    margin-bottom: 0.5rem;
+}
+
+.booking-field input,
+.booking-field select {
+    padding: 0.875rem 1rem;
+    border: 2px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: var(--font-body);
+    background: white;
+    cursor: pointer;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    width: 100%;
+}
+
+.booking-field input:focus,
+.booking-field select:focus {
+    outline: none;
+    border-color: var(--tropical-ocean);
+    box-shadow: 0 0 0 3px rgba(51,153,255,0.2);
+}
+
+.booking-submit {
+    background: linear-gradient(135deg, #ff8c42 0%, var(--tropical-sunset) 100%);
+    color: white;
+    border: none;
+    padding: 0.875rem 2rem;
+    font-size: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.booking-submit:hover {
+    background: linear-gradient(135deg, #e67a35 0%, #e55a2a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255,107,53,0.4);
+}
+
+/* Flatpickr customization */
+.flatpickr-calendar {
+    font-family: var(--font-body);
+    border-radius: 12px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .hero-booking-title {
+        font-size: 2rem;
+    }
+
+    .booking-form {
+        padding: 1rem;
+    }
+
+    .booking-fields {
+        flex-direction: column;
+    }
+
+    .booking-field {
+        width: 100%;
+    }
+
+    .booking-submit {
+        width: 100%;
+        margin-top: 0.5rem;
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hero-section {
+        min-height: 60vh;
+    }
+
+    .image-hero {
+        min-height: 60vh;
+    }
+
+    .hero-overlay .hero-title {
+        font-size: 2rem;
+    }
+
+    .landing-section-inner {
+        padding: 2rem 1rem;
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.5rem;
+    }
+}
+/* Full-width text component - breaks out of container */
+.text-component.text-fullwidth {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    max-width: none;
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    padding: 4rem 2rem;
+}
+
+.landing-section .text-component.text-fullwidth {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+}
+
+/* Remove parent padding when section has fullwidth component */
+.landing-section:has(.text-fullwidth) .landing-section-inner {
+    padding: 0;
+    max-width: none;
+}
+
+/* Fullwidth keeps same text formatting as default, just no bubble */
+.landing-section .text-component.text-fullwidth {
+    padding: 3rem 2rem;
+    font-size: 1.25rem;
+    line-height: 1.9;
+}
+
+.landing-section .text-component.text-fullwidth h1,
+.landing-section .text-component.text-fullwidth h2,
+.landing-section .text-component.text-fullwidth h3 {
+    font-family: var(--font-heading);
+    color: var(--gray-800);
+    margin-bottom: 1.5rem;
+}
+
+.landing-section .text-component.text-fullwidth p {
+    color: var(--gray-700);
+    margin-bottom: 1.25rem;
+}
+
+.landing-section .text-component.text-fullwidth a {
+    color: var(--primary-color);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.landing-section .text-component.text-fullwidth a:hover {
+    text-decoration: underline;
+}
+
+.landing-section .text-component.text-fullwidth.bg-sand {
+    background: var(--tropical-sand);
+}
+
+.landing-section .text-component.text-fullwidth.bg-sea {
+    background: var(--tropical-sea);
+}
+
+.landing-section .text-component.text-fullwidth.bg-grass {
+    background: var(--tropical-grass);
+}
+
+.landing-section .text-component.text-fullwidth.bg-dark {
+    background: var(--gray-800);
+    color: #ffffff;
+}
+
+/* ============================================
+   APARTMENT PAGE - AIRBNB STYLE
+   ============================================ */
+
+.apartment-page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 var(--space-lg);
+}
+
+.apartment-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin-bottom: var(--space-lg);
+    color: var(--gray-900);
+}
+
+/* Airbnb-style Photo Gallery */
+.airbnb-gallery {
+    margin-bottom: var(--space-xl);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
+
+.gallery-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+    height: 400px;
+    position: relative;
+}
+
+.gallery-item {
+    overflow: hidden;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.gallery-item:hover {
+    opacity: 0.9;
+}
+
+.gallery-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* First image spans 2 rows */
+.gallery-item-1 {
+    grid-row: 1 / 3;
+    border-radius: var(--border-radius-lg) 0 0 var(--border-radius-lg);
+}
+
+/* Top right images */
+.gallery-item-2 {
+    grid-column: 2;
+    grid-row: 1;
+}
+
+.gallery-item-3 {
+    grid-column: 3;
+    grid-row: 1;
+    border-radius: 0 var(--border-radius-lg) 0 0;
+}
+
+/* Bottom right images */
+.gallery-item-4 {
+    grid-column: 2;
+    grid-row: 2;
+}
+
+.gallery-item-5 {
+    grid-column: 3;
+    grid-row: 2;
+    border-radius: 0 0 var(--border-radius-lg) 0;
+    position: relative;
+}
+
+.gallery-show-all {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    background: white;
+    border: 1px solid var(--gray-900);
+    border-radius: var(--border-radius);
+    padding: 8px 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.1s ease;
+}
+
+.gallery-show-all:hover {
+    transform: scale(1.02);
+}
+
+/* Two-column layout */
+.apartment-layout {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: var(--space-2xl);
+    align-items: start;
+}
+
+.apartment-main {
+    padding-right: var(--space-xl);
+    border-right: 1px solid var(--gray-200);
+}
+
+.apartment-main .text-component {
+    margin-bottom: var(--space-xl);
+}
+
+.apartment-main .text-component h2,
+.apartment-main .text-component h3 {
+    font-size: 1.375rem;
+    font-weight: 600;
+    margin-bottom: var(--space-md);
+}
+
+.apartment-main .text-component p {
+    color: var(--gray-700);
+    line-height: 1.6;
+}
+
+.apartment-main .text-component ul {
+    list-style: none;
+    padding: 0;
+}
+
+.apartment-main .text-component li {
+    padding: var(--space-sm) 0;
+    border-bottom: 1px solid var(--gray-100);
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.apartment-main .text-component li::before {
+    content: "";
+    display: none;
+}
+
+/* Booking Widget - Sticky Sidebar */
+.apartment-sidebar {
+    position: sticky;
+    top: 100px;
+}
+
+.booking-widget {
+    background: transparent;
+}
+
+.booking-widget .booking-form {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.booking-dates {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--gray-400);
+    border-radius: var(--border-radius) var(--border-radius) 0 0;
+    overflow: hidden;
+}
+
+.booking-field {
+    padding: 10px 12px;
+}
+
+.booking-field label {
+    display: block;
+    font-size: 0.625rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--gray-900);
+    margin-bottom: 4px;
+}
+
+.booking-field input,
+.booking-field select {
+    width: 100%;
+    border: none;
+    background: transparent;
+    font-size: 0.875rem;
+    color: var(--gray-700);
+    padding: 0;
+    cursor: pointer;
+}
+
+.booking-field input:focus,
+.booking-field select:focus {
+    outline: none;
+}
+
+.booking-field-checkin {
+    border-right: 1px solid var(--gray-400);
+}
+
+.booking-field-guests {
+    border: 1px solid var(--gray-400);
+    border-top: none;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    margin-bottom: var(--space-md);
+}
+
+.booking-submit {
+    width: 100%;
+    background: linear-gradient(to right, #ff8c42, #ff6b35);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    padding: 14px 24px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.2s ease;
+}
+
+.booking-submit:hover {
+    background: linear-gradient(to right, #e67a35, #e55a2a);
+    transform: scale(1.01);
+    box-shadow: var(--shadow-md);
+}
+
+/* Mobile Responsive */
+@media (max-width: 900px) {
+    .apartment-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .apartment-main {
+        padding-right: 0;
+        border-right: none;
+    }
+
+    .apartment-sidebar {
+        position: relative;
+        top: 0;
+    }
+
+    .gallery-grid {
+        grid-template-columns: 1fr 1fr;
+        grid-template-rows: 2fr 1fr;
+        height: 300px;
+    }
+
+    .gallery-item-1 {
+        grid-column: 1 / 3;
+        grid-row: 1;
+        border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0;
+    }
+
+    .gallery-item-2 {
+        grid-column: 1;
+        grid-row: 2;
+        border-radius: 0 0 0 var(--border-radius-lg);
+    }
+
+    .gallery-item-3 {
+        grid-column: 2;
+        grid-row: 2;
+        border-radius: 0 0 var(--border-radius-lg) 0;
+    }
+
+    .gallery-item-4,
+    .gallery-item-5 {
+        display: none;
+    }
+}
+
+@media (max-width: 600px) {
+    .gallery-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+        height: 250px;
+    }
+
+    .gallery-item-1 {
+        grid-column: 1;
+        border-radius: var(--border-radius-lg);
+    }
+
+    .gallery-item-2,
+    .gallery-item-3,
+    .gallery-item-4,
+    .gallery-item-5 {
+        display: none;
+    }
+
+    .booking-dates {
+        grid-template-columns: 1fr;
+    }
+
+    .booking-field-checkin {
+        border-right: none;
+        border-bottom: 1px solid var(--gray-400);
+    }
+}

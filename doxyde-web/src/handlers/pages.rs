@@ -79,7 +79,34 @@ pub async fn show_page_handler(
                 serde_json::from_value::<serde_json::Value>(component.content.clone())
             {
                 // Get parent_page_id - could be null, number, or not present
-                let parent_page_id = config.get("parent_page_id").and_then(|v| v.as_i64());
+                let configured_parent_id = config.get("parent_page_id").and_then(|v| v.as_i64());
+
+                // Validate parent_page_id exists, fall back to current page if invalid
+                let parent_page_id = if let Some(parent_id) = configured_parent_id {
+                    // Check if the configured parent page exists
+                    match page_repo.find_by_id(parent_id).await {
+                        Ok(Some(_)) => Some(parent_id),
+                        Ok(None) => {
+                            tracing::warn!(
+                                configured_parent_id = parent_id,
+                                fallback_page_id = page_id,
+                                "blog_summary parent_page_id references non-existent page, falling back to current page"
+                            );
+                            Some(page_id)
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                error = %e,
+                                configured_parent_id = parent_id,
+                                fallback_page_id = page_id,
+                                "Failed to verify parent page, falling back to current page"
+                            );
+                            Some(page_id)
+                        }
+                    }
+                } else {
+                    configured_parent_id
+                };
 
                 // Fetch pages based on parent_page_id
                 let mut child_pages = if let Some(parent_id) = parent_page_id {
@@ -160,13 +187,39 @@ pub async fn show_page_handler(
                         format!("/{}", path_parts.join("/"))
                     };
 
+                    // Get first image from child page's published version
+                    let image_url = if let Some(child_id) = child.id {
+                        if let Ok(Some(child_version)) = version_repo.get_published(child_id).await {
+                            if let Some(version_id) = child_version.id {
+                                if let Ok(child_components) = component_repo.list_by_page_version(version_id).await {
+                                    child_components.iter()
+                                        .find(|c| c.component_type == "image")
+                                        .and_then(|img| {
+                                            let slug = img.content.get("slug")?.as_str()?;
+                                            let format = img.content.get("format")?.as_str()?;
+                                            Some(format!("/{}.{}", slug, format))
+                                        })
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     pages_data.push(serde_json::json!({
                         "id": child.id,
                         "title": child.title,
                         "slug": child.slug,
                         "description": child.description,
                         "created_at": child.created_at.format("%B %d, %Y").to_string(),
-                        "url": child_url
+                        "url": child_url,
+                        "image_url": image_url
                     }));
                 }
 

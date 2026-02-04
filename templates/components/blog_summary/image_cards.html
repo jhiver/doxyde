@@ -1,0 +1,125 @@
+<div class="blog-summary image-cards">
+    {% if component.content.display_title %}
+        <h2 class="summary-title">{{ component.content.display_title }}</h2>
+    {% endif %}
+
+    <div class="summary-grid">
+        {% for page in component.content.pages %}
+        <article class="summary-card" onclick="window.location.href='{{ page.url }}'">
+            {% if page.image_url %}
+            <a href="{{ page.url }}" class="summary-card-image">
+                <img src="{{ page.image_url }}" alt="{{ page.title }}" loading="lazy">
+            </a>
+            {% endif %}
+
+            <div class="summary-card-content">
+                <h3 class="summary-card-title">
+                    <a href="{{ page.url }}">{{ page.title }}</a>
+                </h3>
+
+                {% if component.content.show_descriptions and page.description %}
+                    <p class="summary-card-description">{{ page.description }}</p>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</div>
+
+<style>
+.blog-summary.image-cards {
+    margin: var(--space-xl) 0;
+}
+
+.blog-summary.image-cards .summary-title {
+    margin-bottom: var(--space-lg);
+    color: var(--gray-900);
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+.blog-summary.image-cards .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: var(--space-lg);
+}
+
+.blog-summary.image-cards .summary-card {
+    background: white;
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+}
+
+.blog-summary.image-cards .summary-card:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-4px);
+}
+
+.blog-summary.image-cards .summary-card-image {
+    display: block;
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+}
+
+.blog-summary.image-cards .summary-card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.blog-summary.image-cards .summary-card:hover .summary-card-image img {
+    transform: scale(1.05);
+}
+
+.blog-summary.image-cards .summary-card-content {
+    padding: var(--space-md);
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.blog-summary.image-cards .summary-card-title {
+    margin: 0 0 var(--space-sm) 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+}
+
+.blog-summary.image-cards .summary-card-title a {
+    color: var(--gray-900);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.blog-summary.image-cards .summary-card:hover .summary-card-title a {
+    color: var(--primary-color);
+}
+
+.blog-summary.image-cards .summary-card-description {
+    color: var(--gray-600);
+    line-height: 1.5;
+    margin: 0;
+    flex-grow: 1;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+}
+
+@media (max-width: 768px) {
+    .blog-summary.image-cards .summary-grid {
+        grid-template-columns: 1fr;
+        gap: var(--space-md);
+    }
+
+    .blog-summary.image-cards .summary-card-image {
+        aspect-ratio: 16 / 9;
+    }
+}
+</style>

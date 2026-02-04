@@ -1,0 +1,77 @@
+<div class="image-component image-hero-booking">
+    <img src="/{{ component.content.slug }}.{{ component.content.format }}"
+         alt="{{ component.content.alt_text | default(value='') }}"
+         loading="eager">
+
+    <div class="hero-booking-overlay">
+        <div class="hero-booking-content">
+            {% if component.title %}
+            <h1 class="hero-booking-title">{{ component.title }}</h1>
+            {% endif %}
+
+            <form class="booking-form" action="/reserver" method="GET">
+                <div class="booking-fields">
+                    <div class="booking-field">
+                        <label for="checkin">Check-in</label>
+                        <input type="text" id="checkin" name="checkin" placeholder="Select date" readonly>
+                    </div>
+                    <div class="booking-field">
+                        <label for="checkout">Check-out</label>
+                        <input type="text" id="checkout" name="checkout" placeholder="Select date" readonly>
+                    </div>
+                    <div class="booking-field">
+                        <label for="guests">Guests</label>
+                        <select id="guests" name="guests">
+                            <option value="1">1 Guest</option>
+                            <option value="2" selected>2 Guests</option>
+                            <option value="3">3 Guests</option>
+                            <option value="4">4 Guests</option>
+                            <option value="5">5 Guests</option>
+                            <option value="6">6+ Guests</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="booking-submit">Check Availability</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Flatpickr CSS -->
+<link rel="stylesheet" href="/.static/vendor/flatpickr/flatpickr.min.css">
+<link rel="stylesheet" href="/.static/vendor/flatpickr/airbnb.css">
+
+<!-- Flatpickr JS -->
+<script src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dayAfter = new Date(today);
+    dayAfter.setDate(dayAfter.getDate() + 2);
+
+    const checkinPicker = flatpickr("#checkin", {
+        dateFormat: "M d, Y",
+        minDate: "today",
+        defaultDate: tomorrow,
+        onChange: function(selectedDates) {
+            if (selectedDates[0]) {
+                const minCheckout = new Date(selectedDates[0]);
+                minCheckout.setDate(minCheckout.getDate() + 1);
+                checkoutPicker.set('minDate', minCheckout);
+                if (checkoutPicker.selectedDates[0] <= selectedDates[0]) {
+                    checkoutPicker.setDate(minCheckout);
+                }
+            }
+        }
+    });
+
+    const checkoutPicker = flatpickr("#checkout", {
+        dateFormat: "M d, Y",
+        minDate: dayAfter,
+        defaultDate: dayAfter
+    });
+});
+</script>
