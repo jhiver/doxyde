@@ -453,7 +453,10 @@ mod tests {
         let templates = component.get_available_templates();
         // Just verify there's at least one template and it includes the default
         assert!(!templates.is_empty(), "Should have at least one template");
-        assert!(templates.contains(&"cards"), "Should include default 'cards' template");
+        assert!(
+            templates.contains(&"cards"),
+            "Should include default 'cards' template"
+        );
     }
 
     #[test]

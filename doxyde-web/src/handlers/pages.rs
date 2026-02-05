@@ -189,10 +189,14 @@ pub async fn show_page_handler(
 
                     // Get first image from child page's published version
                     let image_url = if let Some(child_id) = child.id {
-                        if let Ok(Some(child_version)) = version_repo.get_published(child_id).await {
+                        if let Ok(Some(child_version)) = version_repo.get_published(child_id).await
+                        {
                             if let Some(version_id) = child_version.id {
-                                if let Ok(child_components) = component_repo.list_by_page_version(version_id).await {
-                                    child_components.iter()
+                                if let Ok(child_components) =
+                                    component_repo.list_by_page_version(version_id).await
+                                {
+                                    child_components
+                                        .iter()
                                         .find(|c| c.component_type == "image")
                                         .and_then(|img| {
                                             let slug = img.content.get("slug")?.as_str()?;
@@ -461,5 +465,11 @@ pub async fn show_page_handler(
         }
     };
 
-    Ok(Html(html))
+    Ok((
+        [(
+            axum::http::header::CACHE_CONTROL,
+            "no-cache, must-revalidate",
+        )],
+        Html(html),
+    ))
 }

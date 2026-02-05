@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block title %}Bad Request - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: #f56565;
+        line-height: 1;
+        margin: 0;
+        opacity: 0.3;
+        position: relative;
+    }
+
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: #2d3748;
+    }
+
+    .error-description {
+        font-size: 18px;
+        color: #718096;
+        margin-bottom: 40px;
+        max-width: 500px;
+        line-height: 1.6;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .button {
+        display: inline-block;
+        padding: 12px 32px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .button-primary {
+        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .button-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .button-secondary {
+        color: #4a5568;
+        background: #e2e8f0;
+    }
+
+    .button-secondary:hover {
+        background: #cbd5e0;
+    }
+
+    /* Warning icon */
+    .error-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        position: relative;
+    }
+
+    .warning-triangle {
+        width: 0;
+        height: 0;
+        border-left: 40px solid transparent;
+        border-right: 40px solid transparent;
+        border-bottom: 70px solid #f56565;
+        opacity: 0.3;
+        position: absolute;
+        left: 0;
+        top: 0;
+    }
+
+    .warning-triangle::before {
+        content: '!';
+        position: absolute;
+        color: white;
+        font-size: 40px;
+        font-weight: bold;
+        left: 50%;
+        top: 20px;
+        transform: translateX(-50%);
+    }
+
+    .help-info {
+        background: #fff5f5;
+        border: 2px solid #feb2b2;
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 40px;
+        max-width: 500px;
+        width: 100%;
+        text-align: left;
+    }
+
+    .help-info h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: #742a2a;
+    }
+
+    .help-info p {
+        color: #4a5568;
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .help-info ul {
+        margin: 12px 0;
+        padding-left: 24px;
+        color: #4a5568;
+    }
+
+    .help-info li {
+        margin: 6px 0;
+        font-size: 14px;
+    }
+
+    /* Responsive */
+    @media (max-width: 767px) {
+        .error-code {
+            font-size: 80px;
+        }
+
+        .error-title {
+            font-size: 28px;
+        }
+
+        .error-description {
+            font-size: 16px;
+        }
+
+        .button {
+            padding: 12px 24px;
+            font-size: 14px;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <div class="warning-triangle"></div>
+    </div>
+
+    <h1 class="error-code">400</h1>
+    <h2 class="error-title">{{ error_title | default(value="Bad Request") }}</h2>
+    <p class="error-description">
+        {{ error_description | default(value="The request could not be understood. Please check your input and try again.") }}
+    </p>
+
+    <div class="error-actions">
+        <button onclick="history.back()" class="button button-primary">
+            ← Go Back and Fix
+        </button>
+        <a href="/" class="button button-secondary">Go to Dashboard</a>
+    </div>
+
+    <div class="help-info">
+        <h3>Common Causes</h3>
+        <ul>
+            <li>Missing required form fields</li>
+            <li>Invalid data format (e.g., text in a number field)</li>
+            <li>Malformed JSON in text areas</li>
+            <li>Special characters in restricted fields</li>
+        </ul>
+        <p style="margin-top: 16px;">
+            <strong>Need help?</strong> Use your browser's back button to return to the form and check your input carefully.
+        </p>
+    </div>
+</div>
+{% endblock %}

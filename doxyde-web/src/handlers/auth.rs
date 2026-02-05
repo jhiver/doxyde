@@ -308,7 +308,7 @@ pub async fn logout(
 #[cfg(test)]
 mod _disabled_tests {
     use super::*;
-    
+
     use doxyde_core::models::user::User;
     use sqlx::SqlitePool;
 
@@ -627,7 +627,12 @@ mod _disabled_tests {
             .build();
         let jar = jar.add(cookie);
 
-        let response = logout(State(state), jar, crate::db_middleware::SiteDatabase(pool.clone())).await;
+        let response = logout(
+            State(state),
+            jar,
+            crate::db_middleware::SiteDatabase(pool.clone()),
+        )
+        .await;
         assert!(response.is_ok());
 
         // Verify session was deleted

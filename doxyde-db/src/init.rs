@@ -76,7 +76,8 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
             );
 
             // Try to run this specific migration
-            match sqlx::query(&migration.sql).execute(pool).await {
+            // Execute each statement separately since sqlx::query only runs one statement
+            match execute_migration_statements(pool, &migration.sql).await {
                 Ok(_) => {
                     // Record successful migration
                     let checksum_bytes: &[u8] = &migration.checksum;
@@ -138,5 +139,32 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
 
     tracing::info!("All migrations processed successfully");
 
+    Ok(())
+}
+
+/// Execute a migration SQL that may contain multiple statements.
+/// Splits on `;` and executes each non-empty statement individually.
+/// Uses a single connection so PRAGMAs persist across statements.
+async fn execute_migration_statements(
+    pool: &SqlitePool,
+    sql: &str,
+) -> Result<(), sqlx::Error> {
+    let mut conn = pool.acquire().await?;
+    for statement in sql.split(';') {
+        let trimmed = statement.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // Skip comment-only fragments
+        let without_comments: String = trimmed
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("--"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        if without_comments.trim().is_empty() {
+            continue;
+        }
+        sqlx::query(trimmed).execute(&mut *conn).await?;
+    }
     Ok(())
 }

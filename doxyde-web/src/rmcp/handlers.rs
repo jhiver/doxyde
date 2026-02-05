@@ -90,8 +90,7 @@ pub async fn handle_sse(
     let (sse_server, _router) = SseServer::new(config);
 
     // Spawn a task to handle the service with the validated site_id
-    let _service_handle =
-        sse_server.with_service(move || DoxydeRmcpService::new(db.clone()));
+    let _service_handle = sse_server.with_service(move || DoxydeRmcpService::new(db.clone()));
 
     // SSE handler integration pending - returning not implemented status
     // The proper implementation would need to extract the SSE handler from the router

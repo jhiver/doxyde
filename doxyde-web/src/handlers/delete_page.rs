@@ -185,7 +185,7 @@ pub async fn do_delete_page_handler(
 
     // Perform the deletion
     page_repo.delete(page_id).await.map_err(|e| {
-        tracing::error!("Failed to delete page: {}", e);
+        tracing::error!("Failed to delete page {}: {:?}", page_id, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
@@ -216,7 +216,7 @@ mod tests {
 
         // Create test page
         let page = Page::new_with_parent(
-                root.id.unwrap(),
+            root.id.unwrap(),
             "test-page".to_string(),
             "Test Page".to_string(),
         );

@@ -1486,7 +1486,6 @@ mod tests {
         Ok(())
     }
 
-
     // Note: test_create_page_with_non_existent_site_fails removed - not applicable in single-database mode
 
     #[sqlx::test]
@@ -1744,8 +1743,6 @@ mod tests {
         Ok(())
     }
 
-
-
     #[sqlx::test]
     async fn test_find_by_slug_case_sensitive() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -1916,7 +1913,6 @@ mod tests {
 
         Ok(())
     }
-
 
     // Note: test_list_all_non_existent_site removed - not applicable in single-database mode
 
@@ -2122,10 +2118,8 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Create two child pages
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
 
         let _id1 = repo.create(&page1).await?;
         let id2 = repo.create(&page2).await?;
@@ -2194,12 +2188,9 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Create three child pages
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
-        let mut page3 =
-            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let mut page3 = Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
 
         let id1 = repo.create(&page1).await?;
         let id2 = repo.create(&page2).await?;
@@ -2624,7 +2615,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_breadcrumb_trail_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -2739,12 +2729,10 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Create hierarchy
-        let middle =
-            Page::new_with_parent(root_id, "middle".to_string(), "Middle".to_string());
+        let middle = Page::new_with_parent(root_id, "middle".to_string(), "Middle".to_string());
         let middle_id = repo.create(&middle).await?;
 
-        let leaf =
-            Page::new_with_parent(middle_id, "leaf".to_string(), "Leaf".to_string());
+        let leaf = Page::new_with_parent(middle_id, "leaf".to_string(), "Leaf".to_string());
         repo.create(&leaf).await?;
 
         // Get breadcrumb trail for middle page
@@ -2769,8 +2757,7 @@ mod tests {
         let repo = PageRepository::new(pool.clone());
 
         // Create hierarchy with siblings
-        let parent =
-            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
+        let parent = Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let child1 = Page::new_with_parent(parent_id, "child1".to_string(), "Child 1".to_string());
@@ -2930,7 +2917,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_get_root_page() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -2969,8 +2955,7 @@ mod tests {
             .contains("Root pages are created automatically"));
 
         // But pages with same slug under different parents should work
-        let child1 =
-            Page::new_with_parent(root_id, "about".to_string(), "About 1".to_string());
+        let child1 = Page::new_with_parent(root_id, "about".to_string(), "About 1".to_string());
         let child1_id = repo.create(&child1).await?;
 
         let parent2 =
@@ -3094,8 +3079,7 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create a child
-        let child =
-            Page::new_with_parent(root_id, "child".to_string(), "Child".to_string());
+        let child = Page::new_with_parent(root_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         // Root page is not a descendant of anything (it has no parent)
@@ -3134,7 +3118,6 @@ mod tests {
 
         Ok(())
     }
-
 
     #[sqlx::test]
     async fn test_get_all_descendants_no_children() -> Result<()> {
@@ -3271,18 +3254,15 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create pages with specific positions
-        let mut page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let mut page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         page1.position = 2;
         let page1_id = repo.create(&page1).await?;
 
-        let mut page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let mut page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         page2.position = 1;
         let page2_id = repo.create(&page2).await?;
 
-        let mut page3 =
-            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
+        let mut page3 = Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         page3.position = 3;
         repo.create(&page3).await?;
 
@@ -3319,7 +3299,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_reorder_siblings_basic() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -3330,18 +3309,15 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create siblings with initial positions
-        let mut page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let mut page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         page1.position = 1;
         let page1_id = repo.create(&page1).await?;
 
-        let mut page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let mut page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         page2.position = 2;
         let page2_id = repo.create(&page2).await?;
 
-        let mut page3 =
-            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
+        let mut page3 = Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         page3.position = 3;
         let page3_id = repo.create(&page3).await?;
 
@@ -3376,12 +3352,10 @@ mod tests {
 
         // Create another page at root level (which shouldn't be possible, but for testing)
         // We'll test with pages under root instead
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Reorder
@@ -3474,16 +3448,13 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create three siblings
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
-        let page3 =
-            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
+        let page3 = Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         let page3_id = repo.create(&page3).await?;
 
         // Reorder only two of them
@@ -3512,12 +3483,10 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create two siblings
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Set both to the same position (this is allowed, ordering will use slug as tiebreaker)
@@ -3640,12 +3609,10 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create hierarchy: root -> parent -> child -> grandchild
-        let parent =
-            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
+        let parent = Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let child =
-            Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         let grandchild =
@@ -3730,7 +3697,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_move_page_position_updated() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -3741,8 +3707,7 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create parent with existing children
-        let parent =
-            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
+        let parent = Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
         let mut existing1 =
@@ -3873,16 +3838,13 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create test pages
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
-        let page3 =
-            Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
+        let page3 = Page::new_with_parent(root_id, "page3".to_string(), "Page 3".to_string());
         let page3_id = repo.create(&page3).await?;
 
         // Get valid move targets for page1
@@ -3910,12 +3872,10 @@ mod tests {
         let root_id = get_root_page_id(&pool).await?;
 
         // Create hierarchy: parent -> child -> grandchild
-        let parent =
-            Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
+        let parent = Page::new_with_parent(root_id, "parent".to_string(), "Parent".to_string());
         let parent_id = repo.create(&parent).await?;
 
-        let child =
-            Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
+        let child = Page::new_with_parent(parent_id, "child".to_string(), "Child".to_string());
         let child_id = repo.create(&child).await?;
 
         let grandchild =
@@ -3957,7 +3917,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_get_valid_move_targets_excludes_current_parent() -> Result<()> {
         let pool = SqlitePool::connect(":memory:").await?;
@@ -3969,13 +3928,11 @@ mod tests {
         let root_id = root.id.unwrap();
 
         // Create page1 under root
-        let page1 =
-            Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
+        let page1 = Page::new_with_parent(root_id, "page1".to_string(), "Page 1".to_string());
         let page1_id = repo.create(&page1).await?;
 
         // Create page2 under root
-        let page2 =
-            Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
+        let page2 = Page::new_with_parent(root_id, "page2".to_string(), "Page 2".to_string());
         let page2_id = repo.create(&page2).await?;
 
         // Get valid move targets for page1 (which is currently under root)
@@ -4136,14 +4093,12 @@ mod tests {
         assert_eq!(page1.slug, "custom-slug");
 
         // Create page with empty slug - should auto-generate
-        let mut page2 =
-            Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
+        let mut page2 = Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
         let id2 = repo.create_with_auto_slug(&mut page2).await?;
         assert_eq!(page2.slug, "my-page");
 
         // Create another page with same title - should get suffix
-        let mut page3 =
-            Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
+        let mut page3 = Page::new_with_parent(root_id, "".to_string(), "My Page".to_string());
         let id3 = repo.create_with_auto_slug(&mut page3).await?;
         assert_eq!(page3.slug, "my-page-2");
 

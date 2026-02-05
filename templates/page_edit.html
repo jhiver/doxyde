@@ -441,6 +441,128 @@
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
         transform: scale(1.02);
     }
+
+    /* Multi-Image Upload - Drop Zone Overlay */
+    #multi-upload-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(37, 99, 235, 0.9);
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s;
+        pointer-events: none;
+    }
+    #multi-upload-overlay.visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+    #multi-upload-overlay .overlay-content {
+        text-align: center;
+        color: white;
+    }
+    #multi-upload-overlay .upload-icon {
+        font-size: 4rem;
+        margin-bottom: var(--space-md);
+    }
+    #multi-upload-overlay h2 {
+        margin: 0 0 var(--space-sm) 0;
+        font-size: 2rem;
+    }
+    #multi-upload-overlay p {
+        margin: 0;
+        opacity: 0.9;
+    }
+
+    /* Multi-Image Upload - Queue Panel */
+    #multi-upload-queue {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        width: 320px;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        z-index: 9999;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(20px);
+        transition: all 0.3s;
+    }
+    #multi-upload-queue.visible {
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0);
+    }
+    .queue-header {
+        padding: 12px 16px;
+        background: var(--gray-100);
+        border-bottom: 1px solid var(--gray-200);
+        border-radius: 8px 8px 0 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .queue-title {
+        font-weight: 600;
+        color: var(--gray-700);
+    }
+    .queue-count {
+        font-size: 0.875rem;
+        color: var(--gray-500);
+    }
+    .queue-items {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .queue-item {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--gray-100);
+    }
+    .queue-item:last-child {
+        border-bottom: none;
+    }
+    .item-name {
+        font-size: 0.875rem;
+        color: var(--gray-700);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 4px;
+    }
+    .item-progress {
+        height: 4px;
+        background: var(--gray-200);
+        border-radius: 2px;
+        margin: 6px 0;
+        overflow: hidden;
+    }
+    .progress-bar {
+        height: 100%;
+        background: var(--primary-color);
+        transition: width 0.2s;
+        border-radius: 2px;
+    }
+    .item-status {
+        font-size: 0.75rem;
+        color: var(--gray-500);
+    }
+    .queue-item.complete .progress-bar {
+        background: var(--success-color);
+    }
+    .queue-item.complete .item-status {
+        color: var(--success-color);
+    }
+    .queue-item.error .progress-bar {
+        background: var(--danger-color);
+    }
+    .queue-item.error .item-status {
+        color: var(--danger-color);
+    }
 </style>
 <script>
 function submitComponentsForm(action) {
@@ -910,20 +1032,23 @@ function moveComponent(componentId, direction) {
     const form = document.getElementById('components-form');
     const actionInput = form.querySelector('input[name="action"]');
     actionInput.value = 'move_component';
-    
+
     // Add the component ID and direction
     const moveIdInput = document.createElement('input');
     moveIdInput.type = 'hidden';
     moveIdInput.name = 'move_component_id';
     moveIdInput.value = componentId;
     form.appendChild(moveIdInput);
-    
+
     const directionInput = document.createElement('input');
     directionInput.type = 'hidden';
     directionInput.name = 'move_direction';
     directionInput.value = direction;
     form.appendChild(directionInput);
-    
+
+    // Add hash to form action so page scrolls to the moved component after reload
+    form.action = window.location.pathname + '#component-' + componentId;
+
     // Submit the form
     form.submit();
 }
@@ -1047,6 +1172,7 @@ function preventDefaults(e) {
     e.stopPropagation();
 }
 </script>
+<script src="/.static/js/multi-upload.js"></script>
 {% endblock %}
 
 {% block sidebar %}

@@ -19,10 +19,12 @@ use axum::{
     extract::Form,
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
+    Json,
 };
 use doxyde_core::models::{component::Component, page::Page, permission::SiteRole, site::Site};
 use doxyde_db::repositories::{ComponentRepository, PageRepository, SiteUserRepository};
 use serde::Deserialize;
+use serde_json::json;
 use tera::Context;
 
 use crate::{
@@ -34,6 +36,8 @@ use crate::{
 pub struct AddComponentForm {
     pub content: String,
     pub component_type: String,
+    #[serde(default)]
+    pub ajax: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -406,6 +410,15 @@ pub async fn add_component_handler(
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
+    // Check if client requested JSON response (AJAX)
+    if form.ajax {
+        return Ok(Json(json!({
+            "success": true,
+            "component_id": component_id
+        }))
+        .into_response());
+    }
+
     // Redirect back to edit page with anchor to the new component
     let redirect_path = build_page_path(&state, &db, &page).await?;
     let edit_path = if redirect_path == "/" {
@@ -555,11 +568,7 @@ pub async fn create_page_handler(
     let mut new_page = if form.slug.is_empty() {
         Page::new_with_parent_and_title(parent_page_id, form.title.clone())
     } else {
-        Page::new_with_parent(
-            parent_page_id,
-            form.slug.clone(),
-            form.title.clone(),
-        )
+        Page::new_with_parent(parent_page_id, form.slug.clone(), form.title.clone())
     };
 
     // Set all the additional properties from the form
@@ -688,9 +697,12 @@ pub async fn publish_draft_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    // Redirect to view page
+    // Redirect to view page with cache-busting parameter to prevent the
+    // browser's Speculation Rules API from serving a stale prerendered page
     let redirect_path = build_page_path(&state, &db, &page).await?;
-    Ok(Redirect::to(&redirect_path).into_response())
+    let timestamp = chrono::Utc::now().timestamp();
+    let redirect_url = format!("{}?_v={}", redirect_path, timestamp);
+    Ok(Redirect::to(&redirect_url).into_response())
 }
 
 /// Discard draft changes
@@ -861,6 +873,18 @@ pub async fn save_draft_handler(
         }
     }
 
+    // Log positions before normalization for debugging reorder+publish issues
+    if let Ok(components_before) = component_repo.list_by_page_version(draft_version_id).await {
+        let positions: Vec<String> = components_before
+            .iter()
+            .map(|c| format!("id={:?} pos={}", c.id, c.position))
+            .collect();
+        tracing::info!(
+            "Positions before normalize: [{}]",
+            positions.join(", ")
+        );
+    }
+
     // Normalize positions after all updates and deletions
     component_repo
         .normalize_positions(draft_version_id)
@@ -997,11 +1021,12 @@ pub async fn move_component_handler(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_helpers::{create_test_app_state, create_test_session, create_test_user, setup_test_schema};
+    use crate::test_helpers::{
+        create_test_app_state, create_test_session, create_test_user, setup_test_schema,
+    };
     use doxyde_core::{PageVersion, SiteUser};
     use doxyde_db::repositories::{
-        ComponentRepository, PageRepository, PageVersionRepository,
-        SiteUserRepository,
+        ComponentRepository, PageRepository, PageVersionRepository, SiteUserRepository,
     };
 
     #[sqlx::test]
@@ -1025,7 +1050,10 @@ mod tests {
             .await?;
 
         // Get the root page
-        let root_page = page_repo.get_root_page().await?.ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
+        let root_page = page_repo
+            .get_root_page()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with 3 components
@@ -1120,7 +1148,8 @@ mod tests {
         let current_user = CurrentUser { user, session };
 
         // In multi-database mode, create a dummy site object for testing
-        let mut site = doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
+        let mut site =
+            doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
         site.id = Some(1);
 
         // Call save_draft_handler (this is where the bug was)
@@ -1215,7 +1244,10 @@ mod tests {
             .await?;
 
         // Get the root page
-        let root_page = page_repo.get_root_page().await?.ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
+        let root_page = page_repo
+            .get_root_page()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Failed to get root page"))?;
         let page_id = root_page.id.unwrap();
 
         // Create an initial published version with no components
@@ -1236,13 +1268,15 @@ mod tests {
 
         let app_state = test_state;
         // In multi-database mode, create a dummy site object for testing
-        let mut site = doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
+        let mut site =
+            doxyde_core::models::Site::new("test.local".to_string(), "Test Site".to_string());
         site.id = Some(1);
 
         // Add a component
         let add_form = AddComponentForm {
             content: "New test component".to_string(),
             component_type: "text".to_string(),
+            ajax: false,
         };
 
         let response = add_component_handler(

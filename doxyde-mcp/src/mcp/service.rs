@@ -1234,7 +1234,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Get published version
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let version = version_repo
@@ -1267,7 +1266,6 @@ impl DoxydeRmcpService {
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get draft version
         let version_repo = PageVersionRepository::new(self.pool.clone());
@@ -1302,7 +1300,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
 
@@ -1335,15 +1332,11 @@ impl DoxydeRmcpService {
             let published_id = published
                 .id
                 .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?;
-            let published_components =
-                component_repo.list_by_page_version(published_id).await?;
+            let published_components = component_repo.list_by_page_version(published_id).await?;
 
             // Create new draft version
-            let new_version = doxyde_core::models::PageVersion::new(
-                page_id,
-                published.version_number + 1,
-                None,
-            );
+            let new_version =
+                doxyde_core::models::PageVersion::new(page_id, published.version_number + 1, None);
             let new_draft_id = version_repo.create(&new_version).await?;
 
             // Copy components to new draft
@@ -1430,7 +1423,6 @@ impl DoxydeRmcpService {
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -1581,7 +1573,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Track if anything changed
         let mut changed = false;
 
@@ -1637,7 +1628,6 @@ impl DoxydeRmcpService {
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
 
@@ -1696,7 +1686,6 @@ impl DoxydeRmcpService {
                 .find_by_id(parent_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("Parent page not found"))?;
-
         } else {
             // Check if root page already exists
             let existing_pages = page_repo.list_all().await?;
@@ -1750,7 +1739,7 @@ impl DoxydeRmcpService {
         } else {
             doxyde_core::models::Page::new(slug.clone(), req.title.clone())
         };
-        
+
         // Set additional fields
         new_page.template = template.clone();
         new_page.position = position;
@@ -1787,7 +1776,6 @@ impl DoxydeRmcpService {
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Track if anything changed
         let mut changed = false;
@@ -1901,7 +1889,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         let deleted_position = component.position;
 
         // Delete the component
@@ -1935,7 +1922,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         let version_repo = PageVersionRepository::new(self.pool.clone());
 
         // Get the draft version
@@ -1962,7 +1948,6 @@ impl DoxydeRmcpService {
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         let version_repo = PageVersionRepository::new(self.pool.clone());
         let component_repo = ComponentRepository::new(self.pool.clone());
@@ -2017,7 +2002,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         Ok(self.component_to_info(component))
     }
 
@@ -2031,7 +2015,6 @@ impl DoxydeRmcpService {
             .find_by_id(page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Store parent_id before deletion
         let parent_id = page.parent_page_id;
@@ -2069,7 +2052,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Cannot move the root page
         if page.parent_page_id.is_none() && req.new_parent_id.is_none() {
             return Err(anyhow::anyhow!("Root page is already at the root level"));
@@ -2087,7 +2069,6 @@ impl DoxydeRmcpService {
                 .find_by_id(new_parent_id)
                 .await?
                 .ok_or_else(|| anyhow::anyhow!("New parent page not found"))?;
-
 
             // Check for circular reference
             if self
@@ -2271,7 +2252,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Get all components in the version
         let mut all_components = component_repo
             .list_by_page_version(component.page_version_id)
@@ -2370,7 +2350,6 @@ impl DoxydeRmcpService {
             .find_by_id(version.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get all components in the version
         let mut all_components = component_repo
@@ -2569,7 +2548,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
         let draft_info = draft_result
@@ -2670,7 +2648,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Update component fields
         if let Some(content) = req.content {
             component.content = serde_json::json!({
@@ -2707,7 +2684,6 @@ impl DoxydeRmcpService {
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -2889,7 +2865,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Update component metadata (not the image file itself)
         let mut content = component.content.clone();
 
@@ -2937,7 +2912,6 @@ impl DoxydeRmcpService {
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -3040,7 +3014,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Update component fields
         let mut content = component.content.clone();
 
@@ -3083,7 +3056,6 @@ impl DoxydeRmcpService {
             .find_by_id(req.page_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
-
 
         // Get or create draft version
         let draft_result = self.internal_get_or_create_draft(req.page_id).await?;
@@ -3185,7 +3157,6 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
-
         // Update component fields
         if let Some(html) = req.html {
             component.content = serde_json::json!({
@@ -3227,8 +3198,7 @@ mod tests {
 
     fn create_test_service(pool: SqlitePool) -> (DoxydeRmcpService, tempfile::TempDir) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-        let service =
-            DoxydeRmcpService::with_upload_dir(pool, temp_dir.path().to_path_buf());
+        let service = DoxydeRmcpService::with_upload_dir(pool, temp_dir.path().to_path_buf());
         (service, temp_dir)
     }
 
@@ -3277,10 +3247,8 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create test page as child of root
-        let mut page = doxyde_core::models::Page::new(
-            "test-page".to_string(),
-            "Test Page".to_string(),
-        );
+        let mut page =
+            doxyde_core::models::Page::new("test-page".to_string(), "Test Page".to_string());
         page.parent_page_id = root_page.id;
         page.template = "default".to_string();
         let page_id = page_repo.create(&page).await?;
@@ -3309,7 +3277,6 @@ mod tests {
         assert!(result.contains("Page not found") || result.contains("Failed to find page"));
         Ok(())
     }
-
 
     #[sqlx::test]
     async fn test_get_page_by_path_root(pool: SqlitePool) -> Result<()> {
@@ -3356,14 +3323,12 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create about page
-        let mut about =
-            doxyde_core::models::Page::new("about".to_string(), "About".to_string());
+        let mut about = doxyde_core::models::Page::new("about".to_string(), "About".to_string());
         about.parent_page_id = root.id;
         let about_id = page_repo.create(&about).await?;
 
         // Create team page under about
-        let mut team =
-            doxyde_core::models::Page::new("team".to_string(), "Our Team".to_string());
+        let mut team = doxyde_core::models::Page::new("team".to_string(), "Our Team".to_string());
         team.parent_page_id = Some(about_id);
         let team_id = page_repo.create(&team).await?;
 
@@ -3419,7 +3384,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_search_pages_by_title(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
@@ -3439,10 +3403,8 @@ mod tests {
         team_page.parent_page_id = root.id;
         page_repo.create(&team_page).await?;
 
-        let mut values_page = doxyde_core::models::Page::new(
-            "team-values".to_string(),
-            "Team Values".to_string(),
-        );
+        let mut values_page =
+            doxyde_core::models::Page::new("team-values".to_string(), "Team Values".to_string());
         values_page.parent_page_id = root.id;
         page_repo.create(&values_page).await?;
 
@@ -3471,9 +3433,7 @@ mod tests {
     #[sqlx::test]
     async fn test_search_pages_in_content(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -3555,10 +3515,8 @@ mod tests {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
-        let mut page = doxyde_core::models::Page::new(
-            "contact".to_string(),
-            "Contact Us".to_string(),
-        );
+        let mut page =
+            doxyde_core::models::Page::new("contact".to_string(), "Contact Us".to_string());
         page.parent_page_id = root.id;
         page.description = Some("Get in touch with our SUPPORT team".to_string());
         page_repo.create(&page).await?;
@@ -3592,9 +3550,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_published_content(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -3668,13 +3624,10 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_get_draft_content_exists(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -3760,13 +3713,10 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_get_or_create_draft_from_published(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -3967,9 +3917,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_component_position_shift(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create test site and page with existing components
         // Site config is created automatically by migrations
@@ -4026,9 +3974,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_component_workflow_guidance(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4069,10 +4015,8 @@ mod tests {
         version_repo.publish(draft.id.unwrap()).await?;
 
         // Create a new page for scenario 2 that has no versions yet
-        let mut page2 = doxyde_core::models::Page::new(
-            "test-page-2".to_string(),
-            "Test Page 2".to_string(),
-        );
+        let mut page2 =
+            doxyde_core::models::Page::new("test-page-2".to_string(), "Test Page 2".to_string());
         page2.parent_page_id = root.id;
         let page2_id = page_repo.create(&page2).await?;
 
@@ -4155,9 +4099,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_markdown_all_fields(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4208,9 +4150,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_markdown_partial(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4264,9 +4204,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_published_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4310,9 +4248,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_markdown_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4576,7 +4512,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_create_root_page_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
@@ -4617,10 +4552,8 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create a page to update
-        let mut page = doxyde_core::models::Page::new(
-            "original".to_string(),
-            "Original Title".to_string(),
-        );
+        let mut page =
+            doxyde_core::models::Page::new("original".to_string(), "Original Title".to_string());
         page.parent_page_id = root.id;
         page.description = Some("Original description".to_string());
         page.keywords = Some("original, keywords".to_string());
@@ -4664,10 +4597,8 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create a page to update
-        let mut page = doxyde_core::models::Page::new(
-            "original".to_string(),
-            "Original Title".to_string(),
-        );
+        let mut page =
+            doxyde_core::models::Page::new("original".to_string(), "Original Title".to_string());
         page.parent_page_id = root.id;
         page.template = "default".to_string();
         let page_id = page_repo.create(&page).await?;
@@ -4709,8 +4640,7 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create two pages
-        let mut page1 =
-            doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
+        let mut page1 = doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
         page1.parent_page_id = root.id;
         let page_id1 = page_repo.create(&page1).await?;
 
@@ -4737,7 +4667,6 @@ mod tests {
         assert!(result.contains("already exists"));
         Ok(())
     }
-
 
     #[sqlx::test]
     async fn test_update_page_not_found(pool: SqlitePool) -> Result<()> {
@@ -4766,9 +4695,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_component(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4810,9 +4737,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_component_position_update(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4873,9 +4798,7 @@ mod tests {
     #[sqlx::test]
     async fn test_delete_component_published_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -4910,7 +4833,6 @@ mod tests {
         assert!(result.contains("Cannot delete component from published version"));
         Ok(())
     }
-
 
     #[sqlx::test]
     async fn test_delete_component_not_found(pool: SqlitePool) -> Result<()> {
@@ -4997,9 +4919,7 @@ mod tests {
     #[sqlx::test]
     async fn test_discard_draft_cascade_delete(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -5050,7 +4970,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_discard_draft_page_not_found(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
@@ -5070,9 +4989,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_components_draft(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -5145,9 +5062,7 @@ mod tests {
     #[sqlx::test]
     async fn test_list_components_published_only(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -5226,7 +5141,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_list_components_page_not_found(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
@@ -5246,9 +5160,7 @@ mod tests {
     #[sqlx::test]
     async fn test_get_component(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -5308,7 +5220,6 @@ mod tests {
         Ok(())
     }
 
-
     #[sqlx::test]
     async fn test_delete_page_simple(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
@@ -5325,8 +5236,7 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create a child page
-        let mut child =
-            doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
+        let mut child = doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
         child.parent_page_id = Some(root.id.unwrap());
         child.canonical_url = Some("/child".to_string());
         let child_id = page_repo.create(&child).await?;
@@ -5360,8 +5270,7 @@ mod tests {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
-        let mut parent =
-            doxyde_core::models::Page::new("parent".to_string(), "Parent".to_string());
+        let mut parent = doxyde_core::models::Page::new("parent".to_string(), "Parent".to_string());
         parent.parent_page_id = Some(root.id.unwrap());
         parent.canonical_url = Some("/parent".to_string());
         let parent_id = page_repo.create(&parent).await?;
@@ -5441,22 +5350,19 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
         let root_id = root.id.unwrap();
 
-        let mut page1 =
-            doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
+        let mut page1 = doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
         page1.parent_page_id = Some(root_id);
         page1.canonical_url = Some("/page1".to_string());
         page1.position = 0;
         let page1_id = page_repo.create(&page1).await?;
 
-        let mut page2 =
-            doxyde_core::models::Page::new("page2".to_string(), "Page 2".to_string());
+        let mut page2 = doxyde_core::models::Page::new("page2".to_string(), "Page 2".to_string());
         page2.parent_page_id = Some(root_id);
         page2.canonical_url = Some("/page2".to_string());
         page2.position = 1;
         let page2_id = page_repo.create(&page2).await?;
 
-        let mut page3 =
-            doxyde_core::models::Page::new("page3".to_string(), "Page 3".to_string());
+        let mut page3 = doxyde_core::models::Page::new("page3".to_string(), "Page 3".to_string());
         page3.parent_page_id = Some(root_id);
         page3.canonical_url = Some("/page3".to_string());
         page3.position = 2;
@@ -5506,8 +5412,7 @@ mod tests {
         parent2.canonical_url = Some("/parent2".to_string());
         let parent2_id = page_repo.create(&parent2).await?;
 
-        let mut child =
-            doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
+        let mut child = doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
         child.parent_page_id = Some(parent1_id);
         child.canonical_url = Some("/parent1/child".to_string());
         let child_id = page_repo.create(&child).await?;
@@ -5546,22 +5451,19 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
         let root_id = root.id.unwrap();
 
-        let mut page1 =
-            doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
+        let mut page1 = doxyde_core::models::Page::new("page1".to_string(), "Page 1".to_string());
         page1.parent_page_id = Some(root_id);
         page1.canonical_url = Some("/page1".to_string());
         page1.position = 0;
         let page1_id = page_repo.create(&page1).await?;
 
-        let mut page2 =
-            doxyde_core::models::Page::new("page2".to_string(), "Page 2".to_string());
+        let mut page2 = doxyde_core::models::Page::new("page2".to_string(), "Page 2".to_string());
         page2.parent_page_id = Some(root_id);
         page2.canonical_url = Some("/page2".to_string());
         page2.position = 1;
         let page2_id = page_repo.create(&page2).await?;
 
-        let mut page3 =
-            doxyde_core::models::Page::new("page3".to_string(), "Page 3".to_string());
+        let mut page3 = doxyde_core::models::Page::new("page3".to_string(), "Page 3".to_string());
         page3.parent_page_id = Some(root_id);
         page3.canonical_url = Some("/page3".to_string());
         page3.position = 2;
@@ -5606,14 +5508,12 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
         let root_id = root.id.unwrap();
 
-        let mut parent =
-            doxyde_core::models::Page::new("parent".to_string(), "Parent".to_string());
+        let mut parent = doxyde_core::models::Page::new("parent".to_string(), "Parent".to_string());
         parent.parent_page_id = Some(root_id);
         parent.canonical_url = Some("/parent".to_string());
         let parent_id = page_repo.create(&parent).await?;
 
-        let mut child =
-            doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
+        let mut child = doxyde_core::models::Page::new("child".to_string(), "Child".to_string());
         child.parent_page_id = Some(parent_id);
         child.canonical_url = Some("/parent/child".to_string());
         let child_id = page_repo.create(&child).await?;
@@ -5650,8 +5550,7 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
         let root_id = root.id.unwrap();
 
-        let mut other =
-            doxyde_core::models::Page::new("other".to_string(), "Other".to_string());
+        let mut other = doxyde_core::models::Page::new("other".to_string(), "Other".to_string());
         other.parent_page_id = Some(root_id);
         other.canonical_url = Some("/other".to_string());
         let other_id = page_repo.create(&other).await?;
@@ -5674,9 +5573,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_before_down(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -5764,9 +5661,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_before_up(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -5871,9 +5766,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_different_versions_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -5928,9 +5821,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_after_down(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -6018,9 +5909,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_after_up(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -6125,9 +6014,7 @@ mod tests {
     #[sqlx::test]
     async fn test_move_component_after_last(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Create site
         // Site config is created automatically by migrations
@@ -6241,9 +6128,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_text(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6293,9 +6178,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_text_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6430,9 +6313,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_image(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6558,9 +6439,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_code(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6618,9 +6497,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_code_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6703,9 +6580,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_html(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6756,9 +6631,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_non_html_component_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6802,9 +6675,7 @@ mod tests {
     #[sqlx::test]
     async fn test_create_components_position_shift(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 
@@ -6878,9 +6749,7 @@ mod tests {
     #[sqlx::test]
     async fn test_update_component_published_version_fails(pool: SqlitePool) -> Result<()> {
         setup_test_db(&pool).await?;
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Site config is created automatically by migrations
 

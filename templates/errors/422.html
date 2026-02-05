@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Invalid Input - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: #ed8936;
+        line-height: 1;
+        margin: 0;
+        opacity: 0.3;
+        position: relative;
+    }
+
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: #2d3748;
+    }
+
+    .error-description {
+        font-size: 18px;
+        color: #718096;
+        margin-bottom: 40px;
+        max-width: 500px;
+        line-height: 1.6;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .button {
+        display: inline-block;
+        padding: 12px 32px;
+        font-size: 16px;
+        font-weight: 600;
+        border-radius: 8px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .button-primary {
+        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .button-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .button-secondary {
+        color: #4a5568;
+        background: #e2e8f0;
+    }
+
+    .button-secondary:hover {
+        background: #cbd5e0;
+    }
+
+    /* Edit icon */
+    .error-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        position: relative;
+    }
+
+    .edit-icon {
+        width: 60px;
+        height: 60px;
+        border: 6px solid #ed8936;
+        border-radius: 8px;
+        opacity: 0.3;
+        position: absolute;
+        left: 10px;
+        top: 10px;
+        position: relative;
+    }
+
+    .edit-icon::before {
+        content: '';
+        position: absolute;
+        width: 20px;
+        height: 6px;
+        background: #ed8936;
+        transform: rotate(-45deg);
+        top: -8px;
+        right: -8px;
+    }
+
+    .edit-icon::after {
+        content: '✎';
+        position: absolute;
+        color: #ed8936;
+        font-size: 30px;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    .validation-info {
+        background: #fffaf0;
+        border: 2px solid #fbd38d;
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 40px;
+        max-width: 500px;
+        width: 100%;
+        text-align: left;
+    }
+
+    .validation-info h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: #744210;
+    }
+
+    .validation-info p {
+        color: #4a5568;
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .validation-info ul {
+        margin: 12px 0;
+        padding-left: 24px;
+        color: #4a5568;
+    }
+
+    .validation-info li {
+        margin: 6px 0;
+        font-size: 14px;
+    }
+
+    .validation-info code {
+        background: #fef5e7;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: 'Courier New', monospace;
+        font-size: 13px;
+        color: #744210;
+    }
+
+    /* Responsive */
+    @media (max-width: 767px) {
+        .error-code {
+            font-size: 80px;
+        }
+
+        .error-title {
+            font-size: 28px;
+        }
+
+        .error-description {
+            font-size: 16px;
+        }
+
+        .button {
+            padding: 12px 24px;
+            font-size: 14px;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <div class="edit-icon"></div>
+    </div>
+
+    <h1 class="error-code">422</h1>
+    <h2 class="error-title">{{ error_title | default(value="Invalid Input") }}</h2>
+    <p class="error-description">
+        {{ error_description | default(value="The submitted data could not be processed. Please check your input and try again.") }}
+    </p>
+
+    <div class="error-actions">
+        <button onclick="history.back()" class="button button-primary">
+            ← Go Back and Correct
+        </button>
+        <a href="/" class="button button-secondary">Go to Dashboard</a>
+    </div>
+
+    <div class="validation-info">
+        <h3>Validation Requirements</h3>
+        <p>Please ensure your input meets these requirements:</p>
+        <ul>
+            <li><strong>Tool names:</strong> 3-63 characters, letters, numbers, underscores, and hyphens only</li>
+            <li><strong>Subdomains:</strong> 3-63 characters, alphanumeric and hyphens, start with letter</li>
+            <li><strong>JSON fields:</strong> Valid JSON format (use <code>[...]</code> for arrays, <code>{...}</code> for objects)</li>
+            <li><strong>URLs:</strong> Must start with <code>http://</code> or <code>https://</code></li>
+            <li><strong>Parameters:</strong> Valid types are: string, number, boolean, object, array</li>
+        </ul>
+        <p style="margin-top: 16px;">
+            <strong>Tip:</strong> Check for typos, extra commas, or missing quotes in JSON fields.
+        </p>
+    </div>
+</div>
+{% endblock %}

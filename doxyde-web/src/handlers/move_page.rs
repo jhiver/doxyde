@@ -279,20 +279,14 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
 
         // Create test pages
-        let page1 = Page::new_with_parent(
-                root.id.unwrap(),
-            "page1".to_string(),
-            "Page 1".to_string(),
-        );
+        let page1 =
+            Page::new_with_parent(root.id.unwrap(), "page1".to_string(), "Page 1".to_string());
         let page1_id = page_repo.create(&page1).await?;
         let mut page1 = page1;
         page1.id = Some(page1_id);
 
-        let page2 = Page::new_with_parent(
-                root.id.unwrap(),
-            "page2".to_string(),
-            "Page 2".to_string(),
-        );
+        let page2 =
+            Page::new_with_parent(root.id.unwrap(), "page2".to_string(), "Page 2".to_string());
         let page2_id = page_repo.create(&page2).await?;
         let mut page2 = page2;
         page2.id = Some(page2_id);

@@ -98,13 +98,23 @@ pub async fn serve_image_handler(
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
-                            // file_path is stored relative to working directory (e.g., sites/xxx/uploads/file.jpg)
-                            // Use sites directory parent as base for path validation
-                            let sites_dir = state.config.get_sites_directory().map_err(|e| {
-                                tracing::error!("Failed to get sites directory: {}", e);
-                                StatusCode::INTERNAL_SERVER_ERROR
-                            })?;
-                            let base_dir = sites_dir.parent().unwrap_or(&sites_dir);
+                            // file_path can be absolute (from uploads_dir config) or relative
+                            // Use the uploads directory as the base for path validation
+                            let uploads_dir = PathBuf::from(&state.config.uploads_dir);
+                            let base_dir = if std::path::Path::new(file_path).is_absolute() {
+                                // For absolute paths, use the uploads directory or its parent
+                                uploads_dir
+                                    .parent()
+                                    .map(|p| p.to_path_buf())
+                                    .unwrap_or_else(|| PathBuf::from("/"))
+                            } else {
+                                // For relative paths, use the sites directory parent
+                                state
+                                    .config
+                                    .get_sites_directory()
+                                    .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
+                                    .unwrap_or_else(|_| PathBuf::from("."))
+                            };
 
                             return serve_image_file(
                                 file_path,
@@ -203,13 +213,23 @@ pub async fn image_preview_handler(
     // Extract image data and serve
     let (file_path, format) = extract_image_data(&component)?;
 
-    // file_path is stored relative to working directory (e.g., sites/xxx/uploads/file.jpg)
-    // Use sites directory parent as base for path validation
-    let sites_dir = state.config.get_sites_directory().map_err(|e| {
-        tracing::error!("Failed to get sites directory: {}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    let base_dir = sites_dir.parent().unwrap_or(&sites_dir);
+    // file_path can be absolute (from uploads_dir config) or relative
+    // Use the uploads directory as the base for path validation
+    let uploads_dir = PathBuf::from(&state.config.uploads_dir);
+    let base_dir = if std::path::Path::new(file_path).is_absolute() {
+        // For absolute paths, use the uploads directory or its parent
+        uploads_dir
+            .parent()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/"))
+    } else {
+        // For relative paths, use the sites directory parent
+        state
+            .config
+            .get_sites_directory()
+            .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
+            .unwrap_or_else(|_| PathBuf::from("."))
+    };
 
     tracing::debug!(
         "Serving image preview - file_path: {}, format: {}, base_dir: {:?}",

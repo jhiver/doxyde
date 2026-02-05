@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} - {{ super() }}{% endblock %}
+
+{% block sidebar %}
+    {% if navigation_levels %}
+        {% for level in navigation_levels %}
+        <div class="sidebar-card">
+            <div class="sidebar-card-header">
+                <h3>{{ level.title }}</h3>
+            </div>
+            <div class="sidebar-card-body">
+                <ul class="sidebar-nav">
+                {% for page_item in level.pages %}
+                    <li>
+                        {% if page_item.is_current_page %}
+                            <span class="current-page">{{ page_item.title }}</span>
+                        {% else %}
+                            <a href="{{ page_item.url }}"{% if page_item.is_active %} class="active-path"{% endif %}>
+                                {{ page_item.title }}
+                            </a>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endfor %}
+    {% elif siblings %}
+        <div class="sidebar-card">
+            <div class="sidebar-card-header">
+                <h3>{{ parent_title | default(value="More") }}</h3>
+            </div>
+            <div class="sidebar-card-body">
+                <ul class="sidebar-nav">
+                {% for sibling in siblings %}
+                    <li>
+                        {% if sibling.is_current %}
+                            <span class="current-page">{{ sibling.title }}</span>
+                        {% else %}
+                            <a href="{{ sibling.url }}">{{ sibling.title }}</a>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<article class="apartment-page">
+    {# Breadcrumbs #}
+    {% if breadcrumbs and breadcrumbs|length > 1 %}
+    <nav aria-label="breadcrumb" class="breadcrumb">
+        {% for crumb in breadcrumbs %}
+            {% if not loop.last %}
+                <a href="{{ crumb.url }}">{{ crumb.title }}</a>
+                <span class="breadcrumb-separator">›</span>
+            {% else %}
+                <span class="text-muted">{{ crumb.title }}</span>
+            {% endif %}
+        {% endfor %}
+    </nav>
+    {% endif %}
+
+    {# Title #}
+    <h1 class="apartment-title">{{ page.title }}</h1>
+
+    {# Photo Gallery - Airbnb style grid #}
+    {% set image_count = 0 %}
+    {% for component in components %}
+        {% if component.component_type == "image" %}
+            {% set_global image_count = image_count + 1 %}
+        {% endif %}
+    {% endfor %}
+
+    {% if image_count > 0 %}
+    <div class="airbnb-gallery">
+        <div class="gallery-grid">
+            {% set img_index = 0 %}
+            {% for component in components %}
+                {% if component.component_type == "image" and img_index < 5 %}
+                    {% set_global img_index = img_index + 1 %}
+                    <div class="gallery-item gallery-item-{{ img_index }}" onclick="openGallery(galleryImages, {{ img_index - 1 }})">
+                        <img src="/{{ component.content.slug }}.{{ component.content.format }}"
+                             alt="{{ component.content.alt_text | default(value=component.title) | default(value='') }}"
+                             loading="{% if img_index == 1 %}eager{% else %}lazy{% endif %}">
+                    </div>
+                {% endif %}
+            {% endfor %}
+            {% if image_count > 5 %}
+            <button class="gallery-show-all" onclick="openGallery(galleryImages, 0)">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="3" width="7" height="7"></rect>
+                    <rect x="14" y="14" width="7" height="7"></rect>
+                    <rect x="3" y="14" width="7" height="7"></rect>
+                </svg>
+                Show all photos
+            </button>
+            {% endif %}
+        </div>
+    </div>
+    {# Gallery image data for JavaScript #}
+    <script>
+    var galleryImages = [
+        {% for component in components %}
+            {% if component.component_type == "image" %}
+            { src: "/{{ component.content.slug }}.{{ component.content.format }}", alt: "{{ component.content.alt_text | default(value='') | escape }}" },
+            {% endif %}
+        {% endfor %}
+    ];
+    </script>
+    {% endif %}
+
+    {# Two-column layout: Content + Booking Widget #}
+    <div class="apartment-layout">
+        <div class="apartment-main">
+            {# Render non-image components #}
+            {% for component in components %}
+                {% if component.component_type != "image" %}
+                    {{ render_component(component=component) | safe }}
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <aside class="apartment-sidebar">
+            <div class="booking-widget">
+                <form class="booking-form" action="/reserver" method="GET">
+                    <input type="hidden" name="apartment" value="{{ page.slug }}">
+
+                    <div class="booking-dates">
+                        <div class="booking-field booking-field-checkin">
+                            <label for="checkin">CHECK-IN</label>
+                            <input type="text" id="checkin" name="checkin" placeholder="Add date" readonly>
+                        </div>
+                        <div class="booking-field booking-field-checkout">
+                            <label for="checkout">CHECK-OUT</label>
+                            <input type="text" id="checkout" name="checkout" placeholder="Add date" readonly>
+                        </div>
+                    </div>
+
+                    <div class="booking-field booking-field-guests">
+                        <label for="guests">GUESTS</label>
+                        <select id="guests" name="guests">
+                            <option value="1">1 guest</option>
+                            <option value="2" selected>2 guests</option>
+                            <option value="3">3 guests</option>
+                            <option value="4">4 guests</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="booking-submit">Check availability</button>
+                </form>
+            </div>
+        </aside>
+    </div>
+</article>
+
+{# Flatpickr for date pickers #}
+<link rel="stylesheet" href="/.static/vendor/flatpickr/flatpickr.min.css">
+<link rel="stylesheet" href="/.static/vendor/flatpickr/airbnb.css">
+<script src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    flatpickr("#checkin", {
+        dateFormat: "M d, Y",
+        minDate: "today",
+        defaultDate: today,
+        onChange: function(selectedDates) {
+            if (selectedDates[0]) {
+                const minCheckout = new Date(selectedDates[0]);
+                minCheckout.setDate(minCheckout.getDate() + 1);
+                checkoutPicker.set('minDate', minCheckout);
+            }
+        }
+    });
+
+    const checkoutPicker = flatpickr("#checkout", {
+        dateFormat: "M d, Y",
+        minDate: tomorrow,
+        defaultDate: tomorrow
+    });
+});
+</script>
+
+{# Gallery Modal #}
+<div id="gallery-modal" class="gallery-modal">
+    <button class="gallery-close" onclick="closeGallery()" aria-label="Close gallery">&times;</button>
+    <button class="gallery-nav gallery-prev" onclick="galleryPrev()" aria-label="Previous image">&#8249;</button>
+    <div class="gallery-modal-content">
+        <img id="gallery-image" src="" alt="">
+    </div>
+    <button class="gallery-nav gallery-next" onclick="galleryNext()" aria-label="Next image">&#8250;</button>
+    <div class="gallery-counter"></div>
+</div>
+<script src="/.static/js/gallery.js"></script>
+{% endblock %}

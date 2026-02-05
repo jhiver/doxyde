@@ -505,9 +505,16 @@ fn parse_add_component_form(form_data: &[(String, String)]) -> AddComponentForm 
         .map(|(_, v)| v.clone())
         .unwrap_or_else(|| "text".to_string());
 
+    let ajax = form_data
+        .iter()
+        .find(|(k, _)| k == "ajax")
+        .map(|(_, v)| v == "true")
+        .unwrap_or(false);
+
     AddComponentForm {
         content,
         component_type,
+        ajax,
     }
 }
 
@@ -549,10 +556,7 @@ async fn get_root_page(page_repo: &PageRepository) -> Result<Page, StatusCode> {
 }
 
 /// Navigate through page hierarchy to find target page
-async fn navigate_to_page(
-    page_repo: &PageRepository,
-    path: &str,
-) -> Result<Page, StatusCode> {
+async fn navigate_to_page(page_repo: &PageRepository, path: &str) -> Result<Page, StatusCode> {
     let segments = parse_path_segments(path);
     let mut current_page = get_root_page(page_repo).await?;
 

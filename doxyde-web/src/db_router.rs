@@ -40,12 +40,14 @@ impl DatabaseRouter {
             _config: config.clone(),
             site_pools: Arc::new(RwLock::new(HashMap::new())),
         };
-        
+
         // Run migrations on all existing site databases at startup
         if config.multi_site_mode && !config.sites_directory.is_empty() {
-            router.run_migrations_on_all_sites(&config.sites_directory).await?;
+            router
+                .run_migrations_on_all_sites(&config.sites_directory)
+                .await?;
         }
-        
+
         Ok(router)
     }
 
@@ -154,42 +156,43 @@ impl DatabaseRouter {
     /// Run migrations on all existing site databases at startup
     async fn run_migrations_on_all_sites(&self, sites_directory: &str) -> Result<()> {
         let sites_path = PathBuf::from(sites_directory);
-        
+
         // Check if sites directory exists
         if !sites_path.exists() {
             tracing::info!("Sites directory does not exist yet: {:?}", sites_path);
             return Ok(());
         }
-        
+
         // Iterate through all directories in the sites directory
         let entries = std::fs::read_dir(&sites_path)
             .with_context(|| format!("Failed to read sites directory: {:?}", sites_path))?;
-        
+
         for entry in entries {
             let entry = entry?;
             let path = entry.path();
-            
+
             // Skip if not a directory
             if !path.is_dir() {
                 continue;
             }
-            
+
             // Check if site.db exists in this directory
             let db_path = path.join("site.db");
             if !db_path.exists() {
                 continue;
             }
-            
+
             // Get the site directory name
-            let site_dir_name = path.file_name()
+            let site_dir_name = path
+                .file_name()
                 .and_then(|n| n.to_str())
                 .ok_or_else(|| anyhow::anyhow!("Invalid site directory name"))?;
-            
+
             tracing::info!("Running migrations for site: {}", site_dir_name);
-            
+
             // Build database URL
             let db_url = format!("sqlite:{}", db_path.display());
-            
+
             // Initialize database (this runs migrations)
             match db::init_database(&db_url).await {
                 Ok(pool) => {
@@ -204,7 +207,7 @@ impl DatabaseRouter {
                 }
             }
         }
-        
+
         Ok(())
     }
 

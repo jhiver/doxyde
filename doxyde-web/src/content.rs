@@ -408,9 +408,13 @@ pub async fn content_post_handler(
     let path = uri.path();
     let content_path = ContentPath::parse(path);
 
-    // Check if this is a multipart upload
-    // TODO: This will need to be handled differently without access to request headers
-    let is_multipart = false;
+    // Check if this is a multipart upload by examining Content-Type header
+    let is_multipart = request
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| ct.starts_with("multipart/form-data"))
+        .unwrap_or(false);
 
     if is_multipart
         && (content_path.action.as_deref() == Some(".upload-image")

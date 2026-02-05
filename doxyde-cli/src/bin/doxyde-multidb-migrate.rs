@@ -219,8 +219,7 @@ async fn migrate_to_multi_db(source_path: &str, target_dir: &str, dry_run: bool)
             // Copy the source database to target
             let site_db_path = site_dir.join("site.db");
             println!("  Copying database...");
-            fs::copy(source_path, &site_db_path)
-                .context("Failed to copy source database")?;
+            fs::copy(source_path, &site_db_path).context("Failed to copy source database")?;
 
             // Connect to copied database
             let site_db_url = format!("sqlite:{}", site_db_path.display());
@@ -395,9 +394,7 @@ async fn transform_to_multidb(pool: &SqlitePool, site_id: i64, title: &str) -> R
     .await?;
 
     // Drop old table and rename new one
-    sqlx::query("DROP TABLE pages")
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query("DROP TABLE pages").execute(&mut *tx).await?;
     sqlx::query("ALTER TABLE pages_new RENAME TO pages")
         .execute(&mut *tx)
         .await?;

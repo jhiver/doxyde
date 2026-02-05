@@ -56,14 +56,7 @@ fn bench_page_operations(c: &mut Criterion) {
 
     // Benchmark listing all pages
     c.bench_function("page_list_all", |b| {
-        b.iter(|| {
-            rt.block_on(async {
-                page_repo
-                    .list_all()
-                    .await
-                    .expect("Failed to list pages")
-            })
-        });
+        b.iter(|| rt.block_on(async { page_repo.list_all().await.expect("Failed to list pages") }));
     });
 }
 

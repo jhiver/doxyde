@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}Authentication Required - {{ super() }}{% endblock %}
+
+{% block head %}
+<style>
+    .error-page {
+        text-align: center;
+        padding: 60px 20px;
+        min-height: 60vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .error-code {
+        font-size: 120px;
+        font-weight: 700;
+        color: #667eea;
+        line-height: 1;
+        margin: 0;
+        opacity: 0.3;
+        position: relative;
+    }
+
+    .error-title {
+        font-size: 36px;
+        font-weight: 600;
+        margin: 20px 0;
+        color: #2d3748;
+    }
+
+    .error-description {
+        font-size: 18px;
+        color: #718096;
+        margin-bottom: 40px;
+        max-width: 500px;
+        line-height: 1.6;
+    }
+
+    .error-actions {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    /* Prominent login button */
+    .login-button {
+        display: inline-block;
+        padding: 16px 48px;
+        font-size: 18px;
+        font-weight: 600;
+        color: white;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 8px;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    .login-button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    .login-button:active {
+        transform: translateY(0);
+    }
+
+    /* Lock icon */
+    .error-icon {
+        width: 80px;
+        height: 80px;
+        margin: 0 auto 20px;
+        position: relative;
+    }
+
+    .lock {
+        width: 60px;
+        height: 50px;
+        background: #667eea;
+        border-radius: 8px;
+        position: absolute;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        opacity: 0.3;
+    }
+
+    .lock::before {
+        content: '';
+        position: absolute;
+        width: 40px;
+        height: 30px;
+        border: 8px solid #667eea;
+        border-bottom: none;
+        border-radius: 20px 20px 0 0;
+        top: -25px;
+        left: 50%;
+        transform: translateX(-50%);
+    }
+
+    .lock::after {
+        content: '';
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: white;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+    }
+
+    .auth-info {
+        background: #f7fafc;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 24px;
+        margin-top: 40px;
+        max-width: 500px;
+        width: 100%;
+        text-align: left;
+    }
+
+    .auth-info h3 {
+        font-size: 18px;
+        margin-bottom: 16px;
+        color: #2d3748;
+    }
+
+    .auth-info p {
+        color: #4a5568;
+        margin: 8px 0;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+
+    .auth-info strong {
+        color: #2d3748;
+    }
+
+    /* Animation */
+    @keyframes shake {
+        0%, 100% { transform: translateX(-50%) rotate(0deg); }
+        25% { transform: translateX(-50%) rotate(-5deg); }
+        75% { transform: translateX(-50%) rotate(5deg); }
+    }
+
+    .lock {
+        animation: shake 2s ease-in-out infinite;
+    }
+
+    /* Responsive */
+    @media (max-width: 767px) {
+        .error-code {
+            font-size: 80px;
+        }
+
+        .error-title {
+            font-size: 28px;
+        }
+
+        .error-description {
+            font-size: 16px;
+        }
+
+        .login-button {
+            padding: 14px 36px;
+            font-size: 16px;
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <div class="error-icon">
+        <div class="lock"></div>
+    </div>
+
+    <h1 class="error-code">401</h1>
+    <h2 class="error-title">Authentication Required</h2>
+    <p class="error-description">
+        {% if error_message %}
+            {{ error_message }}
+        {% else %}
+            You need to sign in to access this page. Please log in with your account to continue.
+        {% endif %}
+    </p>
+
+    <div class="error-actions">
+        {% if user %}
+            <a href="/.logout" class="login-button">Switch Account</a>
+            <a href="/" class="button button-secondary">Go to Homepage</a>
+        {% else %}
+            <a href="/.login" class="login-button" aria-label="Sign in to your account">
+                🔐 Sign In to Continue
+            </a>
+        {% endif %}
+    </div>
+
+    {% if not user %}
+    <div class="auth-info">
+        <h3>Why do I need to sign in?</h3>
+        <p>This page contains protected content that requires authentication.</p>
+        <p style="margin-top: 16px;">
+            <strong>If you have an account:</strong> Click the "Sign In" button above to access this page.
+        </p>
+        <p>
+            <strong>Don't have an account?</strong> Contact your administrator for access.
+        </p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
