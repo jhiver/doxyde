@@ -103,6 +103,12 @@ pub fn create_router(state: AppState) -> Router {
             "/.oauth/token",
             post(rmcp::token).options(rmcp::oauth_options),
         )
+        // Per-site CSS and assets
+        .route("/.site-css", get(handlers::site_assets::site_css_handler))
+        .route(
+            "/.site-assets/{*path}",
+            get(handlers::site_assets::site_asset_handler),
+        )
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware

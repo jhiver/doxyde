@@ -214,6 +214,77 @@ impl DoxydeRmcpService {
                     serde_json::from_value(args).map_err(|e| e.to_string())?;
                 Ok(self.move_component_after(Parameters(req)).await)
             }
+            // Site template tools
+            "list_site_templates" => Ok(self.list_site_templates().await),
+            "get_site_template" => {
+                let req: GetSiteTemplateRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.get_site_template(Parameters(req)).await)
+            }
+            "get_default_template" => {
+                let req: GetDefaultTemplateRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.get_default_template(Parameters(req)).await)
+            }
+            "create_site_template" => {
+                let req: CreateSiteTemplateRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.create_site_template(Parameters(req)).await)
+            }
+            "update_site_template" => {
+                let req: UpdateSiteTemplateRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.update_site_template(Parameters(req)).await)
+            }
+            "delete_site_template" => {
+                let req: DeleteSiteTemplateRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.delete_site_template(Parameters(req)).await)
+            }
+            // Site style tools
+            "list_site_styles" => Ok(self.list_site_styles().await),
+            "get_site_style" => {
+                let req: GetSiteStyleRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.get_site_style(Parameters(req)).await)
+            }
+            "create_site_style" => {
+                let req: CreateSiteStyleRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.create_site_style(Parameters(req)).await)
+            }
+            "update_site_style" => {
+                let req: UpdateSiteStyleRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.update_site_style(Parameters(req)).await)
+            }
+            "delete_site_style" => {
+                let req: DeleteSiteStyleRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.delete_site_style(Parameters(req)).await)
+            }
+            // Site asset tools
+            "list_site_assets" => Ok(self.list_site_assets().await),
+            "get_site_asset" => {
+                let req: GetSiteAssetRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.get_site_asset(Parameters(req)).await)
+            }
+            "upload_site_asset" => {
+                let req: UploadSiteAssetRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.upload_site_asset(Parameters(req)).await)
+            }
+            "upload_site_asset_from_url" => {
+                let req: UploadSiteAssetFromUrlRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.upload_site_asset_from_url(Parameters(req)).await)
+            }
+            "delete_site_asset" => {
+                let req: DeleteSiteAssetRequest =
+                    serde_json::from_value(args).map_err(|e| e.to_string())?;
+                Ok(self.delete_site_asset(Parameters(req)).await)
+            }
             _ => Err(format!("Unknown tool: {}", name)),
         }
     }
@@ -578,6 +649,139 @@ pub struct UpdateComponentHtmlRequest {
 
     #[schemars(description = "New template (optional)")]
     pub template: Option<String>,
+}
+
+// Site template request structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListSiteTemplatesRequest {}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSiteTemplateRequest {
+    #[schemars(description = "ID of the template to retrieve")]
+    pub template_id: i64,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetDefaultTemplateRequest {
+    #[schemars(
+        description = "Name of the filesystem template to read (e.g., 'base.html', 'page_templates/default.html')"
+    )]
+    pub template_name: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateSiteTemplateRequest {
+    #[schemars(
+        description = "Template name/path (e.g., 'base.html', 'page_templates/custom.html')"
+    )]
+    pub template_name: String,
+
+    #[schemars(description = "Template content (Tera syntax)")]
+    pub content: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateSiteTemplateRequest {
+    #[schemars(description = "ID of the template to update")]
+    pub template_id: i64,
+
+    #[schemars(description = "New template content (optional)")]
+    pub content: Option<String>,
+
+    #[schemars(description = "Set active status (optional)")]
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteSiteTemplateRequest {
+    #[schemars(description = "ID of the template to delete (reverts to filesystem default)")]
+    pub template_id: i64,
+}
+
+// Site style request structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListSiteStylesRequest {}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSiteStyleRequest {
+    #[schemars(description = "ID of the style to retrieve")]
+    pub style_id: i64,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateSiteStyleRequest {
+    #[schemars(description = "Style name (e.g., 'custom-theme', 'brand-colors')")]
+    pub name: String,
+
+    #[schemars(description = "CSS content")]
+    pub css_content: String,
+
+    #[schemars(description = "Load priority (higher = loaded later, default 0)")]
+    pub priority: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateSiteStyleRequest {
+    #[schemars(description = "ID of the style to update")]
+    pub style_id: i64,
+
+    #[schemars(description = "New CSS content (optional)")]
+    pub css_content: Option<String>,
+
+    #[schemars(description = "New style name (optional)")]
+    pub name: Option<String>,
+
+    #[schemars(description = "New load priority (optional)")]
+    pub priority: Option<i32>,
+
+    #[schemars(description = "Set active status (optional)")]
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteSiteStyleRequest {
+    #[schemars(description = "ID of the style to delete")]
+    pub style_id: i64,
+}
+
+// Site asset request structs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListSiteAssetsRequest {}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSiteAssetRequest {
+    #[schemars(description = "ID of the asset to retrieve metadata for")]
+    pub asset_id: i64,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UploadSiteAssetRequest {
+    #[schemars(description = "Asset path (e.g., 'js/custom.js', 'fonts/brand.woff2')")]
+    pub path: String,
+
+    #[schemars(description = "Base64-encoded asset content")]
+    pub content_base64: String,
+
+    #[schemars(description = "MIME type (e.g., 'text/javascript', 'font/woff2', 'text/css')")]
+    pub mime_type: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UploadSiteAssetFromUrlRequest {
+    #[schemars(description = "Asset path to store as")]
+    pub path: String,
+
+    #[schemars(description = "URL to download the asset from")]
+    pub url: String,
+
+    #[schemars(description = "MIME type for the asset")]
+    pub mime_type: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteSiteAssetRequest {
+    #[schemars(description = "ID of the asset to delete")]
+    pub asset_id: i64,
 }
 
 #[tool_router]
@@ -968,6 +1172,201 @@ impl DoxydeRmcpService {
                     format!("{{\"error\": \"Failed to serialize component: {}\"}}", e)
                 })
             }
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // ========== Site Template Tools ==========
+
+    #[tool(description = "List all custom templates for this site with metadata")]
+    pub async fn list_site_templates(&self) -> String {
+        match self.internal_list_site_templates().await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Get a custom template by ID including its content")]
+    pub async fn get_site_template(
+        &self,
+        Parameters(req): Parameters<GetSiteTemplateRequest>,
+    ) -> String {
+        match self.internal_get_site_template(req.template_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Read the default filesystem template content. Use this to see the current default before creating an override."
+    )]
+    pub async fn get_default_template(
+        &self,
+        Parameters(req): Parameters<GetDefaultTemplateRequest>,
+    ) -> String {
+        match self.internal_get_default_template(&req.template_name).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Create a custom template override. The template will be used instead of the filesystem default for page rendering."
+    )]
+    pub async fn create_site_template(
+        &self,
+        Parameters(req): Parameters<CreateSiteTemplateRequest>,
+    ) -> String {
+        match self.internal_create_site_template(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Update a custom template's content or active status")]
+    pub async fn update_site_template(
+        &self,
+        Parameters(req): Parameters<UpdateSiteTemplateRequest>,
+    ) -> String {
+        match self.internal_update_site_template(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Delete a custom template (reverts to filesystem default)")]
+    pub async fn delete_site_template(
+        &self,
+        Parameters(req): Parameters<DeleteSiteTemplateRequest>,
+    ) -> String {
+        match self.internal_delete_site_template(req.template_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // ========== Site Style Tools ==========
+
+    #[tool(description = "List all custom CSS styles for this site")]
+    pub async fn list_site_styles(&self) -> String {
+        match self.internal_list_site_styles().await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Get a custom CSS style by ID including its content")]
+    pub async fn get_site_style(&self, Parameters(req): Parameters<GetSiteStyleRequest>) -> String {
+        match self.internal_get_site_style(req.style_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Create a custom CSS style. Active styles are served at /.site-css and loaded after the default styles."
+    )]
+    pub async fn create_site_style(
+        &self,
+        Parameters(req): Parameters<CreateSiteStyleRequest>,
+    ) -> String {
+        match self.internal_create_site_style(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Update a custom CSS style's content, name, priority, or active status")]
+    pub async fn update_site_style(
+        &self,
+        Parameters(req): Parameters<UpdateSiteStyleRequest>,
+    ) -> String {
+        match self.internal_update_site_style(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Delete a custom CSS style")]
+    pub async fn delete_site_style(
+        &self,
+        Parameters(req): Parameters<DeleteSiteStyleRequest>,
+    ) -> String {
+        match self.internal_delete_site_style(req.style_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    // ========== Site Asset Tools ==========
+
+    #[tool(description = "List all site assets (path, mime_type, size - no content)")]
+    pub async fn list_site_assets(&self) -> String {
+        match self.internal_list_site_assets().await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Get site asset metadata by ID (not content - use /.site-assets/<path> to access content)"
+    )]
+    pub async fn get_site_asset(&self, Parameters(req): Parameters<GetSiteAssetRequest>) -> String {
+        match self.internal_get_site_asset(req.asset_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Upload a site asset from base64-encoded content. Served at /.site-assets/<path>"
+    )]
+    pub async fn upload_site_asset(
+        &self,
+        Parameters(req): Parameters<UploadSiteAssetRequest>,
+    ) -> String {
+        match self.internal_upload_site_asset(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(
+        description = "Upload a site asset by downloading from a URL. Served at /.site-assets/<path>"
+    )]
+    pub async fn upload_site_asset_from_url(
+        &self,
+        Parameters(req): Parameters<UploadSiteAssetFromUrlRequest>,
+    ) -> String {
+        match self.internal_upload_site_asset_from_url(req).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
+            Err(e) => format!("{{\"error\": \"{}\"}}", e),
+        }
+    }
+
+    #[tool(description = "Delete a site asset")]
+    pub async fn delete_site_asset(
+        &self,
+        Parameters(req): Parameters<DeleteSiteAssetRequest>,
+    ) -> String {
+        match self.internal_delete_site_asset(req.asset_id).await {
+            Ok(result) => serde_json::to_string_pretty(&result)
+                .unwrap_or_else(|e| format!("{{\"error\": \"Failed to serialize: {}\"}}", e)),
             Err(e) => format!("{{\"error\": \"{}\"}}", e),
         }
     }
@@ -3178,6 +3577,415 @@ impl DoxydeRmcpService {
         component_repo.update(&component).await?;
 
         Ok(self.component_to_info(component))
+    }
+
+    // ========== Site Template Internal Methods ==========
+
+    async fn internal_list_site_templates(&self) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteTemplateRepository;
+
+        let repo = SiteTemplateRepository::new(self.pool.clone());
+        let templates = repo.list_all().await?;
+
+        let items: Vec<serde_json::Value> = templates
+            .iter()
+            .map(|t| {
+                json!({
+                    "id": t.id,
+                    "template_name": t.template_name,
+                    "is_active": t.is_active,
+                    "content_length": t.content.len(),
+                    "created_at": t.created_at.to_rfc3339(),
+                    "updated_at": t.updated_at.to_rfc3339(),
+                })
+            })
+            .collect();
+
+        Ok(json!({ "templates": items, "count": items.len() }))
+    }
+
+    async fn internal_get_site_template(&self, template_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteTemplateRepository;
+
+        let repo = SiteTemplateRepository::new(self.pool.clone());
+        let template = repo
+            .find_by_id(template_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Template not found"))?;
+
+        Ok(json!({
+            "id": template.id,
+            "template_name": template.template_name,
+            "content": template.content,
+            "is_active": template.is_active,
+            "created_at": template.created_at.to_rfc3339(),
+            "updated_at": template.updated_at.to_rfc3339(),
+        }))
+    }
+
+    async fn internal_get_default_template(
+        &self,
+        template_name: &str,
+    ) -> Result<serde_json::Value> {
+        use doxyde_core::models::site_template::SiteTemplate;
+
+        SiteTemplate::validate_name(template_name)
+            .map_err(|e| anyhow::anyhow!("Invalid template name: {}", e))?;
+
+        let templates_dir = "templates";
+        let path = std::path::Path::new(templates_dir).join(template_name);
+
+        if !path.exists() {
+            return Err(anyhow::anyhow!(
+                "Default template '{}' not found on filesystem",
+                template_name
+            ));
+        }
+
+        let content = std::fs::read_to_string(&path)
+            .with_context(|| format!("Failed to read template: {}", template_name))?;
+
+        Ok(json!({
+            "template_name": template_name,
+            "content": content,
+            "source": "filesystem",
+        }))
+    }
+
+    async fn internal_create_site_template(
+        &self,
+        req: CreateSiteTemplateRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_core::models::site_template::SiteTemplate;
+        use doxyde_db::repositories::SiteTemplateRepository;
+
+        let template = SiteTemplate::new(req.template_name, req.content);
+        template
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        let repo = SiteTemplateRepository::new(self.pool.clone());
+        let id = repo.create(&template).await?;
+
+        Ok(json!({
+            "id": id,
+            "template_name": template.template_name,
+            "is_active": template.is_active,
+            "message": "Template created. It will be used for page rendering immediately.",
+        }))
+    }
+
+    async fn internal_update_site_template(
+        &self,
+        req: UpdateSiteTemplateRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteTemplateRepository;
+
+        let repo = SiteTemplateRepository::new(self.pool.clone());
+        let mut template = repo
+            .find_by_id(req.template_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Template not found"))?;
+
+        if let Some(content) = req.content {
+            template.content = content;
+        }
+        if let Some(is_active) = req.is_active {
+            template.is_active = is_active;
+        }
+
+        template
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        repo.update(&template).await?;
+
+        Ok(json!({
+            "id": template.id,
+            "template_name": template.template_name,
+            "is_active": template.is_active,
+            "message": "Template updated successfully.",
+        }))
+    }
+
+    async fn internal_delete_site_template(&self, template_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteTemplateRepository;
+
+        let repo = SiteTemplateRepository::new(self.pool.clone());
+        let template = repo
+            .find_by_id(template_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Template not found"))?;
+
+        repo.delete(template_id).await?;
+
+        Ok(json!({
+            "deleted_id": template_id,
+            "template_name": template.template_name,
+            "message": "Template deleted. Filesystem default will be used.",
+        }))
+    }
+
+    // ========== Site Style Internal Methods ==========
+
+    async fn internal_list_site_styles(&self) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteStyleRepository;
+
+        let repo = SiteStyleRepository::new(self.pool.clone());
+        let styles = repo.list_all().await?;
+
+        let items: Vec<serde_json::Value> = styles
+            .iter()
+            .map(|s| {
+                json!({
+                    "id": s.id,
+                    "name": s.name,
+                    "is_active": s.is_active,
+                    "priority": s.priority,
+                    "content_length": s.css_content.len(),
+                    "created_at": s.created_at.to_rfc3339(),
+                    "updated_at": s.updated_at.to_rfc3339(),
+                })
+            })
+            .collect();
+
+        Ok(json!({ "styles": items, "count": items.len() }))
+    }
+
+    async fn internal_get_site_style(&self, style_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteStyleRepository;
+
+        let repo = SiteStyleRepository::new(self.pool.clone());
+        let style = repo
+            .find_by_id(style_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Style not found"))?;
+
+        Ok(json!({
+            "id": style.id,
+            "name": style.name,
+            "css_content": style.css_content,
+            "is_active": style.is_active,
+            "priority": style.priority,
+            "created_at": style.created_at.to_rfc3339(),
+            "updated_at": style.updated_at.to_rfc3339(),
+        }))
+    }
+
+    async fn internal_create_site_style(
+        &self,
+        req: CreateSiteStyleRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_core::models::site_style::SiteStyle;
+        use doxyde_db::repositories::SiteStyleRepository;
+
+        let mut style = SiteStyle::new(req.name, req.css_content);
+        if let Some(priority) = req.priority {
+            style.priority = priority;
+        }
+
+        style
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        let repo = SiteStyleRepository::new(self.pool.clone());
+        let id = repo.create(&style).await?;
+
+        Ok(json!({
+            "id": id,
+            "name": style.name,
+            "priority": style.priority,
+            "is_active": style.is_active,
+            "message": "Style created. Visit /.site-css to see the combined CSS.",
+        }))
+    }
+
+    async fn internal_update_site_style(
+        &self,
+        req: UpdateSiteStyleRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteStyleRepository;
+
+        let repo = SiteStyleRepository::new(self.pool.clone());
+        let mut style = repo
+            .find_by_id(req.style_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Style not found"))?;
+
+        if let Some(css_content) = req.css_content {
+            style.css_content = css_content;
+        }
+        if let Some(name) = req.name {
+            style.name = name;
+        }
+        if let Some(priority) = req.priority {
+            style.priority = priority;
+        }
+        if let Some(is_active) = req.is_active {
+            style.is_active = is_active;
+        }
+
+        style
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        repo.update(&style).await?;
+
+        Ok(json!({
+            "id": style.id,
+            "name": style.name,
+            "priority": style.priority,
+            "is_active": style.is_active,
+            "message": "Style updated successfully.",
+        }))
+    }
+
+    async fn internal_delete_site_style(&self, style_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteStyleRepository;
+
+        let repo = SiteStyleRepository::new(self.pool.clone());
+        let style = repo
+            .find_by_id(style_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Style not found"))?;
+
+        repo.delete(style_id).await?;
+
+        Ok(json!({
+            "deleted_id": style_id,
+            "name": style.name,
+            "message": "Style deleted.",
+        }))
+    }
+
+    // ========== Site Asset Internal Methods ==========
+
+    async fn internal_list_site_assets(&self) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteAssetRepository;
+
+        let repo = SiteAssetRepository::new(self.pool.clone());
+        let assets = repo.list_all().await?;
+
+        let items: Vec<serde_json::Value> = assets
+            .iter()
+            .map(|a| {
+                json!({
+                    "id": a.id,
+                    "path": a.path,
+                    "mime_type": a.mime_type,
+                    "content_length": a.content_length,
+                    "url": format!("/.site-assets/{}", a.path),
+                    "created_at": a.created_at.to_rfc3339(),
+                    "updated_at": a.updated_at.to_rfc3339(),
+                })
+            })
+            .collect();
+
+        Ok(json!({ "assets": items, "count": items.len() }))
+    }
+
+    async fn internal_get_site_asset(&self, asset_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteAssetRepository;
+
+        let repo = SiteAssetRepository::new(self.pool.clone());
+        let asset = repo
+            .find_by_id(asset_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Asset not found"))?;
+
+        Ok(json!({
+            "id": asset.id,
+            "path": asset.path,
+            "mime_type": asset.mime_type,
+            "content_length": asset.content.len(),
+            "url": format!("/.site-assets/{}", asset.path),
+            "created_at": asset.created_at.to_rfc3339(),
+            "updated_at": asset.updated_at.to_rfc3339(),
+        }))
+    }
+
+    async fn internal_upload_site_asset(
+        &self,
+        req: UploadSiteAssetRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_core::models::site_asset::SiteAsset;
+        use doxyde_db::repositories::SiteAssetRepository;
+
+        let content = base64::Engine::decode(
+            &base64::engine::general_purpose::STANDARD,
+            &req.content_base64,
+        )
+        .map_err(|e| anyhow::anyhow!("Invalid base64 content: {}", e))?;
+
+        let asset = SiteAsset::new(req.path, content, req.mime_type);
+        asset
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        let repo = SiteAssetRepository::new(self.pool.clone());
+        let id = repo.create(&asset).await?;
+
+        Ok(json!({
+            "id": id,
+            "path": asset.path,
+            "mime_type": asset.mime_type,
+            "content_length": asset.content.len(),
+            "url": format!("/.site-assets/{}", asset.path),
+            "message": "Asset uploaded successfully.",
+        }))
+    }
+
+    async fn internal_upload_site_asset_from_url(
+        &self,
+        req: UploadSiteAssetFromUrlRequest,
+    ) -> Result<serde_json::Value> {
+        use doxyde_core::models::site_asset::SiteAsset;
+        use doxyde_db::repositories::SiteAssetRepository;
+
+        let response = reqwest::get(&req.url)
+            .await
+            .with_context(|| format!("Failed to download from {}", req.url))?;
+
+        let content = response
+            .bytes()
+            .await
+            .context("Failed to read response body")?
+            .to_vec();
+
+        let asset = SiteAsset::new(req.path, content, req.mime_type);
+        asset
+            .validate()
+            .map_err(|e| anyhow::anyhow!("Validation failed: {}", e))?;
+
+        let repo = SiteAssetRepository::new(self.pool.clone());
+        let id = repo.create(&asset).await?;
+
+        Ok(json!({
+            "id": id,
+            "path": asset.path,
+            "mime_type": asset.mime_type,
+            "content_length": asset.content.len(),
+            "url": format!("/.site-assets/{}", asset.path),
+            "message": "Asset downloaded and uploaded successfully.",
+        }))
+    }
+
+    async fn internal_delete_site_asset(&self, asset_id: i64) -> Result<serde_json::Value> {
+        use doxyde_db::repositories::SiteAssetRepository;
+
+        let repo = SiteAssetRepository::new(self.pool.clone());
+        let asset = repo
+            .find_by_id(asset_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Asset not found"))?;
+
+        repo.delete(asset_id).await?;
+
+        Ok(json!({
+            "deleted_id": asset_id,
+            "path": asset.path,
+            "message": "Asset deleted.",
+        }))
     }
 }
 

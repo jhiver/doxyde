@@ -25,6 +25,7 @@ pub mod pages;
 pub mod properties;
 pub mod reorder;
 pub mod shared;
+pub mod site_assets;
 pub mod sites;
 
 pub use action::handle_action;

@@ -145,10 +145,7 @@ async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
 /// Execute a migration SQL that may contain multiple statements.
 /// Splits on `;` and executes each non-empty statement individually.
 /// Uses a single connection so PRAGMAs persist across statements.
-async fn execute_migration_statements(
-    pool: &SqlitePool,
-    sql: &str,
-) -> Result<(), sqlx::Error> {
+async fn execute_migration_statements(pool: &SqlitePool, sql: &str) -> Result<(), sqlx::Error> {
     let mut conn = pool.acquire().await?;
     for statement in sql.split(';') {
         let trimmed = statement.trim();

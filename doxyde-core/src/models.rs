@@ -23,6 +23,9 @@ pub mod page;
 pub mod permission;
 pub mod session;
 pub mod site;
+pub mod site_asset;
+pub mod site_style;
+pub mod site_template;
 pub mod user;
 pub mod version;
 
@@ -35,5 +38,8 @@ pub use page::*;
 pub use permission::*;
 pub use session::*;
 pub use site::*;
+pub use site_asset::*;
+pub use site_style::*;
+pub use site_template::*;
 pub use user::*;
 pub use version::*;

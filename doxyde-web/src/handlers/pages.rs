@@ -447,21 +447,33 @@ pub async fn show_page_handler(
     };
     context.insert("can_delete", &can_delete);
 
-    // Render the template based on page template type
+    // Render the template based on page template type, with per-site DB overrides
     let template_name = format!("page_templates/{}.html", page.template);
 
-    // Try to render with specific template, fall back to default if not found
-    let html = match state.templates.render(&template_name, &context) {
+    // Try to render with specific template (checking DB overrides first),
+    // fall back to default if not found
+    let html = match crate::site_template_engine::render_with_overrides(
+        &state.templates,
+        &db,
+        &template_name,
+        &context,
+    )
+    .await
+    {
         Ok(html) => html,
         Err(_) => {
-            // Fall back to default template
-            state
-                .templates
-                .render("page_templates/default.html", &context)
-                .map_err(|e| {
-                    tracing::error!(error = %e, "Failed to render default template");
-                    StatusCode::INTERNAL_SERVER_ERROR
-                })?
+            // Fall back to default template (also with DB overrides)
+            crate::site_template_engine::render_with_overrides(
+                &state.templates,
+                &db,
+                "page_templates/default.html",
+                &context,
+            )
+            .await
+            .map_err(|e| {
+                tracing::error!(error = %e, "Failed to render default template");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
         }
     };
 

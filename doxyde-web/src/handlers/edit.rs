@@ -879,10 +879,7 @@ pub async fn save_draft_handler(
             .iter()
             .map(|c| format!("id={:?} pos={}", c.id, c.position))
             .collect();
-        tracing::info!(
-            "Positions before normalize: [{}]",
-            positions.join(", ")
-        );
+        tracing::info!("Positions before normalize: [{}]", positions.join(", "));
     }
 
     // Normalize positions after all updates and deletions

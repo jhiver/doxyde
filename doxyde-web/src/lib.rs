@@ -45,6 +45,7 @@ pub mod session;
 pub mod session_activity;
 pub mod site_config;
 pub mod site_resolver;
+pub mod site_template_engine;
 pub mod state;
 pub mod template_context;
 pub mod template_utils;
