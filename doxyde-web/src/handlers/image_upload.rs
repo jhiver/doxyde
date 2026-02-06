@@ -381,8 +381,12 @@ pub async fn upload_component_image_handler(
 
                 // Read file data
                 let data = field.bytes().await.map_err(|e| {
-                    tracing::error!("Failed to read image bytes: {:?}", e);
-                    StatusCode::BAD_REQUEST
+                    tracing::error!(
+                        "Failed to read image bytes: {:?}, source: {:?}",
+                        e,
+                        std::error::Error::source(&e).map(|s| format!("{:?}", s))
+                    );
+                    StatusCode::INTERNAL_SERVER_ERROR
                 })?;
 
                 tracing::debug!("Read {} bytes of image data", data.len());

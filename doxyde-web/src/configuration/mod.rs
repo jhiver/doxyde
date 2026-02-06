@@ -207,12 +207,20 @@ impl Configuration {
         let config_paths = parser::get_config_file_paths();
         let mut configs = Vec::new();
 
-        for path in config_paths {
-            match parser::parse_toml_file(&path) {
-                Ok(config) => configs.push(config),
+        for path in &config_paths {
+            let exists = path.exists();
+            tracing::info!("Config file {} exists={}", path.display(), exists);
+            match parser::parse_toml_file(path) {
+                Ok(config) => {
+                    tracing::info!(
+                        "Loaded config from {}: upload={:?}",
+                        path.display(),
+                        config.upload.as_ref().map(|u| u.max_upload_size)
+                    );
+                    configs.push(config);
+                }
                 Err(e) => {
-                    // Log the error but continue - missing config files are OK
-                    tracing::debug!("Could not load config file {}: {}", path.display(), e);
+                    tracing::warn!("Could not load config file {}: {}", path.display(), e);
                 }
             }
         }

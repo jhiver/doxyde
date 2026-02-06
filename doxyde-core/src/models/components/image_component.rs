@@ -220,18 +220,4 @@ impl ComponentRenderer for ImageComponent {
         }
     }
 
-    fn get_available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "default",
-            "figure",
-            "hero",
-            "gallery",
-            "thumbnail",
-            "responsive",
-            "hidden",
-            "inline",
-            "float_left",
-            "float_right",
-        ]
-    }
 }

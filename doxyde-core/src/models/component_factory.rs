@@ -15,18 +15,11 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::models::component::Component;
-use crate::models::component_handler::{create_default_registry, ComponentRegistry};
 use crate::models::component_trait::ComponentRenderer;
 use crate::models::components::{
     BlogSummaryComponent, CodeComponent, CustomComponent, HtmlComponent, ImageComponent,
     MarkdownComponent, TextComponent,
 };
-use once_cell::sync::Lazy;
-use std::sync::Arc;
-
-// Global component registry instance
-static COMPONENT_REGISTRY: Lazy<Arc<ComponentRegistry>> =
-    Lazy::new(|| Arc::new(create_default_registry()));
 
 /// Create a renderer for the given component based on its type
 pub fn create_renderer(component: &Component) -> Box<dyn ComponentRenderer> {
@@ -38,17 +31,6 @@ pub fn create_renderer(component: &Component) -> Box<dyn ComponentRenderer> {
         "image" => Box::new(ImageComponent::from_component(component)),
         "blog_summary" => Box::new(BlogSummaryComponent::from_component(component)),
         _ => Box::new(CustomComponent::from_component(component)),
-    }
-}
-
-/// Get available templates for a given component type
-pub fn get_templates_for_type(component_type: &str) -> Vec<&'static str> {
-    // Use the component registry to get templates
-    if let Some(handler) = COMPONENT_REGISTRY.get_handler(component_type) {
-        handler.available_templates()
-    } else {
-        // Fallback for unknown types
-        vec!["default"]
     }
 }
 
@@ -73,22 +55,5 @@ mod tests {
         let html = renderer.render("default");
         assert!(html.contains("custom-component"));
         assert!(html.contains("unknown"));
-    }
-
-    #[test]
-    fn test_get_templates_for_text() {
-        let templates = get_templates_for_type("text");
-        // Templates: default, card, fullwidth, hidden, highlight, left, quote, welcome, with_title
-        assert_eq!(templates.len(), 9);
-        assert!(templates.contains(&"default"));
-        assert!(templates.contains(&"card"));
-        assert!(templates.contains(&"left"));
-    }
-
-    #[test]
-    fn test_get_templates_for_unknown() {
-        let templates = get_templates_for_type("unknown");
-        assert_eq!(templates.len(), 1);
-        assert_eq!(templates[0], "default");
     }
 }

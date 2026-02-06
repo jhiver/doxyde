@@ -56,6 +56,7 @@ async fn main() -> Result<()> {
     // Ensure uploads directory exists
     std::fs::create_dir_all(&config.uploads_dir)?;
     info!("Uploads directory: {}", config.uploads_dir);
+    info!("Max upload size: {} bytes ({} MB)", config.max_upload_size, config.max_upload_size / 1024 / 1024);
 
     // Create rate limiters
     let login_rate_limiter = create_login_rate_limiter(config.login_attempts_per_minute);

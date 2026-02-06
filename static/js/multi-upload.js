@@ -9,7 +9,7 @@
     'use strict';
 
     // Configuration
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
     const VALID_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
     const MAX_CONCURRENT_UPLOADS = 3;
 
@@ -171,7 +171,7 @@
             }
 
             if (file.size > MAX_FILE_SIZE) {
-                invalidFiles.push({ name: file.name, reason: 'File too large (max 10MB)' });
+                invalidFiles.push({ name: file.name, reason: 'File too large (max 50MB)' });
                 continue;
             }
 

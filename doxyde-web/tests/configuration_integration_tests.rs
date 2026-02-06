@@ -106,11 +106,19 @@ fn test_configuration_precedence_complete_flow() -> Result<()> {
         r#"
 database_url = "sqlite:etc.db"
 development_mode = false
+
+[server]
 host = "0.0.0.0"
 port = 3000
+
+[session]
 session_timeout_minutes = 720
 secure_cookies = true
+
+[upload]
 max_upload_size = 5242880
+
+[security]
 csrf_enabled = true
 csrf_token_expiry_hours = 12
 security_headers_hsts = true
@@ -123,12 +131,20 @@ security_headers_csp = true
         &home_config,
         r#"
 database_url = "sqlite:home.db"
+
+[server]
 port = 4000
+
+[session]
 session_timeout_minutes = 1080
+
+[upload]
 max_upload_size = 15728640
+uploads_dir = "/home/user/uploads"
+
+[security]
 csrf_token_expiry_hours = 48
 security_headers_csp_content = "default-src 'self'; script-src 'self'"
-uploads_dir = "/home/user/uploads"
 "#,
     )?;
 
@@ -209,7 +225,10 @@ fn test_configuration_partial_files_and_defaults() -> Result<()> {
     writeln!(
         config_file,
         r#"
+[server]
 host = "127.0.0.1"
+
+[security]
 csrf_enabled = false
 security_headers_hsts = false
 "#
@@ -445,6 +464,7 @@ fn test_configuration_complex_security_headers() -> Result<()> {
     writeln!(
         config_file,
         r#"
+[security]
 security_headers_csp_content = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.example.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self' wss:; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
 security_hsts_content = "max-age=63072000; includeSubDomains; preload"
 security_frame_options_content = "SAMEORIGIN"
@@ -512,6 +532,7 @@ fn test_configuration_upload_allowed_types_parsing() -> Result<()> {
     writeln!(
         config_file,
         r#"
+[upload]
 upload_allowed_types = ["jpeg", "jpg", "png", "gif", "webp", "svg", "pdf", "doc", "docx", "txt", "md"]
 "#
     )?;

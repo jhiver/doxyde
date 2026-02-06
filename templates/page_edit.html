@@ -698,9 +698,9 @@ function handleImageFileUpload(file, componentId) {
         return;
     }
     
-    // Check file size (10MB max)
-    if (file.size > 10 * 1024 * 1024) {
-        alert('File is too large. Maximum size is 10MB.');
+    // Check file size (50MB max)
+    if (file.size > 50 * 1024 * 1024) {
+        alert('File is too large. Maximum size is 50MB.');
         return;
     }
     
@@ -766,7 +766,7 @@ function handleImageFileUpload(file, componentId) {
                         location.reload();
                     }
                 } else {
-                    const errorMsg = xhr.status === 413 ? 'File is too large. Maximum size is 10MB.' :
+                    const errorMsg = xhr.status === 413 ? 'File is too large. Maximum size is 50MB.' :
                                     xhr.status === 415 ? 'Invalid image format. Please upload JPG, PNG, GIF, WebP, or SVG.' :
                                     'Failed to upload image. Please try again.';
                     alert(errorMsg);
@@ -948,7 +948,7 @@ function updateImageComponent(componentId, imageData) {
     contentGroup.innerHTML = successMessage + `
         <label for="content_${componentId}">Content</label>
         <div class="image-preview" style="margin-bottom: 10px;">
-            <img src="/.image-preview?component_id=${componentId}" 
+            <img src="/.image-preview?component_id=${componentId}&_t=${Date.now()}"
                  alt="${imageData.description || imageData.title}"
                  style="max-width: 200px; max-height: 200px; border: 1px solid #dee2e6; border-radius: 4px;">
         </div>
@@ -1063,16 +1063,14 @@ function updateBlogSummaryContent(componentId) {
     const countInput = document.getElementById(`blog_count_${componentId}`);
     const descriptionsCheck = document.getElementById(`blog_descriptions_${componentId}`);
     const sortSelect = document.getElementById(`blog_sort_${componentId}`);
-    const templateSelect = document.getElementById(`blog_template_${componentId}`);
-    
+
     // Build the content object
     const content = {
         parent_page_id: parentSelect.value ? parseInt(parentSelect.value) : null,
         display_title: titleInput.value.trim(),
         item_count: parseInt(countInput.value) || 5,
         show_descriptions: descriptionsCheck.checked,
-        sort_order: sortSelect.value,
-        template: templateSelect.value
+        sort_order: sortSelect.value
     };
     
     // Update the hidden input
@@ -1422,7 +1420,7 @@ function preventDefaults(e) {
                                         📁 Browse Files
                                     </button>
                                     <div class="help-text" style="margin-top: 15px; font-size: 0.875rem;">
-                                        <p style="margin: 5px 0;">Supports: JPG, PNG, GIF, WebP, SVG (max 10MB)</p>
+                                        <p style="margin: 5px 0;">Supports: JPG, PNG, GIF, WebP, SVG (max 50MB)</p>
                                         <p style="margin: 5px 0;">💡 Tip: You can also paste images from clipboard!</p>
                                     </div>
                                 </div>
@@ -1496,24 +1494,6 @@ function preventDefaults(e) {
                                     </select>
                                 </div>
                                 
-                                <div class="form-group">
-                                    <label for="blog_template_{{ component.id }}">Display Template</label>
-                                    <select id="blog_template_{{ component.id }}" 
-                                            onchange="updateBlogSummaryContent({{ component.id }})">
-                                        <option value="cards" {% if component.content.template == "cards" %}selected{% endif %}>
-                                            Cards Grid
-                                        </option>
-                                        <option value="list" {% if component.content.template == "list" %}selected{% endif %}>
-                                            List View
-                                        </option>
-                                        <option value="compact" {% if component.content.template == "compact" %}selected{% endif %}>
-                                            Compact List
-                                        </option>
-                                        <option value="timeline" {% if component.content.template == "timeline" %}selected{% endif %}>
-                                            Timeline
-                                        </option>
-                                    </select>
-                                </div>
                             </div>
                         {% else %}
                             <textarea id="content_{{ component.id }}" 

@@ -27,7 +27,10 @@ use tera::{to_value, Filter, Value};
 /// A wrapper around Tera that can reload templates in development mode
 pub enum TemplateEngine {
     /// Static templates loaded once at startup
-    Static(Arc<Tera>),
+    Static {
+        templates_dir: String,
+        tera: Arc<Tera>,
+    },
     /// Reloadable templates that refresh on each render
     Reloadable {
         templates_dir: String,
@@ -38,7 +41,7 @@ pub enum TemplateEngine {
 impl fmt::Debug for TemplateEngine {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Static(_) => write!(f, "TemplateEngine::Static"),
+            Self::Static { .. } => write!(f, "TemplateEngine::Static"),
             Self::Reloadable { templates_dir, .. } => {
                 write!(f, "TemplateEngine::Reloadable({})", templates_dir)
             }
@@ -59,7 +62,18 @@ impl TemplateEngine {
         } else {
             tracing::info!("Templates loaded once (production mode)");
             let tera = Self::create_tera_instance(templates_dir)?;
-            Ok(Self::Static(Arc::new(tera)))
+            Ok(Self::Static {
+                templates_dir: templates_dir.to_string(),
+                tera: Arc::new(tera),
+            })
+        }
+    }
+
+    /// Return the templates directory path
+    pub fn templates_dir(&self) -> &str {
+        match self {
+            Self::Static { templates_dir, .. } => templates_dir,
+            Self::Reloadable { templates_dir, .. } => templates_dir,
         }
     }
 
@@ -83,6 +97,7 @@ impl TemplateEngine {
             "render_component",
             RenderComponentFunction {
                 templates_dir: templates_dir.to_string(),
+                site_component_templates: HashMap::new(),
             },
         );
         tera.register_function(
@@ -98,7 +113,7 @@ impl TemplateEngine {
     /// Render a template
     pub fn render(&self, template_name: &str, context: &Context) -> Result<String> {
         match self {
-            Self::Static(tera) => Ok(tera.render(template_name, context)?),
+            Self::Static { tera, .. } => Ok(tera.render(template_name, context)?),
             Self::Reloadable {
                 templates_dir,
                 cached,
@@ -132,7 +147,7 @@ impl TemplateEngine {
     /// Get the underlying Tera instance (for backward compatibility)
     pub fn tera(&self) -> Arc<Tera> {
         match self {
-            Self::Static(tera) => Arc::clone(tera),
+            Self::Static { tera, .. } => Arc::clone(tera),
             Self::Reloadable { cached, .. } => {
                 match cached.read() {
                     Ok(read_guard) => {
@@ -155,7 +170,7 @@ impl TemplateEngine {
         context: &tera::Context,
     ) -> tera::Result<String> {
         match self {
-            Self::Static(tera) => tera.render(template_name, context),
+            Self::Static { tera, .. } => tera.render(template_name, context),
             Self::Reloadable { cached, .. } => match cached.read() {
                 Ok(read_guard) => read_guard.render(template_name, context),
                 Err(_) => Err(tera::Error::msg("Failed to acquire read lock")),
@@ -169,7 +184,7 @@ impl TemplateEngine {
         F: tera::Filter + 'static,
     {
         match self {
-            Self::Static(tera) => {
+            Self::Static { tera, .. } => {
                 if let Some(tera_mut) = Arc::get_mut(tera) {
                     tera_mut.register_filter(name, filter);
                 }
@@ -188,7 +203,7 @@ impl TemplateEngine {
         F: tera::Function + 'static,
     {
         match self {
-            Self::Static(tera) => {
+            Self::Static { tera, .. } => {
                 if let Some(tera_mut) = Arc::get_mut(tera) {
                     tera_mut.register_function(name, function);
                 }
@@ -206,7 +221,13 @@ impl TemplateEngine {
 impl Clone for TemplateEngine {
     fn clone(&self) -> Self {
         match self {
-            Self::Static(tera) => Self::Static(Arc::clone(tera)),
+            Self::Static {
+                templates_dir,
+                tera,
+            } => Self::Static {
+                templates_dir: templates_dir.clone(),
+                tera: Arc::clone(tera),
+            },
             Self::Reloadable {
                 templates_dir,
                 cached,

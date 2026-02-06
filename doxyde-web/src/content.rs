@@ -448,23 +448,23 @@ pub async fn content_post_handler(
         };
 
         // Extract multipart from request - note this consumes the request
-        let parts = request.into_parts();
-        let multipart_request = Request::from_parts(parts.0.clone(), parts.1);
+        let content_length = request.headers().get("content-length")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.parse::<usize>().ok());
+        tracing::debug!(
+            "Multipart upload: content_length={:?}, max_upload_size={}",
+            content_length,
+            state.config.max_upload_size
+        );
         let templates = state.templates.clone();
         let multipart =
-            match axum::extract::Multipart::from_request(multipart_request, &state).await {
+            match axum::extract::Multipart::from_request(request, &state).await {
                 Ok(mp) => mp,
                 Err(_) => {
                     return Err(AppError::bad_request("Invalid multipart data")
                         .with_templates(templates.clone()))
                 }
             };
-
-        // Create a new request for handlers with database in extensions
-        let mut handler_request = Request::from_parts(parts.0, axum::body::Body::empty());
-        handler_request
-            .extensions_mut()
-            .insert(crate::db_middleware::SiteDatabase(db.clone()));
 
         // Handle upload based on action
         let response = if content_path.action.as_deref() == Some(".upload-component-image") {

@@ -221,7 +221,10 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
 
     Ok(AppState {
         db_router,
-        templates: TemplateEngine::Static(Arc::new(tera)),
+        templates: TemplateEngine::Static {
+            templates_dir: "templates".to_string(),
+            tera: Arc::new(tera),
+        },
         config,
         login_rate_limiter,
         api_rate_limiter,

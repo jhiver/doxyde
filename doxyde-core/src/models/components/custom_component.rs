@@ -44,7 +44,4 @@ impl ComponentRenderer for CustomComponent {
         )
     }
 
-    fn get_available_templates(&self) -> Vec<&'static str> {
-        vec!["default"]
-    }
 }

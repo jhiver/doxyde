@@ -95,17 +95,6 @@ impl ComponentRenderer for BlogSummaryComponent {
         }
     }
 
-    fn get_available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "cards",
-            "image_cards",
-            "list",
-            "definition",
-            "compact",
-            "timeline",
-            "featured",
-        ]
-    }
 }
 
 impl BlogSummaryComponent {
@@ -433,30 +422,6 @@ mod tests {
 
         let html = component.render("cards");
         assert!(html.contains("No articles to display"));
-    }
-
-    #[test]
-    fn test_available_templates() {
-        let component = BlogSummaryComponent {
-            id: Some(1),
-            config: BlogSummaryConfig {
-                parent_page_id: 10,
-                display_title: None,
-                item_count: 5,
-                order_by: "created_at_desc".to_string(),
-                show_descriptions: true,
-            },
-            pages: vec![],
-            title: None,
-        };
-
-        let templates = component.get_available_templates();
-        // Just verify there's at least one template and it includes the default
-        assert!(!templates.is_empty(), "Should have at least one template");
-        assert!(
-            templates.contains(&"cards"),
-            "Should include default 'cards' template"
-        );
     }
 
     #[test]

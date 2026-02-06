@@ -154,6 +154,8 @@ impl Component {
     }
 
     pub fn validate_template(&self) -> Result<(), String> {
+        // Templates are dynamic: discovered from filesystem + per-site DB overrides.
+        // We only validate format here; actual resolution happens at render time.
         if self.template.is_empty() {
             return Err("Template cannot be empty".to_string());
         }
@@ -162,16 +164,15 @@ impl Component {
             return Err("Template cannot exceed 50 characters".to_string());
         }
 
-        // Get valid templates for this component type using component_factory
-        let valid_templates =
-            crate::models::component_factory::get_templates_for_type(&self.component_type);
-
-        if !valid_templates.contains(&self.template.as_str()) {
+        // Only allow safe characters (alphanumeric, underscore, hyphen)
+        if !self
+            .template
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        {
             return Err(format!(
-                "Invalid template '{}' for component type '{}'. Must be one of: {}",
-                self.template,
-                self.component_type,
-                valid_templates.join(", ")
+                "Template '{}' contains invalid characters. Only alphanumeric, underscore, and hyphen are allowed.",
+                self.template
             ));
         }
 
@@ -590,32 +591,29 @@ mod tests {
 
     #[test]
     fn test_validate_template_valid() {
-        // Test text component templates
-        let text_templates = [
+        // Any well-formed template name is valid (actual resolution is at render time)
+        let valid_templates = [
             "default",
             "with_title",
             "card",
             "highlight",
             "quote",
             "hidden",
+            "hero",
+            "hero_booking",
+            "custom-template",
+            "my_custom_123",
         ];
 
-        for template in &text_templates {
+        for template in &valid_templates {
             let mut component = Component::new(1, "text".to_string(), 0, json!({"text": "test"}));
             component.template = template.to_string();
-            assert!(component.validate_template().is_ok());
+            assert!(
+                component.validate_template().is_ok(),
+                "Template '{}' should be valid",
+                template
+            );
         }
-
-        // Test markdown component can use hero template
-        let mut markdown_component =
-            Component::new(1, "markdown".to_string(), 0, json!({"text": "# Hero"}));
-        markdown_component.template = "hero".to_string();
-        assert!(markdown_component.validate_template().is_ok());
-
-        // Test that text component cannot use hero template
-        let mut text_component = Component::new(1, "text".to_string(), 0, json!({"text": "test"}));
-        text_component.template = "hero".to_string();
-        assert!(text_component.validate_template().is_err());
     }
 
     #[test]
@@ -628,19 +626,24 @@ mod tests {
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Template cannot be empty");
 
-        // Invalid template
-        component.template = "invalid".to_string();
-        let result = component.validate_template();
-        assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .contains("Invalid template 'invalid' for component type 'text'"));
-
         // Too long template
         component.template = "a".repeat(51);
         let result = component.validate_template();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err(), "Template cannot exceed 50 characters");
+
+        // Invalid characters
+        component.template = "../traversal".to_string();
+        assert!(component.validate_template().is_err());
+
+        component.template = "with spaces".to_string();
+        assert!(component.validate_template().is_err());
+
+        component.template = "with/slash".to_string();
+        assert!(component.validate_template().is_err());
+
+        component.template = ".hidden".to_string();
+        assert!(component.validate_template().is_err());
     }
 
     #[test]

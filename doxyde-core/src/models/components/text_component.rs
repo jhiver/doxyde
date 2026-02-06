@@ -135,17 +135,6 @@ impl ComponentRenderer for TextComponent {
         }
     }
 
-    fn get_available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hero",
-            "hidden",
-        ]
-    }
 }
 
 #[cfg(test)]
@@ -199,21 +188,6 @@ mod tests {
         let html = text_comp.render("default");
         assert!(!html.contains("<script>"));
         assert!(html.contains("&lt;script&gt;"));
-    }
-
-    #[test]
-    fn test_available_templates() {
-        let text_comp = TextComponent {
-            id: Some(1),
-            text: "Test".to_string(),
-            title: None,
-        };
-
-        let templates = text_comp.get_available_templates();
-        assert_eq!(templates.len(), 7);
-        assert!(templates.contains(&"default"));
-        assert!(templates.contains(&"with_title"));
-        assert!(templates.contains(&"hero"));
     }
 
     #[test]

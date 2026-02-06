@@ -35,11 +35,6 @@ pub trait ComponentHandler: Send + Sync {
         Ok(())
     }
 
-    /// Get available templates for this component type
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec!["default"]
-    }
-
     /// Compare content of two components for equality
     /// This should ignore metadata and focus on actual content
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
@@ -143,20 +138,6 @@ impl ComponentHandler for TextComponentHandler {
         })
     }
 
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hidden",
-            "left",
-            "welcome",
-            "fullwidth",
-        ]
-    }
-
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
         // For text components, only compare the text field
         content1.get("text") == content2.get("text")
@@ -191,18 +172,6 @@ impl ComponentHandler for MarkdownComponentHandler {
         })
     }
 
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "default",
-            "with_title",
-            "card",
-            "highlight",
-            "quote",
-            "hero",
-            "hidden",
-        ]
-    }
-
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
         // For markdown components, only compare the text field
         content1.get("text") == content2.get("text")
@@ -227,10 +196,6 @@ impl ComponentHandler for HtmlComponentHandler {
         json!({
             "html": ""
         })
-    }
-
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec!["default"]
     }
 
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
@@ -259,10 +224,6 @@ impl ComponentHandler for CodeComponentHandler {
             "code": "",
             "language": "plaintext"
         })
-    }
-
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec!["default", "with_title"]
     }
 
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
@@ -295,21 +256,6 @@ impl ComponentHandler for ImageComponentHandler {
             "description": "",
             "alt_text": ""
         })
-    }
-
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "default",
-            "figure",
-            "hero",
-            "gallery",
-            "thumbnail",
-            "responsive",
-            "hidden",
-            "inline",
-            "float_left",
-            "float_right",
-        ]
     }
 
     fn content_equals(&self, content1: &Value, content2: &Value) -> bool {
@@ -374,17 +320,6 @@ impl ComponentHandler for BlogSummaryComponentHandler {
         Ok(())
     }
 
-    fn available_templates(&self) -> Vec<&'static str> {
-        vec![
-            "cards",
-            "image_cards",
-            "list",
-            "definition",
-            "compact",
-            "timeline",
-            "featured",
-        ]
-    }
 }
 
 /// Create a registry with all built-in component handlers

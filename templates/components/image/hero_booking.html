@@ -57,12 +57,9 @@ function submitBooking(form) {
     var co = document.getElementById('checkout')._flatpickr.selectedDates[0];
     var guests = document.getElementById('guests').value;
     if (!ci || !co) return false;
-    var url = 'https://15820_3.holidayfuture.com/search'
-        + '?numberOfGuests=' + guests
-        + '&start=' + formatDateISO(ci)
-        + '&end=' + formatDateISO(co)
-        + '&page=1';
-    window.open(url, '_blank');
+    // Override this template per-site with the correct booking URL
+    console.warn('hero_booking: no site-specific booking URL configured');
+    alert('Booking not configured for this site.');
     return false;
 }
 

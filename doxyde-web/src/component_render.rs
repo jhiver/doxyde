@@ -25,6 +25,7 @@ use crate::{markdown::markdown_to_html, path_security::validate_template_name};
 /// Tera function to render a component with its template
 pub struct RenderComponentFunction {
     pub templates_dir: String,
+    pub site_component_templates: HashMap<String, String>,
 }
 
 impl TeraFunction for RenderComponentFunction {
@@ -43,30 +44,36 @@ impl TeraFunction for RenderComponentFunction {
         validate_template_name(&component.template)
             .map_err(|e| tera::Error::msg(format!("Invalid template name: {}", e)))?;
 
-        // Build the template path
-        let template_path = format!(
-            "{}/components/{}/{}.html",
-            self.templates_dir, component.component_type, component.template
+        // Check site-specific DB overrides first, then filesystem
+        let template_key = format!(
+            "components/{}/{}.html",
+            component.component_type, component.template
         );
 
-        // Check if template file exists, fall back to default if not
-        let template_content = if Path::new(&template_path).exists() {
-            fs::read_to_string(&template_path)
-                .map_err(|e| tera::Error::msg(format!("Failed to read template: {}", e)))?
+        let template_content = if let Some(content) = self.site_component_templates.get(&template_key) {
+            content.clone()
         } else {
-            // Try default template
-            let default_path = format!(
-                "{}/components/{}/default.html",
-                self.templates_dir, component.component_type
-            );
+            // Build the filesystem template path
+            let template_path = format!("{}/{}", self.templates_dir, template_key);
 
-            if Path::new(&default_path).exists() {
-                fs::read_to_string(&default_path).map_err(|e| {
-                    tera::Error::msg(format!("Failed to read default template: {}", e))
-                })?
+            if Path::new(&template_path).exists() {
+                fs::read_to_string(&template_path)
+                    .map_err(|e| tera::Error::msg(format!("Failed to read template: {}", e)))?
             } else {
-                // Fallback to inline template for backward compatibility
-                return Ok(to_value(render_component_inline(&component)?)?);
+                // Try default template
+                let default_path = format!(
+                    "{}/components/{}/default.html",
+                    self.templates_dir, component.component_type
+                );
+
+                if Path::new(&default_path).exists() {
+                    fs::read_to_string(&default_path).map_err(|e| {
+                        tera::Error::msg(format!("Failed to read default template: {}", e))
+                    })?
+                } else {
+                    // Fallback to inline template for backward compatibility
+                    return Ok(to_value(render_component_inline(&component)?)?);
+                }
             }
         };
 
@@ -206,11 +213,8 @@ impl TeraFunction for GetComponentTemplatesFunction {
 
             template_names
         } else {
-            // Fallback to hardcoded templates if directory doesn't exist
-            doxyde_core::models::component_factory::get_templates_for_type(component_type)
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect()
+            // No template directory found for this component type
+            vec!["default".to_string()]
         };
 
         Ok(to_value(templates)?)
@@ -226,6 +230,7 @@ mod tests {
     fn test_render_component_function() {
         let func = RenderComponentFunction {
             templates_dir: "templates".to_string(),
+            site_component_templates: HashMap::new(),
         };
         let mut args = HashMap::new();
 

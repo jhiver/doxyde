@@ -17,9 +17,11 @@
 use anyhow::Result;
 use doxyde_db::repositories::SiteTemplateRepository;
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use tera::Context;
 
 use crate::autoreload_templates::TemplateEngine;
+use crate::component_render::RenderComponentFunction;
 
 /// Render a template with per-site DB overrides applied.
 ///
@@ -56,5 +58,24 @@ fn render_with_all_overrides(
     for template in templates {
         tera.add_raw_template(&template.template_name, &template.content)?;
     }
+
+    // Extract component template overrides and re-register render_component
+    let component_overrides: HashMap<String, String> = templates
+        .iter()
+        .filter(|t| t.template_name.starts_with("components/"))
+        .map(|t| (t.template_name.clone(), t.content.clone()))
+        .collect();
+
+    if !component_overrides.is_empty() {
+        let templates_dir = default_engine.templates_dir().to_string();
+        tera.register_function(
+            "render_component",
+            RenderComponentFunction {
+                templates_dir,
+                site_component_templates: component_overrides,
+            },
+        );
+    }
+
     Ok(tera.render(template_name, context)?)
 }

@@ -34,7 +34,7 @@ pub async fn site_css_handler(SiteDatabase(db): SiteDatabase) -> Result<Response
     Ok((
         [
             (header::CONTENT_TYPE, "text/css; charset=utf-8"),
-            (header::CACHE_CONTROL, "public, max-age=3600"),
+            (header::CACHE_CONTROL, "public, max-age=60"),
         ],
         css,
     )

@@ -46,6 +46,9 @@ doxyde.toml
 # Site data (databases + uploads)
 sites/
 
+# Hash-based image storage (content-addressable)
+[0-9a-f][0-9a-f]/
+
 # Temporary workspaces
 migration-workspace/
 docs/

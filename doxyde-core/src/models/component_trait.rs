@@ -20,14 +20,6 @@ use serde_json::Value;
 pub trait ComponentRenderer {
     /// Render the component with the specified template
     fn render(&self, template: &str) -> String;
-
-    /// Get list of available templates for this component type
-    fn get_available_templates(&self) -> Vec<&'static str>;
-
-    /// Get the default template name
-    fn get_default_template(&self) -> &'static str {
-        "default"
-    }
 }
 
 /// Trait for comparing component content equality

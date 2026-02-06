@@ -30,21 +30,13 @@ use std::{
 /// but with all fields optional to support partial configuration files
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TomlConfig {
-    #[serde(flatten)]
     pub server: Option<TomlServerConfig>,
-    #[serde(flatten)]
     pub session: Option<TomlSessionConfig>,
-    #[serde(flatten)]
     pub upload: Option<TomlUploadConfig>,
-    #[serde(flatten)]
     pub rate_limit: Option<TomlRateLimitConfig>,
-    #[serde(flatten)]
     pub security: Option<TomlSecurityConfig>,
-    #[serde(flatten)]
     pub path: Option<TomlPathConfig>,
-    #[serde(flatten)]
     pub cache: Option<TomlCacheConfig>,
-    #[serde(flatten)]
     pub mcp: Option<TomlMcpConfig>,
     pub database_url: Option<String>,
     pub development_mode: Option<bool>,
@@ -468,8 +460,12 @@ mod tests {
             r#"
 database_url = "sqlite:test.db"
 development_mode = true
+
+[server]
 host = "127.0.0.1"
 port = 8080
+
+[session]
 session_timeout_minutes = 720
 "#
         )?;
@@ -494,6 +490,7 @@ session_timeout_minutes = 720
         writeln!(
             file,
             r#"
+[security]
 security_headers_csp = true
 security_headers_csp_content = "default-src 'self'; script-src 'self' 'unsafe-inline'"
 security_headers_hsts = false
