@@ -17,12 +17,17 @@
 use anyhow::{anyhow, Context, Result};
 use clap::{Parser, Subcommand};
 use doxyde_core::models::user::User;
-use doxyde_db::repositories::{SiteUserRepository, UserRepository};
+use doxyde_db::repositories::{ComponentRepository, SiteUserRepository, UserRepository};
 use doxyde_web::domain_utils::resolve_site_directory;
+use doxyde_web::uploads::{
+    build_hash_based_path, build_thumb_path, compute_content_hash, extract_image_metadata,
+    generate_thumbnail, ImageFormat,
+};
 use sqlx::SqlitePool;
+use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 #[command(name = "doxyde")]
@@ -59,6 +64,12 @@ enum Commands {
         /// Site domain to operate on (required for multi-database mode)
         #[arg(long, global = true)]
         site: Option<String>,
+    },
+
+    /// Image management commands
+    Image {
+        #[command(subcommand)]
+        command: ImageCommands,
     },
 }
 
@@ -126,6 +137,19 @@ enum UserCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum ImageCommands {
+    /// Migrate images to SHA256-based storage with thumbnails
+    Migrate {
+        /// Site domain to migrate
+        #[arg(long)]
+        site: String,
+        /// Show what would be done without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file if it exists
@@ -148,6 +172,7 @@ async fn main() -> Result<()> {
             let pool = connect_database(&database_url).await?;
             handle_user_command(command, pool).await
         }
+        Commands::Image { command } => handle_image_command(command).await,
     }
 }
 
@@ -516,6 +541,210 @@ async fn list_sites() -> Result<()> {
         for (domain, title, path) in sites {
             println!("  • {} - {} ({})", domain, title, path.display());
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_image_command(command: ImageCommands) -> Result<()> {
+    match command {
+        ImageCommands::Migrate { site, dry_run } => migrate_images(&site, dry_run).await,
+    }
+}
+
+/// Migrate a single image file to hash-based storage
+fn migrate_single_file(
+    file_path: &str,
+    upload_base: &Path,
+    dry_run: bool,
+) -> Result<Option<MigratedFile>> {
+    let path = PathBuf::from(file_path);
+    if !path.exists() {
+        println!("  SKIP (missing): {}", file_path);
+        return Ok(None);
+    }
+
+    let data = fs::read(&path).with_context(|| format!("Failed to read: {}", file_path))?;
+
+    let metadata =
+        extract_image_metadata(&data).with_context(|| format!("Failed to parse: {}", file_path))?;
+
+    let ext = metadata.format.extension();
+    let hash = compute_content_hash(&data);
+    let new_path = build_hash_based_path(upload_base, &hash, ext)?;
+
+    let thumb_path = build_thumb_path(&new_path)?;
+    let has_thumb = matches!(
+        metadata.format,
+        ImageFormat::Jpeg | ImageFormat::Png | ImageFormat::Webp
+    );
+
+    if dry_run {
+        println!("  {} -> {}", file_path, new_path.display());
+        if has_thumb {
+            println!("    + thumbnail: {}", thumb_path.display());
+        }
+        return Ok(Some(MigratedFile {
+            new_path,
+            thumb_path: if has_thumb { Some(thumb_path) } else { None },
+            content_hash: hash,
+            saved_bytes: 0,
+        }));
+    }
+
+    // Copy original to hash-based path (dedup)
+    let mut saved_bytes: i64 = 0;
+    if new_path.exists() {
+        saved_bytes = data.len() as i64;
+    } else {
+        if let Some(parent) = new_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&new_path, &data)?;
+    }
+
+    // Generate thumbnail
+    let actual_thumb = if has_thumb {
+        if thumb_path.exists() {
+            Some(thumb_path.clone())
+        } else {
+            match generate_thumbnail(&data, &metadata.format, 1600)? {
+                Some(thumb_data) => {
+                    fs::write(&thumb_path, &thumb_data)?;
+                    Some(thumb_path.clone())
+                }
+                None => None,
+            }
+        }
+    } else {
+        None
+    };
+
+    println!("  OK: {} -> {}", file_path, new_path.display());
+
+    Ok(Some(MigratedFile {
+        new_path,
+        thumb_path: actual_thumb,
+        content_hash: hash,
+        saved_bytes,
+    }))
+}
+
+struct MigratedFile {
+    new_path: PathBuf,
+    thumb_path: Option<PathBuf>,
+    content_hash: String,
+    saved_bytes: i64,
+}
+
+/// Migrate images for a site to SHA256-based storage
+async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
+    if dry_run {
+        println!("DRY RUN: No files will be modified");
+    }
+    println!("Migrating images for site: {}", domain);
+
+    // Connect to the site database
+    let sites_dir =
+        std::env::var("DOXYDE_SITES_DIRECTORY").unwrap_or_else(|_| "./sites".to_string());
+    let sites_path = PathBuf::from(&sites_dir);
+    let site_dir = resolve_site_directory(&sites_path, domain);
+    let db_path = site_dir.join("site.db");
+
+    if !db_path.exists() {
+        return Err(anyhow!("Site database not found: {}", db_path.display()));
+    }
+
+    let database_url = format!("sqlite:{}", db_path.display());
+    let pool = connect_database(&database_url).await?;
+
+    // Determine upload base directory
+    let upload_base = site_dir.join("uploads");
+    fs::create_dir_all(&upload_base)?;
+
+    // Find all image components
+    let component_repo = ComponentRepository::new(pool.clone());
+    let rows: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, content FROM components WHERE component_type = 'image'")
+            .fetch_all(&pool)
+            .await
+            .context("Failed to query image components")?;
+
+    println!("Found {} image components", rows.len());
+
+    // Group by unique file_path to avoid duplicating work
+    let mut files_map: HashMap<String, Vec<i64>> = HashMap::new();
+    for (id, content_str) in &rows {
+        let content: serde_json::Value =
+            serde_json::from_str(content_str).unwrap_or(serde_json::Value::Null);
+        if let Some(fp) = content.get("file_path").and_then(|v| v.as_str()) {
+            files_map.entry(fp.to_string()).or_default().push(*id);
+        }
+    }
+
+    println!(
+        "Found {} unique files across {} components",
+        files_map.len(),
+        rows.len()
+    );
+
+    let mut migrated = 0u32;
+    let mut skipped = 0u32;
+    let mut total_saved: i64 = 0;
+    let mut thumbs_created = 0u32;
+
+    for (file_path, component_ids) in &files_map {
+        match migrate_single_file(file_path, &upload_base, dry_run)? {
+            Some(result) => {
+                migrated += 1;
+                total_saved += result.saved_bytes;
+                if result.thumb_path.is_some() {
+                    thumbs_created += 1;
+                }
+
+                if !dry_run {
+                    // Update all components that use this file
+                    for &comp_id in component_ids {
+                        let comp = component_repo
+                            .find_by_id(comp_id)
+                            .await?
+                            .ok_or_else(|| anyhow!("Component {} not found", comp_id))?;
+
+                        let mut content = comp.content.clone();
+                        content["file_path"] = serde_json::json!(result.new_path.to_string_lossy());
+                        content["content_hash"] = serde_json::json!(result.content_hash);
+                        if let Some(ref tp) = result.thumb_path {
+                            content["thumb_file_path"] = serde_json::json!(tp.to_string_lossy());
+                        }
+
+                        component_repo
+                            .update_content(
+                                comp_id,
+                                content,
+                                comp.title.clone(),
+                                comp.template.clone(),
+                            )
+                            .await
+                            .with_context(|| format!("Failed to update component {}", comp_id))?;
+                    }
+                }
+            }
+            None => {
+                skipped += 1;
+            }
+        }
+    }
+
+    println!("\nMigration complete:");
+    println!("  Files migrated: {}", migrated);
+    println!("  Files skipped: {}", skipped);
+    println!("  Thumbnails created: {}", thumbs_created);
+    if total_saved > 0 {
+        println!(
+            "  Space saved (dedup): {} bytes ({:.1} MB)",
+            total_saved,
+            total_saved as f64 / 1_048_576.0
+        );
     }
 
     Ok(())

@@ -38,30 +38,33 @@ pub struct ImagePreviewQuery {
     pub component_id: i64,
 }
 
+#[derive(Debug, Deserialize, Default)]
+pub struct ImageServeQuery {
+    pub full: Option<u8>,
+}
+
 /// Serve an image by slug and format
 pub async fn serve_image_handler(
     State(state): State<AppState>,
-    site: Site,
+    _site: Site,
     Path((slug, format)): Path<(String, String)>,
+    query: Option<Query<ImageServeQuery>>,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
+    let want_full = query
+        .as_ref()
+        .and_then(|q| q.full)
+        .map(|v| v == 1)
+        .unwrap_or(false);
     // Search for an image component with this slug
     let component_repo = ComponentRepository::new(db.clone());
     let page_version_repo = PageVersionRepository::new(db.clone());
 
-    // Find all published page versions for this site
-    let site_id = site.id.ok_or_else(|| {
-        tracing::error!("Site has no ID");
+    // Find all published page versions (per-site DB, no site_id filter needed)
+    let published_versions = page_version_repo.find_all_published().await.map_err(|e| {
+        tracing::error!("Failed to find published versions: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-
-    let published_versions = page_version_repo
-        .find_published_by_site(site_id)
-        .await
-        .map_err(|e| {
-            tracing::error!("Failed to find published versions: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
-        })?;
 
     // Search through all published versions for an image with this slug
     for version in published_versions {
@@ -94,30 +97,39 @@ pub async fn serve_image_handler(
                             continue; // Format doesn't match
                         }
 
-                        // Get file path
+                        // Get file path - prefer thumbnail unless full requested
                         if let Some(file_path) =
                             component.content.get("file_path").and_then(|p| p.as_str())
                         {
-                            // file_path can be absolute (from uploads_dir config) or relative
-                            // Use the uploads directory as the base for path validation
-                            let uploads_dir = PathBuf::from(&state.config.uploads_dir);
-                            let base_dir = if std::path::Path::new(file_path).is_absolute() {
-                                // For absolute paths, use the uploads directory or its parent
-                                uploads_dir
-                                    .parent()
-                                    .map(|p| p.to_path_buf())
-                                    .unwrap_or_else(|| PathBuf::from("/"))
+                            // Choose thumbnail or original
+                            let serve_path = if want_full {
+                                file_path.to_string()
                             } else {
-                                // For relative paths, use the sites directory parent
-                                state
-                                    .config
-                                    .get_sites_directory()
-                                    .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
-                                    .unwrap_or_else(|_| PathBuf::from("."))
+                                component
+                                    .content
+                                    .get("thumb_file_path")
+                                    .and_then(|p| p.as_str())
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| file_path.to_string())
                             };
 
+                            let uploads_dir = PathBuf::from(&state.config.uploads_dir);
+                            let base_dir =
+                                if std::path::Path::new(serve_path.as_str()).is_absolute() {
+                                    uploads_dir
+                                        .parent()
+                                        .map(|p| p.to_path_buf())
+                                        .unwrap_or_else(|| PathBuf::from("/"))
+                                } else {
+                                    state
+                                        .config
+                                        .get_sites_directory()
+                                        .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
+                                        .unwrap_or_else(|_| PathBuf::from("."))
+                                };
+
                             return serve_image_file(
-                                file_path,
+                                &serve_path,
                                 &format,
                                 base_dir.to_str().unwrap_or("."),
                                 state.config.static_files_max_age,
@@ -427,10 +439,23 @@ fn extract_image_data(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
 
     #[test]
-    fn test_content_type_mapping() {
-        // Just a simple test to ensure the handler compiles
-        assert_eq!(2 + 2, 4);
+    fn test_image_serve_query_default() {
+        let query: ImageServeQuery = Default::default();
+        assert!(query.full.is_none());
+    }
+
+    #[test]
+    fn test_image_serve_query_parse_full() {
+        let query: ImageServeQuery = serde_urlencoded::from_str("full=1").unwrap();
+        assert_eq!(query.full, Some(1));
+    }
+
+    #[test]
+    fn test_image_serve_query_parse_empty() {
+        let query: ImageServeQuery = serde_urlencoded::from_str("").unwrap();
+        assert!(query.full.is_none());
     }
 }

@@ -94,6 +94,22 @@ impl SiteTemplateRepository {
         row.map(|r| row_to_template(r)).transpose()
     }
 
+    pub async fn list_all_active(&self) -> Result<Vec<SiteTemplate>> {
+        let rows = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+            r#"
+            SELECT id, template_name, content, is_active, created_at, updated_at
+            FROM site_templates
+            WHERE is_active = 1
+            ORDER BY template_name
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to list active site templates")?;
+
+        rows.into_iter().map(|r| row_to_template(r)).collect()
+    }
+
     pub async fn list_all(&self) -> Result<Vec<SiteTemplate>> {
         let rows = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
             r#"
@@ -317,6 +333,28 @@ mod tests {
         let repo = SiteTemplateRepository::new(pool);
         let result = repo.delete(999).await;
         assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_list_all_active() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        let repo = SiteTemplateRepository::new(pool);
+        repo.create(&SiteTemplate::new("a.html".to_string(), "a".to_string()))
+            .await?;
+        let mut inactive = SiteTemplate::new("b.html".to_string(), "b".to_string());
+        inactive.is_active = false;
+        repo.create(&inactive).await?;
+        repo.create(&SiteTemplate::new("c.html".to_string(), "c".to_string()))
+            .await?;
+
+        let active = repo.list_all_active().await?;
+        assert_eq!(active.len(), 2);
+        assert_eq!(active[0].template_name, "a.html");
+        assert_eq!(active[1].template_name, "c.html");
 
         Ok(())
     }

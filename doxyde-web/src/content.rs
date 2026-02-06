@@ -273,7 +273,8 @@ pub async fn content_handler(
 
     // Check if this is an image request (format: /slug.extension)
     if let Some((slug, format)) = check_image_pattern(path) {
-        return handle_image_request(state, host.to_string(), slug, format).await;
+        let query_string = uri.query().map(|q| q.to_string());
+        return handle_image_request(state, host.to_string(), slug, format, query_string).await;
     }
 
     let content_path = ContentPath::parse(path);
@@ -355,6 +356,7 @@ async fn handle_image_request(
     host: String,
     slug: String,
     format: String,
+    query_string: Option<String>,
 ) -> Result<Response, AppError> {
     // Get database for this host using database router
     let sites_dir = state.config.get_sites_directory().map_err(|e| {
@@ -376,11 +378,20 @@ async fn handle_image_request(
             AppError::not_found("Site configuration not found").with_templates(templates.clone())
         })?;
 
+    // Parse query for ?full=1
+    let image_query = query_string
+        .as_deref()
+        .and_then(|qs| {
+            serde_urlencoded::from_str::<crate::handlers::image_serve::ImageServeQuery>(qs).ok()
+        })
+        .map(axum::extract::Query);
+
     // Serve the image
     match serve_image_handler(
         State(state),
         site,
         axum::extract::Path((slug, format)),
+        image_query,
         crate::db_middleware::SiteDatabase(db.clone()),
     )
     .await

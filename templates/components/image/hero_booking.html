@@ -9,19 +9,19 @@
             <h1 class="hero-booking-title">{{ component.title }}</h1>
             {% endif %}
 
-            <form class="booking-form" action="/reserver" method="GET">
+            <form class="booking-form" onsubmit="return submitBooking(this)">
                 <div class="booking-fields">
                     <div class="booking-field">
-                        <label for="checkin">Check-in</label>
-                        <input type="text" id="checkin" name="checkin" placeholder="Select date" readonly>
+                        <label for="checkin">Check-In</label>
+                        <input type="text" id="checkin" placeholder="Select date" readonly>
                     </div>
                     <div class="booking-field">
-                        <label for="checkout">Check-out</label>
-                        <input type="text" id="checkout" name="checkout" placeholder="Select date" readonly>
+                        <label for="checkout">Check-Out</label>
+                        <input type="text" id="checkout" placeholder="Select date" readonly>
                     </div>
                     <div class="booking-field">
                         <label for="guests">Guests</label>
-                        <select id="guests" name="guests">
+                        <select id="guests">
                             <option value="1">1 Guest</option>
                             <option value="2" selected>2 Guests</option>
                             <option value="3">3 Guests</option>
@@ -30,7 +30,7 @@
                             <option value="6">6+ Guests</option>
                         </select>
                     </div>
-                    <button type="submit" class="booking-submit">Check Availability</button>
+                    <button type="submit" class="booking-submit">Search</button>
                 </div>
             </form>
         </div>
@@ -45,30 +45,54 @@
 <script src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
 
 <script>
+function formatDateISO(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+function submitBooking(form) {
+    var ci = document.getElementById('checkin')._flatpickr.selectedDates[0];
+    var co = document.getElementById('checkout')._flatpickr.selectedDates[0];
+    var guests = document.getElementById('guests').value;
+    if (!ci || !co) return false;
+    var url = 'https://15820_3.holidayfuture.com/search'
+        + '?numberOfGuests=' + guests
+        + '&start=' + formatDateISO(ci)
+        + '&end=' + formatDateISO(co)
+        + '&page=1';
+    window.open(url, '_blank');
+    return false;
+}
+
 document.addEventListener('DOMContentLoaded', function() {
-    const today = new Date();
-    const tomorrow = new Date(today);
+    var today = new Date();
+    var tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const dayAfter = new Date(today);
+    var dayAfter = new Date(today);
     dayAfter.setDate(dayAfter.getDate() + 2);
 
-    const checkinPicker = flatpickr("#checkin", {
+    var checkinPicker = flatpickr("#checkin", {
         dateFormat: "M d, Y",
         minDate: "today",
         defaultDate: tomorrow,
         onChange: function(selectedDates) {
             if (selectedDates[0]) {
-                const minCheckout = new Date(selectedDates[0]);
-                minCheckout.setDate(minCheckout.getDate() + 1);
-                checkoutPicker.set('minDate', minCheckout);
-                if (checkoutPicker.selectedDates[0] <= selectedDates[0]) {
-                    checkoutPicker.setDate(minCheckout);
+                var nextDay = new Date(selectedDates[0]);
+                nextDay.setDate(nextDay.getDate() + 1);
+                checkoutPicker.set('minDate', nextDay);
+                var currentCheckout = checkoutPicker.selectedDates[0];
+                if (!currentCheckout || currentCheckout <= selectedDates[0]) {
+                    var plusFive = new Date(selectedDates[0]);
+                    plusFive.setDate(plusFive.getDate() + 5);
+                    checkoutPicker.setDate(plusFive);
                 }
             }
         }
     });
 
-    const checkoutPicker = flatpickr("#checkout", {
+    var checkoutPicker = flatpickr("#checkout", {
         dateFormat: "M d, Y",
         minDate: dayAfter,
         defaultDate: dayAfter

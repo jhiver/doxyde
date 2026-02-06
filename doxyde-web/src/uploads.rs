@@ -17,10 +17,14 @@
 use anyhow::{anyhow, Context, Result};
 use chrono::{DateTime, Utc};
 use image::GenericImageView;
+use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
+
+/// Maximum thumbnail width in pixels
+const THUMBNAIL_MAX_WIDTH: u32 = 1600;
 
 /// Magic bytes for common image formats
 const JPEG_MAGIC: &[u8] = &[0xFF, 0xD8, 0xFF];
@@ -60,6 +64,17 @@ impl ImageFormat {
             ImageFormat::Gif => "image/gif",
             ImageFormat::Webp => "image/webp",
             ImageFormat::Svg => "image/svg+xml",
+        }
+    }
+
+    /// Convert to image crate format (if applicable)
+    pub fn to_image_format(&self) -> Option<image::ImageFormat> {
+        match self {
+            ImageFormat::Jpeg => Some(image::ImageFormat::Jpeg),
+            ImageFormat::Png => Some(image::ImageFormat::Png),
+            ImageFormat::Gif => Some(image::ImageFormat::Gif),
+            ImageFormat::Webp => Some(image::ImageFormat::WebP),
+            ImageFormat::Svg => None,
         }
     }
 
@@ -244,6 +259,132 @@ pub fn validate_upload_filename(filename: &str) -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Result of saving an image with optional thumbnail
+#[derive(Debug, Clone)]
+pub struct SavedImage {
+    pub file_path: PathBuf,
+    pub thumb_file_path: Option<PathBuf>,
+    pub content_hash: String,
+}
+
+/// Compute SHA256 hex digest of content
+pub fn compute_content_hash(data: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
+/// Build a hash-based file path: base/ab/cd/abcd...64chars.ext
+pub fn build_hash_based_path(base: &Path, hash: &str, ext: &str) -> Result<PathBuf> {
+    if hash.len() < 4 {
+        return Err(anyhow!("Hash too short: {}", hash));
+    }
+    let dir = base.join(&hash[0..2]).join(&hash[2..4]);
+    Ok(dir.join(format!("{}.{}", hash, ext)))
+}
+
+/// Build thumbnail path by adding _thumb suffix to the stem
+pub fn build_thumb_path(original: &Path) -> Result<PathBuf> {
+    let stem = original
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("Invalid file path for thumbnail"))?;
+    let ext = original
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| anyhow!("File has no extension"))?;
+    let parent = original
+        .parent()
+        .ok_or_else(|| anyhow!("File has no parent directory"))?;
+    Ok(parent.join(format!("{}_thumb.{}", stem, ext)))
+}
+
+/// Generate a thumbnail from image data
+///
+/// Returns None for SVG, GIF, or images already <= max_width.
+pub fn generate_thumbnail(
+    data: &[u8],
+    format: &ImageFormat,
+    max_width: u32,
+) -> Result<Option<Vec<u8>>> {
+    // Skip SVG (vector) and GIF (animation)
+    match format {
+        ImageFormat::Svg | ImageFormat::Gif => return Ok(None),
+        _ => {}
+    }
+
+    let img_format = format
+        .to_image_format()
+        .ok_or_else(|| anyhow!("No image crate format for {:?}", format))?;
+
+    let img = image::load_from_memory(data).context("Failed to decode image for thumbnail")?;
+
+    let (width, _height) = img.dimensions();
+    if width <= max_width {
+        return Ok(None);
+    }
+
+    let thumb = img.resize(max_width, u32::MAX, image::imageops::FilterType::Lanczos3);
+
+    let mut buf = std::io::Cursor::new(Vec::new());
+    thumb
+        .write_to(&mut buf, img_format)
+        .context("Failed to encode thumbnail")?;
+
+    Ok(Some(buf.into_inner()))
+}
+
+/// Save data to hash-based path with dedup
+///
+/// Returns (file_path, content_hash). Skips write if file already exists.
+pub fn save_with_dedup(data: &[u8], base: &Path, ext: &str) -> Result<(PathBuf, String)> {
+    let hash = compute_content_hash(data);
+    let file_path = build_hash_based_path(base, &hash, ext)?;
+
+    if !file_path.exists() {
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create dir: {:?}", parent))?;
+        }
+        let mut file = fs::File::create(&file_path)
+            .with_context(|| format!("Failed to create: {:?}", file_path))?;
+        file.write_all(data)
+            .with_context(|| format!("Failed to write: {:?}", file_path))?;
+    }
+
+    Ok((file_path, hash))
+}
+
+/// Save image with hash-based naming and generate thumbnail
+pub fn save_image_with_thumbnail(
+    data: &[u8],
+    base: &Path,
+    metadata: &ImageMetadata,
+) -> Result<SavedImage> {
+    let ext = metadata.format.extension();
+    let (file_path, content_hash) = save_with_dedup(data, base, ext)?;
+
+    let thumb_file_path = match generate_thumbnail(data, &metadata.format, THUMBNAIL_MAX_WIDTH)? {
+        Some(thumb_data) => {
+            let thumb_path = build_thumb_path(&file_path)?;
+            if !thumb_path.exists() {
+                let mut file = fs::File::create(&thumb_path)
+                    .with_context(|| format!("Failed to create thumb: {:?}", thumb_path))?;
+                file.write_all(&thumb_data)
+                    .with_context(|| format!("Failed to write thumb: {:?}", thumb_path))?;
+            }
+            Some(thumb_path)
+        }
+        None => None,
+    };
+
+    Ok(SavedImage {
+        file_path,
+        thumb_file_path,
+        content_hash,
+    })
 }
 
 #[cfg(test)]
@@ -469,5 +610,110 @@ mod tests {
         let result = validate_upload_filename("script.sh");
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("security reasons"));
+    }
+
+    #[test]
+    fn test_compute_content_hash() {
+        let data = b"hello world";
+        let hash = compute_content_hash(data);
+        // Known SHA256 for "hello world"
+        assert_eq!(hash.len(), 64);
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
+    }
+
+    #[test]
+    fn test_compute_content_hash_deterministic() {
+        let data = b"some image bytes";
+        let hash1 = compute_content_hash(data);
+        let hash2 = compute_content_hash(data);
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_build_hash_based_path() {
+        let base = Path::new("/uploads");
+        let hash = "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2";
+        let path = build_hash_based_path(base, hash, "jpg").unwrap();
+
+        assert_eq!(path, PathBuf::from(format!("/uploads/a1/b2/{}.jpg", hash)));
+    }
+
+    #[test]
+    fn test_build_hash_based_path_short_hash() {
+        let base = Path::new("/uploads");
+        assert!(build_hash_based_path(base, "ab", "jpg").is_err());
+    }
+
+    #[test]
+    fn test_build_thumb_path() {
+        let original = PathBuf::from("/uploads/a1/b2/abc123.jpg");
+        let thumb = build_thumb_path(&original).unwrap();
+        assert_eq!(thumb, PathBuf::from("/uploads/a1/b2/abc123_thumb.jpg"));
+    }
+
+    #[test]
+    fn test_build_thumb_path_png() {
+        let original = PathBuf::from("/uploads/ff/00/hash.png");
+        let thumb = build_thumb_path(&original).unwrap();
+        assert_eq!(thumb, PathBuf::from("/uploads/ff/00/hash_thumb.png"));
+    }
+
+    #[test]
+    fn test_generate_thumbnail_svg_returns_none() {
+        let svg_data = b"<svg><rect/></svg>";
+        let result = generate_thumbnail(svg_data, &ImageFormat::Svg, 1600).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_generate_thumbnail_gif_returns_none() {
+        let gif_data = b"GIF89aXXXXXXXX";
+        let result = generate_thumbnail(gif_data, &ImageFormat::Gif, 1600).unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_save_with_dedup() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let data = b"dedup test data";
+
+        let (path1, hash1) = save_with_dedup(data, temp_dir.path(), "bin").unwrap();
+        let (path2, hash2) = save_with_dedup(data, temp_dir.path(), "bin").unwrap();
+
+        // Same hash and path
+        assert_eq!(hash1, hash2);
+        assert_eq!(path1, path2);
+
+        // File exists and has correct content
+        assert!(path1.exists());
+        let saved = fs::read(&path1).unwrap();
+        assert_eq!(saved, data);
+    }
+
+    #[test]
+    fn test_save_with_dedup_different_data() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let (path1, hash1) = save_with_dedup(b"data1", temp_dir.path(), "bin").unwrap();
+        let (path2, hash2) = save_with_dedup(b"data2", temp_dir.path(), "bin").unwrap();
+
+        assert_ne!(hash1, hash2);
+        assert_ne!(path1, path2);
+    }
+
+    #[test]
+    fn test_to_image_format() {
+        assert!(ImageFormat::Jpeg.to_image_format().is_some());
+        assert!(ImageFormat::Png.to_image_format().is_some());
+        assert!(ImageFormat::Gif.to_image_format().is_some());
+        assert!(ImageFormat::Webp.to_image_format().is_some());
+        assert!(ImageFormat::Svg.to_image_format().is_none());
     }
 }

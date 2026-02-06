@@ -38,3 +38,14 @@ cobertura.xml
 
 # Claude custom commands
 .claude/
+
+# Local configuration
+doxyde.toml
+.mcp.json
+
+# Site data (databases + uploads)
+sites/
+
+# Temporary workspaces
+migration-workspace/
+docs/

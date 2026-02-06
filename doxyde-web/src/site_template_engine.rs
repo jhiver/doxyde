@@ -23,13 +23,12 @@ use crate::autoreload_templates::TemplateEngine;
 
 /// Render a template with per-site DB overrides applied.
 ///
-/// If the site has an active custom template matching `template_name`,
-/// a clone of the default Tera engine is created with the override
-/// injected via `add_raw_template`. This preserves all registered
-/// filters and functions while allowing the custom template to
-/// `{% extends "base.html" %}` normally.
+/// Loads ALL active custom templates from the site's database and
+/// overlays them on a clone of the default Tera engine. This ensures
+/// that parent templates (e.g. `base.html`) are also overridden when
+/// a child template uses `{% extends "base.html" %}`.
 ///
-/// Falls back to the default filesystem template when no override exists.
+/// Falls back to the default filesystem templates when no overrides exist.
 pub async fn render_with_overrides(
     default_engine: &TemplateEngine,
     db: &SqlitePool,
@@ -37,24 +36,25 @@ pub async fn render_with_overrides(
     context: &Context,
 ) -> Result<String> {
     let repo = SiteTemplateRepository::new(db.clone());
-    let custom = repo.find_active_by_name(template_name).await?;
+    let active_templates = repo.list_all_active().await?;
 
-    match custom {
-        Some(template) => {
-            render_with_custom(default_engine, template_name, &template.content, context)
-        }
-        None => default_engine.render(template_name, context),
+    if active_templates.is_empty() {
+        return default_engine.render(template_name, context);
     }
+
+    render_with_all_overrides(default_engine, template_name, &active_templates, context)
 }
 
-fn render_with_custom(
+fn render_with_all_overrides(
     default_engine: &TemplateEngine,
     template_name: &str,
-    custom_content: &str,
+    templates: &[doxyde_core::models::site_template::SiteTemplate],
     context: &Context,
 ) -> Result<String> {
     let base_tera = default_engine.tera();
     let mut tera = (*base_tera).clone();
-    tera.add_raw_template(template_name, custom_content)?;
+    for template in templates {
+        tera.add_raw_template(&template.template_name, &template.content)?;
+    }
     Ok(tera.render(template_name, context)?)
 }

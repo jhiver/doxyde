@@ -107,7 +107,7 @@
     var galleryImages = [
         {% for component in components %}
             {% if component.component_type == "image" %}
-            { src: "/{{ component.content.slug }}.{{ component.content.format }}", alt: "{{ component.content.alt_text | default(value='') | escape }}" },
+            { src: "/{{ component.content.slug }}.{{ component.content.format }}?full=1", alt: "{{ component.content.alt_text | default(value='') | escape }}" },
             {% endif %}
         {% endfor %}
     ];

@@ -20,7 +20,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Redirect, Response},
 };
-use chrono::Utc;
 use doxyde_core::models::{component::Component, site::Site};
 use doxyde_db::repositories::ComponentRepository;
 use serde::Deserialize;
@@ -34,8 +33,7 @@ use crate::{
     draft::get_or_create_draft,
     state::AppState,
     uploads::{
-        create_upload_directory, extract_image_metadata, generate_unique_filename, sanitize_slug,
-        save_upload, validate_upload_filename,
+        extract_image_metadata, sanitize_slug, save_image_with_thumbnail, validate_upload_filename,
     },
 };
 
@@ -183,17 +181,9 @@ pub async fn upload_image_handler(
     let metadata =
         extract_image_metadata(&image_data).map_err(|_| StatusCode::UNSUPPORTED_MEDIA_TYPE)?;
 
-    // Create upload directory
-    let now = Utc::now();
+    // Save image with hash-based naming and thumbnail
     let upload_base = PathBuf::from(&state.config.uploads_dir);
-    let upload_dir = create_upload_directory(&upload_base, now)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Generate unique filename
-    let filename = generate_unique_filename(&original_filename);
-
-    // Save file to disk
-    let file_path = save_upload(&image_data, &upload_dir, &filename)
+    let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Get or create draft version
@@ -213,18 +203,22 @@ pub async fn upload_image_handler(
     let next_position = components.len() as i32;
 
     // Create component content
-    let content = json!({
+    let mut content = json!({
         "slug": slug,
         "title": form_data.title.clone().unwrap_or_else(|| slug.clone()),
         "description": form_data.description.unwrap_or_default(),
         "format": metadata.format.extension(),
-        "file_path": file_path.to_string_lossy(),
+        "file_path": saved.file_path.to_string_lossy(),
+        "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
         "size": metadata.size,
         "width": metadata.width,
         "height": metadata.height,
     });
+    if let Some(ref thumb) = saved.thumb_file_path {
+        content["thumb_file_path"] = json!(thumb.to_string_lossy());
+    }
 
     // Create new component
     let mut component = Component::new(
@@ -311,17 +305,9 @@ pub async fn upload_image_ajax_handler(
         }
     };
 
-    // Create upload directory
-    let now = Utc::now();
+    // Save image with hash-based naming and thumbnail
     let upload_base = PathBuf::from(&state.config.uploads_dir);
-    let upload_dir = create_upload_directory(&upload_base, now)
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-
-    // Generate unique filename
-    let filename = generate_unique_filename(&original_filename);
-
-    // Save file to disk
-    let file_path = save_upload(&image_data, &upload_dir, &filename)
+    let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Generate a suggested slug from the filename
@@ -333,9 +319,10 @@ pub async fn upload_image_ajax_handler(
     );
 
     // Return upload info as JSON
-    Ok(Json(json!({
+    let mut response = json!({
         "success": true,
-        "file_path": file_path.to_string_lossy(),
+        "file_path": saved.file_path.to_string_lossy(),
+        "content_hash": saved.content_hash,
         "original_name": original_filename,
         "suggested_slug": suggested_slug,
         "format": metadata.format.extension(),
@@ -343,8 +330,12 @@ pub async fn upload_image_ajax_handler(
         "size": metadata.size,
         "width": metadata.width,
         "height": metadata.height,
-    }))
-    .into_response())
+    });
+    if let Some(ref thumb) = saved.thumb_file_path {
+        response["thumb_file_path"] = json!(thumb.to_string_lossy());
+    }
+
+    Ok(Json(response).into_response())
 }
 
 /// Handle component image upload - uploads image and updates component in one go
@@ -468,26 +459,14 @@ pub async fn upload_component_image_handler(
         metadata.size
     );
 
-    // Create upload directory
-    let now = Utc::now();
+    // Save image with hash-based naming and thumbnail
     let upload_base = PathBuf::from(&state.config.uploads_dir);
     tracing::debug!("Upload base directory: {:?}", upload_base);
-    let upload_dir = create_upload_directory(&upload_base, now).map_err(|e| {
-        tracing::error!("Failed to create upload directory: {:?}", e);
-        StatusCode::INTERNAL_SERVER_ERROR
-    })?;
-    tracing::debug!("Created upload directory: {:?}", upload_dir);
-
-    // Generate unique filename
-    let filename = generate_unique_filename(&original_filename);
-    tracing::debug!("Generated filename: {}", filename);
-
-    // Save file to disk
-    let file_path = save_upload(&image_data, &upload_dir, &filename).map_err(|e| {
+    let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata).map_err(|e| {
         tracing::error!("Failed to save upload: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    tracing::debug!("Saved file to: {:?}", file_path);
+    tracing::debug!("Saved file to: {:?}", saved.file_path);
 
     // Update the component with the new image data
     let component_repo = ComponentRepository::new(db.clone());
@@ -511,18 +490,22 @@ pub async fn upload_component_image_handler(
     }
 
     // Create new component content
-    let content = json!({
+    let mut content = json!({
         "slug": slug,
         "title": title.clone().unwrap_or_else(|| slug.clone()),
         "description": description.unwrap_or_default(),
         "format": metadata.format.extension(),
-        "file_path": file_path.to_string_lossy(),
+        "file_path": saved.file_path.to_string_lossy(),
+        "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
         "size": metadata.size,
         "width": metadata.width,
         "height": metadata.height,
     });
+    if let Some(ref thumb) = saved.thumb_file_path {
+        content["thumb_file_path"] = json!(thumb.to_string_lossy());
+    }
 
     // Update the component
     component_repo
@@ -536,20 +519,25 @@ pub async fn upload_component_image_handler(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     // Return the updated image data as JSON
-    Ok(Json(json!({
+    let mut response = json!({
         "success": true,
         "slug": slug,
         "title": content["title"],
         "description": content["description"],
         "format": metadata.format.extension(),
-        "file_path": file_path.to_string_lossy(),
+        "file_path": saved.file_path.to_string_lossy(),
+        "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
         "size": metadata.size,
         "width": metadata.width,
         "height": metadata.height,
-    }))
-    .into_response())
+    });
+    if let Some(ref thumb) = saved.thumb_file_path {
+        response["thumb_file_path"] = json!(thumb.to_string_lossy());
+    }
+
+    Ok(Json(response).into_response())
 }
 
 #[cfg(test)]
