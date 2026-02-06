@@ -2019,7 +2019,9 @@ impl DoxydeRmcpService {
     }
 
     async fn internal_publish_draft(&self, page_id: i64) -> Result<DraftInfo> {
-        use doxyde_db::repositories::{PageRepository, PageVersionRepository};
+        use doxyde_db::repositories::{
+            ComponentRepository, PageRepository, PageVersionRepository,
+        };
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
@@ -2028,47 +2030,26 @@ impl DoxydeRmcpService {
             .await?
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
+        // Publish and clean up orphaned files + old versions
+        let result = crate::cleanup::publish_and_cleanup(&self.pool, page_id).await?;
+
+        // Get version info for the response
         let version_repo = PageVersionRepository::new(self.pool.clone());
+        let published = version_repo
+            .find_by_id(result.published_version_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Published version not found"))?;
 
-        // Get the draft version
-        let draft = version_repo.get_draft(page_id).await?.ok_or_else(|| {
-            anyhow::anyhow!("No draft version exists for this page. Use get_or_create_draft first.")
-        })?;
-
-        // Unpublish current published version if exists
-        if let Some(current_published) = version_repo.get_published(page_id).await? {
-            // Manually unpublish by updating is_published field
-            sqlx::query(
-                r#"
-                UPDATE page_versions
-                SET is_published = 0
-                WHERE id = ?
-                "#,
-            )
-            .bind(
-                current_published
-                    .id
-                    .ok_or_else(|| anyhow::anyhow!("Published version has no ID"))?,
-            )
-            .execute(&self.pool)
-            .await
-            .context("Failed to unpublish current version")?;
-        }
-
-        // Publish the draft
-        let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
-        version_repo.publish(draft_id).await?;
-
-        // Get component count for the draft
-        use doxyde_db::repositories::ComponentRepository;
         let component_repo = ComponentRepository::new(self.pool.clone());
-        let components = component_repo.list_by_page_version(draft_id).await?;
+        let components = component_repo
+            .list_by_page_version(result.published_version_id)
+            .await?;
 
         Ok(DraftInfo {
             page_id,
-            version_id: draft_id,
-            version_number: draft.version_number,
-            created_by: draft.created_by,
+            version_id: result.published_version_id,
+            version_number: published.version_number,
+            created_by: published.created_by,
             is_published: true,
             component_count: components.len() as i32,
         })
@@ -3135,18 +3116,14 @@ impl DoxydeRmcpService {
         };
 
         // Extract image metadata
-        use crate::uploads::{extract_image_metadata, ImageFormatExt};
+        use crate::uploads::{extract_image_metadata, save_image_with_thumbnail, ImageFormatExt};
         let metadata = extract_image_metadata(&image_data)
             .map_err(|e| anyhow::anyhow!("Invalid image format: {}", e))?;
 
-        // Create upload directory
-        use crate::uploads::{create_upload_directory, generate_unique_filename, save_upload};
-        use chrono::Utc;
+        // Save image with hash-based naming and thumbnail
+        let saved = save_image_with_thumbnail(&image_data, &self.upload_dir, &metadata)?;
 
-        let now = Utc::now();
-        let upload_dir = create_upload_directory(&self.upload_dir, now)?;
-
-        // Generate filename based on slug or URI
+        // Determine original filename for metadata
         let original_filename = if req.uri.starts_with("data:") {
             format!("{}.{}", req.slug, metadata.format.extension())
         } else {
@@ -3156,10 +3133,6 @@ impl DoxydeRmcpService {
                 .unwrap_or("image")
                 .to_string()
         };
-        let filename = generate_unique_filename(&original_filename);
-
-        // Save file to disk
-        let file_path = save_upload(&image_data, &upload_dir, &filename)?;
 
         // Determine position
         let component_repo = ComponentRepository::new(self.pool.clone());
@@ -3187,11 +3160,17 @@ impl DoxydeRmcpService {
             "description": req.description.unwrap_or_default(),
             "alt_text": req.alt_text.unwrap_or_default(),
             "format": metadata.format.extension(),
-            "file_path": file_path.to_string_lossy(),
+            "file_path": saved.file_path.to_string_lossy(),
+            "content_hash": saved.content_hash,
             "original_name": original_filename,
             "mime_type": metadata.format.mime_type(),
             "size": metadata.size,
         });
+
+        // Add thumbnail path if available
+        if let Some(ref thumb) = saved.thumb_file_path {
+            content["thumb_file_path"] = serde_json::json!(thumb.to_string_lossy());
+        }
 
         // Add dimensions if available (not available for SVG)
         if let Some(width) = metadata.width {

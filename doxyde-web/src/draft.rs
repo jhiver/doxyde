@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use doxyde_core::models::version::PageVersion;
 use doxyde_db::repositories::{ComponentRepository, PageVersionRepository};
 use sqlx::SqlitePool;
@@ -70,21 +70,9 @@ pub async fn delete_draft_if_exists(pool: &SqlitePool, page_id: i64) -> Result<(
     Ok(())
 }
 
-/// Publish a draft version
+/// Publish a draft version, clean up old versions and orphaned files
 pub async fn publish_draft(pool: &SqlitePool, page_id: i64) -> Result<()> {
-    let version_repo = PageVersionRepository::new(pool.clone());
-
-    // Get the draft
-    let draft = version_repo
-        .get_draft(page_id)
-        .await?
-        .context("No draft version found to publish")?;
-
-    if let Some(draft_id) = draft.id {
-        // Publish it
-        version_repo.publish(draft_id).await?;
-    }
-
+    doxyde_mcp::cleanup::publish_and_cleanup(pool, page_id).await?;
     Ok(())
 }
 

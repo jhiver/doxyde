@@ -18,6 +18,30 @@ use anyhow::{Context, Result};
 use doxyde_core::models::version::PageVersion;
 use sqlx::SqlitePool;
 
+fn parse_version_row(
+    row: (i64, i64, i32, Option<String>, bool, String),
+) -> Result<PageVersion> {
+    let (id, page_id, version_number, created_by, is_published, created_at_str) = row;
+    let created_at = if created_at_str.contains('T') {
+        chrono::DateTime::parse_from_rfc3339(&created_at_str)
+            .context("Failed to parse created_at as RFC3339")?
+            .with_timezone(&chrono::Utc)
+    } else {
+        chrono::NaiveDateTime::parse_from_str(&created_at_str, "%Y-%m-%d %H:%M:%S")
+            .context("Failed to parse created_at as SQLite format")?
+            .and_utc()
+    };
+
+    Ok(PageVersion {
+        id: Some(id),
+        page_id,
+        version_number,
+        created_by,
+        is_published,
+        created_at,
+    })
+}
+
 pub struct PageVersionRepository {
     pool: SqlitePool,
 }
@@ -285,6 +309,112 @@ impl PageVersionRepository {
         .execute(&self.pool)
         .await
         .context("Failed to publish page version")?;
+
+        Ok(())
+    }
+
+    /// Find all published page versions (for multi-database architecture
+    /// where each DB is already site-specific, no site_id filter needed)
+    pub async fn find_all_published(&self) -> Result<Vec<PageVersion>> {
+        let rows = sqlx::query_as::<_, (i64, i64, i32, Option<String>, bool, String)>(
+            r#"
+            SELECT pv.id, pv.page_id, pv.version_number, pv.created_by, pv.is_published, pv.created_at
+            FROM page_versions pv
+            WHERE pv.is_published = 1
+            ORDER BY pv.created_at DESC
+            "#,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to find all published page versions")?;
+
+        let versions = rows
+            .into_iter()
+            .map(
+                |(id, page_id, version_number, created_by, is_published, created_at_str)| {
+                    let created_at = if created_at_str.contains('T') {
+                        chrono::DateTime::parse_from_rfc3339(&created_at_str)
+                            .context("Failed to parse created_at as RFC3339")
+                            .map(|dt| dt.with_timezone(&chrono::Utc))
+                    } else {
+                        chrono::NaiveDateTime::parse_from_str(&created_at_str, "%Y-%m-%d %H:%M:%S")
+                            .context("Failed to parse created_at as SQLite format")
+                            .map(|dt| dt.and_utc())
+                    }
+                    .unwrap_or_else(|_| chrono::Utc::now());
+
+                    PageVersion {
+                        id: Some(id),
+                        page_id,
+                        version_number,
+                        created_by,
+                        is_published,
+                        created_at,
+                    }
+                },
+            )
+            .collect();
+
+        Ok(versions)
+    }
+
+    /// List all versions of a page except the specified one
+    pub async fn list_old_versions(
+        &self,
+        page_id: i64,
+        exclude_version_id: i64,
+    ) -> Result<Vec<PageVersion>> {
+        let rows = sqlx::query_as::<_, (i64, i64, i32, Option<String>, bool, String)>(
+            r#"
+            SELECT id, page_id, version_number, created_by, is_published, created_at
+            FROM page_versions
+            WHERE page_id = ? AND id != ?
+            ORDER BY version_number ASC
+            "#,
+        )
+        .bind(page_id)
+        .bind(exclude_version_id)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to list old versions")?;
+
+        rows.into_iter()
+            .map(parse_version_row)
+            .collect()
+    }
+
+    /// Delete multiple versions by ID (CASCADE deletes their components)
+    pub async fn delete_versions(&self, version_ids: &[i64]) -> Result<u64> {
+        if version_ids.is_empty() {
+            return Ok(0);
+        }
+
+        let mut total_deleted = 0u64;
+        for id in version_ids {
+            let result = sqlx::query("DELETE FROM page_versions WHERE id = ?")
+                .bind(id)
+                .execute(&self.pool)
+                .await
+                .context("Failed to delete version")?;
+            total_deleted += result.rows_affected();
+        }
+
+        Ok(total_deleted)
+    }
+
+    /// Unpublish a version (set is_published = 0)
+    pub async fn unpublish(&self, version_id: i64) -> Result<()> {
+        sqlx::query(
+            r#"
+            UPDATE page_versions
+            SET is_published = 0
+            WHERE id = ?
+            "#,
+        )
+        .bind(version_id)
+        .execute(&self.pool)
+        .await
+        .context("Failed to unpublish page version")?;
 
         Ok(())
     }
@@ -731,6 +861,148 @@ mod tests {
         // Now should be 3
         let next = repo.get_next_version_number(page_id).await?;
         assert_eq!(next, 3);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_list_old_versions() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        let page_id =
+            sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = PageVersionRepository::new(pool);
+
+        let v1 = PageVersion::new(page_id, 1, None);
+        let v1_id = repo.create(&v1).await?;
+
+        let v2 = PageVersion::new(page_id, 2, None);
+        let v2_id = repo.create(&v2).await?;
+
+        let v3 = PageVersion::new(page_id, 3, None);
+        let v3_id = repo.create(&v3).await?;
+
+        // Exclude v3, should get v1 and v2
+        let old = repo.list_old_versions(page_id, v3_id).await?;
+        assert_eq!(old.len(), 2);
+        assert_eq!(old[0].id, Some(v1_id));
+        assert_eq!(old[1].id, Some(v2_id));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_list_old_versions_empty() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        let page_id =
+            sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = PageVersionRepository::new(pool);
+
+        let v1 = PageVersion::new(page_id, 1, None);
+        let v1_id = repo.create(&v1).await?;
+
+        // Only one version, exclude it => empty
+        let old = repo.list_old_versions(page_id, v1_id).await?;
+        assert!(old.is_empty());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_delete_versions() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        let page_id =
+            sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = PageVersionRepository::new(pool);
+
+        let v1 = PageVersion::new(page_id, 1, None);
+        let v1_id = repo.create(&v1).await?;
+
+        let v2 = PageVersion::new(page_id, 2, None);
+        let v2_id = repo.create(&v2).await?;
+
+        let v3 = PageVersion::new(page_id, 3, None);
+        let _v3_id = repo.create(&v3).await?;
+
+        // Delete v1 and v2
+        let deleted = repo.delete_versions(&[v1_id, v2_id]).await?;
+        assert_eq!(deleted, 2);
+
+        // Only v3 should remain
+        let remaining = repo.list_by_page(page_id).await?;
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].version_number, 3);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_delete_versions_empty() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        let repo = PageVersionRepository::new(pool);
+
+        let deleted = repo.delete_versions(&[]).await?;
+        assert_eq!(deleted, 0);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_unpublish_version() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        let page_id =
+            sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = PageVersionRepository::new(pool);
+
+        let v1 = PageVersion::new(page_id, 1, None);
+        let v1_id = repo.create(&v1).await?;
+
+        // Publish it first
+        repo.publish(v1_id).await?;
+        let found = repo.find_by_id(v1_id).await?.ok_or(anyhow::anyhow!("not found"))?;
+        assert!(found.is_published);
+
+        // Unpublish
+        repo.unpublish(v1_id).await?;
+        let found = repo.find_by_id(v1_id).await?.ok_or(anyhow::anyhow!("not found"))?;
+        assert!(!found.is_published);
 
         Ok(())
     }

@@ -526,6 +526,57 @@ impl ComponentRepository {
         Ok(())
     }
 
+    /// Collect image file paths from all image components in a version
+    pub async fn collect_image_paths_for_version(
+        &self,
+        version_id: i64,
+    ) -> Result<Vec<(String, Option<String>)>> {
+        let rows = sqlx::query_as::<_, (String,)>(
+            r#"
+            SELECT content
+            FROM components
+            WHERE page_version_id = ? AND component_type = 'image'
+            "#,
+        )
+        .bind(version_id)
+        .fetch_all(&self.pool)
+        .await
+        .context("Failed to collect image paths")?;
+
+        let mut paths = Vec::new();
+        for (content_str,) in rows {
+            let content: serde_json::Value = serde_json::from_str(&content_str)
+                .context("Failed to parse component content JSON")?;
+            if let Some(file_path) = content.get("file_path").and_then(|v| v.as_str()) {
+                let thumb = content
+                    .get("thumb_file_path")
+                    .and_then(|v| v.as_str())
+                    .map(String::from);
+                paths.push((file_path.to_string(), thumb));
+            }
+        }
+
+        Ok(paths)
+    }
+
+    /// Count how many image components reference a given file path
+    pub async fn count_references_to_file(&self, file_path: &str) -> Result<i64> {
+        let row: (i64,) = sqlx::query_as(
+            r#"
+            SELECT COUNT(*)
+            FROM components
+            WHERE component_type = 'image'
+              AND json_extract(content, '$.file_path') = ?
+            "#,
+        )
+        .bind(file_path)
+        .fetch_one(&self.pool)
+        .await
+        .context("Failed to count references to file")?;
+
+        Ok(row.0)
+    }
+
     /// Get component type usage statistics
     pub async fn get_component_type_usage_stats(&self) -> Result<Vec<(String, i64)>> {
         let stats = sqlx::query!(
@@ -2068,6 +2119,149 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("Component not found"));
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_collect_image_paths_for_version() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let version_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Create an image component with thumb
+        let img1 = Component::new(
+            version_id,
+            "image".to_string(),
+            0,
+            json!({
+                "slug": "photo1",
+                "format": "jpg",
+                "file_path": "/uploads/photo1.jpg",
+                "thumb_file_path": "/uploads/photo1_thumb.jpg"
+            }),
+        );
+        repo.create(&img1).await?;
+
+        // Create an image component without thumb
+        let img2 = Component::new(
+            version_id,
+            "image".to_string(),
+            1,
+            json!({
+                "slug": "photo2",
+                "format": "png",
+                "file_path": "/uploads/photo2.png"
+            }),
+        );
+        repo.create(&img2).await?;
+
+        // Create a text component (should be ignored)
+        let text = Component::new(
+            version_id,
+            "text".to_string(),
+            2,
+            json!({"text": "Hello"}),
+        );
+        repo.create(&text).await?;
+
+        let paths = repo.collect_image_paths_for_version(version_id).await?;
+        assert_eq!(paths.len(), 2);
+        assert_eq!(paths[0].0, "/uploads/photo1.jpg");
+        assert_eq!(paths[0].1, Some("/uploads/photo1_thumb.jpg".to_string()));
+        assert_eq!(paths[1].0, "/uploads/photo2.png");
+        assert_eq!(paths[1].1, None);
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_collect_image_paths_empty_version() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        let repo = ComponentRepository::new(pool);
+        let paths = repo.collect_image_paths_for_version(999).await?;
+        assert!(paths.is_empty());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_count_references_to_file() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        sqlx::query("INSERT INTO sites (domain, title) VALUES ('test.com', 'Test')")
+            .execute(&pool)
+            .await?;
+        sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page', 'Page')")
+            .execute(&pool)
+            .await?;
+        let v1_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 1)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+        let v2_id =
+            sqlx::query("INSERT INTO page_versions (page_id, version_number) VALUES (1, 2)")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
+
+        let repo = ComponentRepository::new(pool);
+
+        // Same file_path in two different versions
+        let img1 = Component::new(
+            v1_id,
+            "image".to_string(),
+            0,
+            json!({"slug": "photo", "format": "jpg", "file_path": "/uploads/shared.jpg"}),
+        );
+        repo.create(&img1).await?;
+
+        let img2 = Component::new(
+            v2_id,
+            "image".to_string(),
+            0,
+            json!({"slug": "photo", "format": "jpg", "file_path": "/uploads/shared.jpg"}),
+        );
+        repo.create(&img2).await?;
+
+        // Different file
+        let img3 = Component::new(
+            v2_id,
+            "image".to_string(),
+            1,
+            json!({"slug": "other", "format": "png", "file_path": "/uploads/other.png"}),
+        );
+        repo.create(&img3).await?;
+
+        assert_eq!(
+            repo.count_references_to_file("/uploads/shared.jpg").await?,
+            2
+        );
+        assert_eq!(
+            repo.count_references_to_file("/uploads/other.png").await?,
+            1
+        );
+        assert_eq!(
+            repo.count_references_to_file("/uploads/nonexistent.jpg").await?,
+            0
+        );
 
         Ok(())
     }
