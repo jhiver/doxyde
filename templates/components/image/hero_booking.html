@@ -71,6 +71,7 @@ document.addEventListener('DOMContentLoaded', function() {
     dayAfter.setDate(dayAfter.getDate() + 2);
 
     var checkinPicker = flatpickr("#checkin", {
+        disableMobile: true,
         dateFormat: "M d, Y",
         minDate: "today",
         defaultDate: tomorrow,
@@ -90,6 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     var checkoutPicker = flatpickr("#checkout", {
+        disableMobile: true,
         dateFormat: "M d, Y",
         minDate: dayAfter,
         defaultDate: dayAfter
