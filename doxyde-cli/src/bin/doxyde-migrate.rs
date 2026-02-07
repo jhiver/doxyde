@@ -150,7 +150,7 @@ async fn main() -> Result<()> {
     println!("\n✅ Migration completed successfully!");
     println!("   Sites in database: {}", site_count);
     println!("\nTo use this database, configure Doxyde with:");
-    println!("   SITES_DIRECTORY={}", args.sites_directory);
+    println!("   SITES_DIR={}", args.sites_directory);
     println!("   or add to /etc/doxyde.conf:");
     println!("   sites_directory = \"{}\"", args.sites_directory);
 

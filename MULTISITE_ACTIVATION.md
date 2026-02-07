@@ -43,7 +43,7 @@ database_url = "sqlite:/var/lib/doxyde/doxyde.db"
 Or use environment variables:
 
 ```bash
-export DOXYDE_DATABASE_SITES_DIRECTORY="/var/lib/doxyde/sites"
+export SITES_DIR="/var/lib/doxyde/sites"
 export DOXYDE_DATABASE_MULTI_SITE_MODE=true
 ```
 

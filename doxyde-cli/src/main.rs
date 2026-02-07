@@ -404,7 +404,7 @@ fn resolve_database_url(base_url: &str, site: Option<&str>) -> Result<String> {
         Some(domain) => {
             // Get sites directory (default: "./sites")
             let sites_dir =
-                std::env::var("DOXYDE_SITES_DIRECTORY").unwrap_or_else(|_| "./sites".to_string());
+                std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
             let sites_path = PathBuf::from(sites_dir);
             let site_dir = resolve_site_directory(&sites_path, domain);
@@ -436,7 +436,7 @@ async fn create_site(domain: &str, title: &str) -> Result<()> {
 
     // Get sites directory
     let sites_dir =
-        std::env::var("DOXYDE_SITES_DIRECTORY").unwrap_or_else(|_| "./sites".to_string());
+        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
     let sites_path = PathBuf::from(&sites_dir);
     let site_dir = resolve_site_directory(&sites_path, domain);
@@ -487,7 +487,7 @@ async fn create_site(domain: &str, title: &str) -> Result<()> {
 async fn list_sites() -> Result<()> {
     // Get sites directory
     let sites_dir =
-        std::env::var("DOXYDE_SITES_DIRECTORY").unwrap_or_else(|_| "./sites".to_string());
+        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
     let sites_path = PathBuf::from(&sites_dir);
 
@@ -669,7 +669,7 @@ async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
 
     // Connect to the site database
     let sites_dir =
-        std::env::var("DOXYDE_SITES_DIRECTORY").unwrap_or_else(|_| "./sites".to_string());
+        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
     let sites_path = PathBuf::from(&sites_dir);
     let site_dir = resolve_site_directory(&sites_path, domain);
     let db_path = site_dir.join("site.db");
@@ -786,7 +786,7 @@ async fn handle_storage_command(command: StorageCommands) -> Result<()> {
                 ));
             }
 
-            let sites_dir = std::env::var("DOXYDE_SITES_DIRECTORY")
+            let sites_dir = std::env::var("SITES_DIR")
                 .unwrap_or_else(|_| "./sites".to_string());
             let sites_path = PathBuf::from(&sites_dir);
 
