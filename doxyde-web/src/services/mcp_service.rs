@@ -8,6 +8,7 @@ use sqlx::SqlitePool;
 #[derive(Clone)]
 pub struct McpService {
     pool: SqlitePool,
+    site_directory: std::path::PathBuf,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -51,8 +52,11 @@ pub struct DraftInfo {
 }
 
 impl McpService {
-    pub fn new(pool: SqlitePool) -> Self {
-        Self { pool }
+    pub fn new(pool: SqlitePool, site_directory: std::path::PathBuf) -> Self {
+        Self {
+            pool,
+            site_directory,
+        }
     }
 
     /// List all pages in the site with hierarchy
@@ -708,7 +712,7 @@ impl McpService {
             .ok_or_else(|| anyhow::anyhow!("Draft ID not found"))?;
 
         // Publish it
-        crate::draft::publish_draft(&self.pool, page_id).await?;
+        crate::draft::publish_draft(&self.pool, page_id, &self.site_directory).await?;
 
         // Get component count for info
         let component_repo = ComponentRepository::new(self.pool.clone());
@@ -1024,7 +1028,8 @@ mod tests {
         let pool = sqlx::SqlitePool::connect(":memory:").await?;
         sqlx::migrate!("../migrations").run(&pool).await?;
         let _site = create_test_site(&pool, "test.com", "Test Site").await?;
-        let service = McpService::new(pool);
+        let tmp_dir = tempfile::tempdir()?;
+        let service = McpService::new(pool, tmp_dir.path().to_path_buf());
 
         Ok(service)
     }
@@ -1405,11 +1410,13 @@ mod tests {
         let pool = sqlx::SqlitePool::connect(":memory:").await?;
         sqlx::migrate!("../migrations").run(&pool).await?;
         let other_site = create_test_site(&pool, "other.com", "Other Site").await?;
-        let service = McpService::new(pool.clone(), other_site.id.unwrap());
+        let tmp_dir1 = tempfile::tempdir()?;
+        let service = McpService::new(pool.clone(), tmp_dir1.path().to_path_buf());
 
         // Create a page in a different site
         let main_site = create_test_site(&pool, "main.com", "Main Site").await?;
-        let main_service = McpService::new(pool.clone(), main_site.id.unwrap());
+        let tmp_dir2 = tempfile::tempdir()?;
+        let main_service = McpService::new(pool.clone(), tmp_dir2.path().to_path_buf());
 
         // Get root page of main site
         let pages = main_service.list_pages().await?;
@@ -1577,8 +1584,10 @@ mod tests {
         let site1 = create_test_site(&pool, "site1.com", "Site 1").await?;
         let site2 = create_test_site(&pool, "site2.com", "Site 2").await?;
 
-        let service1 = McpService::new(pool.clone(), site1.id.unwrap());
-        let service2 = McpService::new(pool.clone(), site2.id.unwrap());
+        let tmp_dir1 = tempfile::tempdir()?;
+        let service1 = McpService::new(pool.clone(), tmp_dir1.path().to_path_buf());
+        let tmp_dir2 = tempfile::tempdir()?;
+        let service2 = McpService::new(pool.clone(), tmp_dir2.path().to_path_buf());
 
         // Get root pages
         let pages1 = service1.list_pages().await?;
@@ -1953,11 +1962,13 @@ mod tests {
         let pool = sqlx::SqlitePool::connect(":memory:").await?;
         sqlx::migrate!("../migrations").run(&pool).await?;
         let other_site = create_test_site(&pool, "other.com", "Other Site").await?;
-        let service = McpService::new(pool.clone(), other_site.id.unwrap());
+        let tmp_dir1 = tempfile::tempdir()?;
+        let service = McpService::new(pool.clone(), tmp_dir1.path().to_path_buf());
 
         // Create a page in a different site
         let main_site = create_test_site(&pool, "main.com", "Main Site").await?;
-        let main_service = McpService::new(pool.clone(), main_site.id.unwrap());
+        let tmp_dir2 = tempfile::tempdir()?;
+        let main_service = McpService::new(pool.clone(), tmp_dir2.path().to_path_buf());
 
         // Create page and components in main site
         let pages = main_service.list_pages().await?;

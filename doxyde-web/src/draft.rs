@@ -71,8 +71,12 @@ pub async fn delete_draft_if_exists(pool: &SqlitePool, page_id: i64) -> Result<(
 }
 
 /// Publish a draft version, clean up old versions and orphaned files
-pub async fn publish_draft(pool: &SqlitePool, page_id: i64) -> Result<()> {
-    doxyde_mcp::cleanup::publish_and_cleanup(pool, page_id).await?;
+pub async fn publish_draft(
+    pool: &SqlitePool,
+    page_id: i64,
+    site_directory: &std::path::Path,
+) -> Result<()> {
+    doxyde_mcp::cleanup::publish_and_cleanup(pool, page_id, site_directory).await?;
     Ok(())
 }
 
@@ -224,7 +228,8 @@ mod tests {
         // Create and publish a draft
         let draft =
             get_or_create_draft(&pool, page_id, Some("test@example.com".to_string())).await?;
-        publish_draft(&pool, page_id).await?;
+        let tmp_dir = tempfile::tempdir()?;
+        publish_draft(&pool, page_id, tmp_dir.path()).await?;
 
         // Verify it's published
         let version_repo = PageVersionRepository::new(pool.clone());

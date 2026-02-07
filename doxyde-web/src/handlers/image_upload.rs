@@ -31,9 +31,11 @@ use crate::{
     auth::CurrentUser,
     db_middleware::SiteDatabase,
     draft::get_or_create_draft,
+    site_resolver::SiteContext,
     state::AppState,
     uploads::{
-        extract_image_metadata, sanitize_slug, save_image_with_thumbnail, validate_upload_filename,
+        extract_image_metadata, sanitize_slug, save_image_with_thumbnail,
+        to_relative_image_path, validate_upload_filename,
     },
 };
 
@@ -106,6 +108,7 @@ pub async fn upload_image_handler(
     site: Site,
     page: doxyde_core::models::page::Page,
     user: CurrentUser,
+    site_ctx: SiteContext,
     mut multipart: Multipart,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
@@ -181,10 +184,17 @@ pub async fn upload_image_handler(
     let metadata =
         extract_image_metadata(&image_data).map_err(|_| StatusCode::UNSUPPORTED_MEDIA_TYPE)?;
 
-    // Save image with hash-based naming and thumbnail
-    let upload_base = PathBuf::from(&state.config.uploads_dir);
+    // Save image with hash-based naming and thumbnail into site images dir
+    let upload_base = site_ctx.images_path();
     let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Convert to relative path for DB storage
+    let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
+        .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
+    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
+        to_relative_image_path(tp, &site_ctx.site_directory)
+    });
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
@@ -202,13 +212,13 @@ pub async fn upload_image_handler(
 
     let next_position = components.len() as i32;
 
-    // Create component content
+    // Create component content with relative paths
     let mut content = json!({
         "slug": slug,
         "title": form_data.title.clone().unwrap_or_else(|| slug.clone()),
         "description": form_data.description.unwrap_or_default(),
         "format": metadata.format.extension(),
-        "file_path": saved.file_path.to_string_lossy(),
+        "file_path": rel_path,
         "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
@@ -216,8 +226,8 @@ pub async fn upload_image_handler(
         "width": metadata.width,
         "height": metadata.height,
     });
-    if let Some(ref thumb) = saved.thumb_file_path {
-        content["thumb_file_path"] = json!(thumb.to_string_lossy());
+    if let Some(ref thumb_rel) = rel_thumb {
+        content["thumb_file_path"] = json!(thumb_rel);
     }
 
     // Create new component
@@ -252,6 +262,7 @@ pub async fn upload_image_ajax_handler(
     site: Site,
     _page: doxyde_core::models::page::Page,
     user: CurrentUser,
+    site_ctx: SiteContext,
     mut multipart: Multipart,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
@@ -305,10 +316,17 @@ pub async fn upload_image_ajax_handler(
         }
     };
 
-    // Save image with hash-based naming and thumbnail
-    let upload_base = PathBuf::from(&state.config.uploads_dir);
+    // Save image with hash-based naming and thumbnail into site images dir
+    let upload_base = site_ctx.images_path();
     let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    // Convert to relative path for storage
+    let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
+        .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
+    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
+        to_relative_image_path(tp, &site_ctx.site_directory)
+    });
 
     // Generate a suggested slug from the filename
     let suggested_slug = sanitize_slug(
@@ -318,10 +336,10 @@ pub async fn upload_image_ajax_handler(
             .unwrap_or("image"),
     );
 
-    // Return upload info as JSON
+    // Return upload info as JSON with relative paths
     let mut response = json!({
         "success": true,
-        "file_path": saved.file_path.to_string_lossy(),
+        "file_path": rel_path,
         "content_hash": saved.content_hash,
         "original_name": original_filename,
         "suggested_slug": suggested_slug,
@@ -331,8 +349,8 @@ pub async fn upload_image_ajax_handler(
         "width": metadata.width,
         "height": metadata.height,
     });
-    if let Some(ref thumb) = saved.thumb_file_path {
-        response["thumb_file_path"] = json!(thumb.to_string_lossy());
+    if let Some(ref thumb_rel) = rel_thumb {
+        response["thumb_file_path"] = json!(thumb_rel);
     }
 
     Ok(Json(response).into_response())
@@ -344,6 +362,7 @@ pub async fn upload_component_image_handler(
     site: Site,
     page: doxyde_core::models::page::Page,
     user: CurrentUser,
+    site_ctx: SiteContext,
     mut multipart: Multipart,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
@@ -463,14 +482,21 @@ pub async fn upload_component_image_handler(
         metadata.size
     );
 
-    // Save image with hash-based naming and thumbnail
-    let upload_base = PathBuf::from(&state.config.uploads_dir);
+    // Save image with hash-based naming and thumbnail into site images dir
+    let upload_base = site_ctx.images_path();
     tracing::debug!("Upload base directory: {:?}", upload_base);
     let saved = save_image_with_thumbnail(&image_data, &upload_base, &metadata).map_err(|e| {
         tracing::error!("Failed to save upload: {:?}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
     tracing::debug!("Saved file to: {:?}", saved.file_path);
+
+    // Convert to relative paths for DB storage
+    let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
+        .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
+    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
+        to_relative_image_path(tp, &site_ctx.site_directory)
+    });
 
     // Update the component with the new image data
     let component_repo = ComponentRepository::new(db.clone());
@@ -493,13 +519,13 @@ pub async fn upload_component_image_handler(
         return Err(StatusCode::FORBIDDEN);
     }
 
-    // Create new component content
+    // Create new component content with relative paths
     let mut content = json!({
         "slug": slug,
         "title": title.clone().unwrap_or_else(|| slug.clone()),
         "description": description.unwrap_or_default(),
         "format": metadata.format.extension(),
-        "file_path": saved.file_path.to_string_lossy(),
+        "file_path": rel_path,
         "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
@@ -507,8 +533,8 @@ pub async fn upload_component_image_handler(
         "width": metadata.width,
         "height": metadata.height,
     });
-    if let Some(ref thumb) = saved.thumb_file_path {
-        content["thumb_file_path"] = json!(thumb.to_string_lossy());
+    if let Some(ref thumb_rel) = rel_thumb {
+        content["thumb_file_path"] = json!(thumb_rel);
     }
 
     // Update the component
@@ -529,7 +555,7 @@ pub async fn upload_component_image_handler(
         "title": content["title"],
         "description": content["description"],
         "format": metadata.format.extension(),
-        "file_path": saved.file_path.to_string_lossy(),
+        "file_path": rel_path,
         "content_hash": saved.content_hash,
         "original_name": original_filename,
         "mime_type": metadata.format.mime_type(),
@@ -537,8 +563,8 @@ pub async fn upload_component_image_handler(
         "width": metadata.width,
         "height": metadata.height,
     });
-    if let Some(ref thumb) = saved.thumb_file_path {
-        response["thumb_file_path"] = json!(thumb.to_string_lossy());
+    if let Some(ref thumb_rel) = rel_thumb {
+        response["thumb_file_path"] = json!(thumb_rel);
     }
 
     Ok(Json(response).into_response())

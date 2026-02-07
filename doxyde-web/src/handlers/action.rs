@@ -33,8 +33,10 @@ use crate::{
         move_page::MovePageForm,
         properties::PagePropertiesForm,
     },
+    site_resolver::SiteContext,
     AppState,
 };
+use std::path::PathBuf;
 
 /// Handle POST requests to action URLs
 pub async fn handle_action(
@@ -43,10 +45,12 @@ pub async fn handle_action(
     State(state): State<AppState>,
     db: sqlx::SqlitePool,
     user: CurrentUser,
+    site_ctx: SiteContext,
     body: String,
 ) -> Result<Response, StatusCode> {
     let path = uri.path();
     let content_path = ContentPath::parse(path);
+    let site_directory = site_ctx.site_directory;
 
     tracing::info!(
         "handle_action called - path: {}, action: {:?}, body length: {}",
@@ -58,7 +62,7 @@ pub async fn handle_action(
     let site = resolve_site(&db, &host).await?;
     let page = resolve_page(&db, &site, &content_path).await?;
 
-    route_to_handler(state, db, site, page, user, body, content_path).await
+    route_to_handler(state, db, site, page, user, site_directory, body, content_path).await
 }
 
 /// Route to the appropriate handler based on action
@@ -68,12 +72,13 @@ async fn route_to_handler(
     site: Site,
     page: Page,
     user: CurrentUser,
+    site_directory: PathBuf,
     body: String,
     content_path: ContentPath,
 ) -> Result<Response, StatusCode> {
     match content_path.action.as_deref() {
         Some(".edit") | Some(".content") => {
-            handle_edit_action(state, db, site, page, user, body).await
+            handle_edit_action(state, db, site, page, user, site_directory, body).await
         }
         Some(".new") => handle_new_page(state, db, site, page, user, body).await,
         Some(".properties") => handle_properties(state, db, site, page, user, body).await,
@@ -91,6 +96,7 @@ async fn handle_edit_action(
     site: Site,
     page: Page,
     user: CurrentUser,
+    site_directory: PathBuf,
     body: String,
 ) -> Result<Response, StatusCode> {
     let form_data = parse_form_data(&body)?;
@@ -98,7 +104,8 @@ async fn handle_edit_action(
 
     match action.as_deref() {
         Some("save_draft") | Some("publish_draft") => {
-            handle_save_or_publish(state, db, site, page, user, form_data, &action).await
+            handle_save_or_publish(state, db, site, page, user, site_directory, form_data, &action)
+                .await
         }
         Some("discard_draft") => handle_discard_draft(state, db, site, page, user).await,
         Some("add_component") => handle_add_component(state, db, site, page, user, form_data).await,
@@ -119,6 +126,7 @@ async fn handle_save_or_publish(
     site: Site,
     page: Page,
     user: CurrentUser,
+    site_directory: PathBuf,
     form_data: Vec<(String, String)>,
     action: &Option<String>,
 ) -> Result<Response, StatusCode> {
@@ -129,7 +137,7 @@ async fn handle_save_or_publish(
     if action.as_deref() == Some("save_draft") {
         save_draft(state, db, site, page, user, save_form).await
     } else {
-        save_and_publish(state, db, site, page, user, save_form).await
+        save_and_publish(state, db, site, page, user, site_directory, save_form).await
     }
 }
 
@@ -153,6 +161,7 @@ async fn save_and_publish(
     site: Site,
     page: Page,
     user: CurrentUser,
+    site_directory: PathBuf,
     save_form: SaveDraftForm,
 ) -> Result<Response, StatusCode> {
     // First save the draft
@@ -167,7 +176,10 @@ async fn save_and_publish(
     .await?;
 
     // Then publish it
-    crate::handlers::publish_draft_handler(state, db, site, page, user).await
+    crate::handlers::publish_draft_handler(
+        state, db, site, page, user, &site_directory,
+    )
+    .await
 }
 
 /// Handle discard draft

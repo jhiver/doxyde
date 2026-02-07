@@ -387,9 +387,104 @@ pub fn save_image_with_thumbnail(
     })
 }
 
+/// Resolve an image file path to an absolute path on disk.
+///
+/// Handles both new relative paths (`images/ab/cd/hash.jpg`) and
+/// legacy absolute paths or paths starting with `./sites/`.
+pub fn resolve_image_path(file_path: &str, site_directory: &Path) -> PathBuf {
+    let p = Path::new(file_path);
+
+    // Already absolute -> use as-is (legacy)
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+
+    // New relative format: images/ab/cd/hash.jpg
+    if file_path.starts_with("images/") {
+        return site_directory.join(file_path);
+    }
+
+    // Legacy relative format: ./sites/domain-hash/uploads/ab/cd/hash.jpg
+    if file_path.starts_with("./") || file_path.starts_with("sites/") {
+        return PathBuf::from(file_path);
+    }
+
+    // Fallback: treat as relative to site directory
+    site_directory.join(file_path)
+}
+
+/// Convert an absolute file path to a path relative to the site directory.
+///
+/// Returns the path as `images/ab/cd/hash.jpg` for storage in the DB.
+/// Returns None if the path is not under the site directory.
+pub fn to_relative_image_path(abs_path: &Path, site_directory: &Path) -> Option<String> {
+    abs_path
+        .strip_prefix(site_directory)
+        .ok()
+        .and_then(|rel| rel.to_str())
+        .map(|s| s.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_resolve_image_path_new_relative() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved = resolve_image_path("images/ab/cd/hash.jpg", site_dir);
+        assert_eq!(
+            resolved,
+            PathBuf::from("/data/sites/example-com-abc12345/images/ab/cd/hash.jpg")
+        );
+    }
+
+    #[test]
+    fn test_resolve_image_path_absolute() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved = resolve_image_path("/old/path/image.jpg", site_dir);
+        assert_eq!(resolved, PathBuf::from("/old/path/image.jpg"));
+    }
+
+    #[test]
+    fn test_resolve_image_path_legacy_dotslash() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved = resolve_image_path(
+            "./sites/example-com-abc12345/uploads/ab/cd/hash.jpg",
+            site_dir,
+        );
+        assert_eq!(
+            resolved,
+            PathBuf::from("./sites/example-com-abc12345/uploads/ab/cd/hash.jpg")
+        );
+    }
+
+    #[test]
+    fn test_resolve_image_path_fallback() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved = resolve_image_path("uploads/ab/cd/hash.jpg", site_dir);
+        assert_eq!(
+            resolved,
+            PathBuf::from("/data/sites/example-com-abc12345/uploads/ab/cd/hash.jpg")
+        );
+    }
+
+    #[test]
+    fn test_to_relative_image_path() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let abs = Path::new("/data/sites/example-com-abc12345/images/ab/cd/hash.jpg");
+        assert_eq!(
+            to_relative_image_path(abs, site_dir),
+            Some("images/ab/cd/hash.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_to_relative_image_path_not_under_site() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let abs = Path::new("/other/path/image.jpg");
+        assert_eq!(to_relative_image_path(abs, site_dir), None);
+    }
 
     #[test]
     fn test_image_format_detection() {

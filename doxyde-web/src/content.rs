@@ -30,6 +30,7 @@ use crate::{
     db_middleware::SiteDatabase,
     error::AppError,
     handlers::serve_image_handler,
+    site_resolver::SiteContext,
     AppState,
 };
 use sqlx::SqlitePool;
@@ -392,6 +393,7 @@ async fn handle_image_request(
         site,
         axum::extract::Path((slug, format)),
         image_query,
+        site_context,
         crate::db_middleware::SiteDatabase(db.clone()),
     )
     .await
@@ -447,6 +449,13 @@ pub async fn content_post_handler(
             Err(e) => return Err(e),
         };
 
+        // Extract SiteContext from request before consuming it for multipart
+        let site_ctx = request
+            .extensions()
+            .get::<SiteContext>()
+            .cloned()
+            .ok_or_else(|| AppError::internal_server_error("Site context missing"))?;
+
         // Extract multipart from request - note this consumes the request
         let content_length = request.headers().get("content-length")
             .and_then(|v| v.to_str().ok())
@@ -473,6 +482,7 @@ pub async fn content_post_handler(
                 site,
                 page,
                 user,
+                site_ctx,
                 multipart,
                 crate::db_middleware::SiteDatabase(db.clone()),
             )
@@ -483,6 +493,7 @@ pub async fn content_post_handler(
                 site,
                 page,
                 user,
+                site_ctx,
                 multipart,
                 crate::db_middleware::SiteDatabase(db.clone()),
             )
@@ -507,6 +518,16 @@ pub async fn content_post_handler(
     } else {
         // Database already available from SiteDatabase extractor
 
+        // Extract SiteContext before consuming the request body
+        let site_ctx = request
+            .extensions()
+            .get::<SiteContext>()
+            .cloned()
+            .ok_or_else(|| {
+                AppError::internal_server_error("Site context missing")
+                    .with_templates(state.templates.clone())
+            })?;
+
         // Handle regular form POST - convert request body to String
         let body = match axum::body::to_bytes(request.into_body(), usize::MAX).await {
             Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
@@ -517,8 +538,10 @@ pub async fn content_post_handler(
         };
 
         // Call the existing action handler
-        match crate::handlers::handle_action(Host(host), uri, State(state.clone()), db, user, body)
-            .await
+        match crate::handlers::handle_action(
+            Host(host), uri, State(state.clone()), db, user, site_ctx, body,
+        )
+        .await
         {
             Ok(response) => Ok(response),
             Err(status) => {

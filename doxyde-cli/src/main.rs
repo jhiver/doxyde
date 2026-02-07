@@ -71,6 +71,12 @@ enum Commands {
         #[command(subcommand)]
         command: ImageCommands,
     },
+
+    /// Storage migration commands
+    Storage {
+        #[command(subcommand)]
+        command: StorageCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -150,6 +156,22 @@ enum ImageCommands {
     },
 }
 
+#[derive(Subcommand)]
+enum StorageCommands {
+    /// Migrate site storage to self-contained format
+    Migrate {
+        /// Specific site domain to migrate
+        #[arg(long)]
+        site: Option<String>,
+        /// Migrate all sites
+        #[arg(long)]
+        all: bool,
+        /// Show what would be done without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Load .env file if it exists
@@ -173,6 +195,7 @@ async fn main() -> Result<()> {
             handle_user_command(command, pool).await
         }
         Commands::Image { command } => handle_image_command(command).await,
+        Commands::Storage { command } => handle_storage_command(command).await,
     }
 }
 
@@ -750,6 +773,270 @@ async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+async fn handle_storage_command(command: StorageCommands) -> Result<()> {
+    match command {
+        StorageCommands::Migrate {
+            site,
+            all,
+            dry_run,
+        } => {
+            if !all && site.is_none() {
+                return Err(anyhow!(
+                    "Specify --site <domain> or --all to migrate all sites"
+                ));
+            }
+
+            let sites_dir = std::env::var("DOXYDE_SITES_DIRECTORY")
+                .unwrap_or_else(|_| "./sites".to_string());
+            let sites_path = PathBuf::from(&sites_dir);
+
+            if dry_run {
+                println!("DRY RUN: No files will be modified");
+            }
+
+            let site_dirs = collect_site_dirs(&sites_path, site.as_deref())?;
+
+            for site_dir in &site_dirs {
+                migrate_site_storage(site_dir, dry_run).await?;
+            }
+
+            Ok(())
+        }
+    }
+}
+
+/// Collect site directories to migrate
+fn collect_site_dirs(sites_path: &Path, site: Option<&str>) -> Result<Vec<PathBuf>> {
+    if let Some(domain) = site {
+        let dir = resolve_site_directory(sites_path, domain);
+        if !dir.exists() {
+            return Err(anyhow!("Site directory not found: {}", dir.display()));
+        }
+        return Ok(vec![dir]);
+    }
+
+    // Collect all site directories
+    let mut dirs = Vec::new();
+    if !sites_path.exists() {
+        return Err(anyhow!(
+            "Sites directory not found: {}",
+            sites_path.display()
+        ));
+    }
+    for entry in fs::read_dir(sites_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() && path.join("site.db").exists() {
+            dirs.push(path);
+        }
+    }
+    Ok(dirs)
+}
+
+/// Migrate a single site's storage to self-contained format
+async fn migrate_site_storage(site_dir: &Path, dry_run: bool) -> Result<()> {
+    let dir_name = site_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("unknown");
+    println!("\nMigrating site: {}", dir_name);
+
+    // Step 1: Rename uploads/ -> images/
+    rename_uploads_to_images(site_dir, dry_run)?;
+
+    // Step 2: Rewrite image paths in DB
+    let db_path = site_dir.join("site.db");
+    let database_url = format!("sqlite:{}", db_path.display());
+    let pool = connect_database(&database_url).await?;
+
+    let rewritten = rewrite_image_paths(&pool, site_dir, dry_run).await?;
+    println!("  Paths rewritten: {}", rewritten);
+
+    Ok(())
+}
+
+/// Rename uploads/ to images/ if needed
+fn rename_uploads_to_images(site_dir: &Path, dry_run: bool) -> Result<bool> {
+    let uploads_dir = site_dir.join("uploads");
+    let images_dir = site_dir.join("images");
+
+    if !uploads_dir.exists() {
+        if images_dir.exists() {
+            println!("  images/ already exists, skipping rename");
+        } else {
+            println!("  No uploads/ or images/ directory found");
+        }
+        return Ok(false);
+    }
+
+    if images_dir.exists() {
+        println!("  Both uploads/ and images/ exist - merging");
+        if !dry_run {
+            merge_directories(&uploads_dir, &images_dir)?;
+            fs::remove_dir_all(&uploads_dir)?;
+        }
+        return Ok(true);
+    }
+
+    println!("  Renaming uploads/ -> images/");
+    if !dry_run {
+        fs::rename(&uploads_dir, &images_dir)
+            .with_context(|| "Failed to rename uploads/ to images/")?;
+    }
+    Ok(true)
+}
+
+/// Merge source directory contents into destination
+fn merge_directories(src: &Path, dest: &Path) -> Result<()> {
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+
+        if src_path.is_dir() {
+            if !dest_path.exists() {
+                fs::create_dir_all(&dest_path)?;
+            }
+            merge_directories(&src_path, &dest_path)?;
+        } else if !dest_path.exists() {
+            fs::copy(&src_path, &dest_path)?;
+        }
+    }
+    Ok(())
+}
+
+/// Rewrite image paths in component content to be relative
+async fn rewrite_image_paths(
+    pool: &SqlitePool,
+    site_dir: &Path,
+    dry_run: bool,
+) -> Result<u32> {
+    let rows: Vec<(i64, String)> =
+        sqlx::query_as("SELECT id, content FROM components WHERE component_type = 'image'")
+            .fetch_all(pool)
+            .await
+            .context("Failed to query image components")?;
+
+    let mut rewritten = 0u32;
+
+    for (id, content_str) in &rows {
+        let mut content: serde_json::Value =
+            serde_json::from_str(content_str).unwrap_or(serde_json::Value::Null);
+
+        let mut changed = false;
+
+        // Extract current paths (clone to avoid borrow issues)
+        let file_path = content
+            .get("file_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        let thumb_path = content
+            .get("thumb_file_path")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        if let Some(fp) = &file_path {
+            if let Some(new_path) = compute_relative_path(fp, site_dir) {
+                if new_path != *fp {
+                    println!("  [{}] file_path: {} -> {}", id, fp, new_path);
+                    if !dry_run {
+                        content["file_path"] = serde_json::json!(new_path);
+                    }
+                    changed = true;
+                }
+            }
+        }
+
+        if let Some(tp) = &thumb_path {
+            if let Some(new_path) = compute_relative_path(tp, site_dir) {
+                if new_path != *tp {
+                    println!("  [{}] thumb_file_path: {} -> {}", id, tp, new_path);
+                    if !dry_run {
+                        content["thumb_file_path"] = serde_json::json!(new_path);
+                    }
+                    changed = true;
+                }
+            }
+        }
+
+        if changed {
+            rewritten += 1;
+
+            if !dry_run {
+                let content_json = serde_json::to_string(&content)?;
+                sqlx::query("UPDATE components SET content = ? WHERE id = ?")
+                    .bind(&content_json)
+                    .bind(id)
+                    .execute(pool)
+                    .await
+                    .with_context(|| format!("Failed to update component {}", id))?;
+
+                // Verify file exists on disk
+                let fp = content
+                    .get("file_path")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+                let resolved = site_dir.join(fp);
+                if !resolved.exists() {
+                    println!("  WARNING: File not found: {}", resolved.display());
+                }
+            }
+        }
+    }
+
+    Ok(rewritten)
+}
+
+/// Convert an old-style path to a relative path within the site directory
+fn compute_relative_path(old_path: &str, site_dir: &Path) -> Option<String> {
+    // Already relative and correct format
+    if old_path.starts_with("images/") {
+        return Some(old_path.to_string());
+    }
+
+    let path = Path::new(old_path);
+
+    // Absolute path: try to strip site_dir prefix
+    if path.is_absolute() {
+        if let Ok(rel) = path.strip_prefix(site_dir) {
+            let rel_str = rel.to_string_lossy();
+            // If it starts with "uploads/", replace with "images/"
+            if rel_str.starts_with("uploads/") {
+                return Some(rel_str.replacen("uploads/", "images/", 1));
+            }
+            return Some(rel_str.to_string());
+        }
+        // Absolute path outside site dir - try to extract the hash subpath
+        return extract_hash_subpath(old_path);
+    }
+
+    // CWD-relative: ./sites/domain-hash/uploads/ab/cd/hash.ext
+    if old_path.starts_with("./sites/") || old_path.starts_with("sites/") {
+        return extract_hash_subpath(old_path);
+    }
+
+    // uploads/ prefix (without site directory)
+    if old_path.starts_with("uploads/") {
+        return Some(old_path.replacen("uploads/", "images/", 1));
+    }
+
+    Some(old_path.to_string())
+}
+
+/// Extract the hash-based subpath from a full path containing /uploads/ or /images/
+fn extract_hash_subpath(path: &str) -> Option<String> {
+    // Find "/uploads/" and take everything after it, prefixed with "images/"
+    if let Some(idx) = path.find("/uploads/") {
+        let suffix = &path[idx + "/uploads/".len()..];
+        return Some(format!("images/{}", suffix));
+    }
+    if let Some(idx) = path.find("/images/") {
+        let suffix = &path[idx + "/images/".len()..];
+        return Some(format!("images/{}", suffix));
+    }
+    None
+}
+
 /// Extracts the domain from a directory name by removing the hash suffix
 fn extract_domain_from_directory(dir_name: &str) -> String {
     // Directory format is: domain-hash
@@ -759,5 +1046,139 @@ fn extract_domain_from_directory(dir_name: &str) -> String {
         without_hash.replace('-', ".")
     } else {
         dir_name.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_relative_path_already_relative() {
+        let site_dir = Path::new("/sites/twaki-la-029e5816");
+        let result = compute_relative_path("images/ab/cd/hash.jpg", site_dir);
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_compute_relative_path_absolute_with_uploads() {
+        let site_dir = Path::new("/sites/twaki-la-029e5816");
+        let result = compute_relative_path(
+            "/sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
+            site_dir,
+        );
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_compute_relative_path_cwd_relative() {
+        let site_dir = Path::new("/sites/twaki-la-029e5816");
+        let result = compute_relative_path(
+            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
+            site_dir,
+        );
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_compute_relative_path_uploads_prefix() {
+        let site_dir = Path::new("/sites/twaki-la-029e5816");
+        let result = compute_relative_path("uploads/ab/cd/hash.jpg", site_dir);
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_compute_relative_path_cross_site() {
+        let site_dir = Path::new("/sites/rusty-pelican-12345678");
+        let result = compute_relative_path(
+            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
+            site_dir,
+        );
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_extract_hash_subpath_uploads() {
+        let result = extract_hash_subpath(
+            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
+        );
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_extract_hash_subpath_images() {
+        let result = extract_hash_subpath(
+            "/home/user/sites/twaki-la-029e5816/images/ab/cd/hash.jpg",
+        );
+        assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
+    }
+
+    #[test]
+    fn test_extract_hash_subpath_no_match() {
+        let result = extract_hash_subpath("/some/random/path.jpg");
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_rename_uploads_to_images() {
+        let tmp = tempfile::tempdir().unwrap();
+        let site_dir = tmp.path();
+
+        // Create uploads directory with a file
+        let uploads = site_dir.join("uploads");
+        fs::create_dir_all(uploads.join("ab/cd")).unwrap();
+        fs::write(uploads.join("ab/cd/hash.jpg"), b"data").unwrap();
+
+        // Rename
+        let result = rename_uploads_to_images(site_dir, false).unwrap();
+        assert!(result);
+
+        // uploads/ should be gone, images/ should exist
+        assert!(!uploads.exists());
+        assert!(site_dir.join("images/ab/cd/hash.jpg").exists());
+    }
+
+    #[test]
+    fn test_rename_uploads_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let site_dir = tmp.path();
+
+        let uploads = site_dir.join("uploads");
+        fs::create_dir_all(&uploads).unwrap();
+
+        let result = rename_uploads_to_images(site_dir, true).unwrap();
+        assert!(result);
+
+        // uploads/ should still exist in dry run
+        assert!(uploads.exists());
+    }
+
+    #[test]
+    fn test_merge_directories() {
+        let tmp = tempfile::tempdir().unwrap();
+        let src = tmp.path().join("src");
+        let dest = tmp.path().join("dest");
+
+        // Create source with files
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("a.txt"), b"src-a").unwrap();
+        fs::write(src.join("sub/b.txt"), b"src-b").unwrap();
+
+        // Create dest with some overlapping files
+        fs::create_dir_all(dest.join("sub")).unwrap();
+        fs::write(dest.join("a.txt"), b"dest-a").unwrap();
+        fs::write(dest.join("c.txt"), b"dest-c").unwrap();
+
+        merge_directories(&src, &dest).unwrap();
+
+        // dest/a.txt should be unchanged (not overwritten)
+        assert_eq!(fs::read_to_string(dest.join("a.txt")).unwrap(), "dest-a");
+        // dest/sub/b.txt should be copied from src
+        assert_eq!(
+            fs::read_to_string(dest.join("sub/b.txt")).unwrap(),
+            "src-b"
+        );
+        // dest/c.txt should be unchanged
+        assert_eq!(fs::read_to_string(dest.join("c.txt")).unwrap(), "dest-c");
     }
 }

@@ -53,9 +53,12 @@ async fn main() -> Result<()> {
     info!("Loading templates from: {}", config.templates_dir);
     let templates = init_templates(&config.templates_dir, config.development_mode)?;
 
-    // Ensure uploads directory exists
-    std::fs::create_dir_all(&config.uploads_dir)?;
-    info!("Uploads directory: {}", config.uploads_dir);
+    // Warn if deprecated uploads_dir is configured (per-site images/ is used now)
+    if !config.uploads_dir.is_empty() && config.uploads_dir != "." {
+        tracing::warn!(
+            "uploads_dir config is deprecated. Images are now stored per-site in sites/<hash>/images/"
+        );
+    }
     info!("Max upload size: {} bytes ({} MB)", config.max_upload_size, config.max_upload_size / 1024 / 1024);
 
     // Create rate limiters

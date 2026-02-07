@@ -31,26 +31,26 @@ use tracing::info;
 pub struct DoxydeRmcpService {
     pool: SqlitePool,
     tool_router: ToolRouter<Self>,
-    upload_dir: std::path::PathBuf,
+    site_directory: std::path::PathBuf,
 }
 
 impl DoxydeRmcpService {
     pub fn new(pool: SqlitePool) -> Self {
-        // Use the standard Doxyde upload directory
+        // Legacy fallback: use env var or home directory
         let upload_dir = std::env::var("DOXYDE_UPLOADS_DIR").unwrap_or_else(|_| {
             let home = std::env::var("HOME").unwrap_or_else(|_| "/home/doxyde".to_string());
             format!("{}/.doxyde/uploads", home)
         });
-        Self::with_upload_dir(pool, std::path::PathBuf::from(upload_dir))
+        Self::with_site_directory(pool, std::path::PathBuf::from(upload_dir))
     }
 
-    pub fn with_upload_dir(pool: SqlitePool, upload_dir: std::path::PathBuf) -> Self {
+    pub fn with_site_directory(pool: SqlitePool, site_directory: std::path::PathBuf) -> Self {
         let router = Self::tool_router();
         info!("Created DoxydeRmcpService with tool_router for single-database mode");
         Self {
             pool,
             tool_router: router,
-            upload_dir,
+            site_directory,
         }
     }
 
@@ -2031,7 +2031,8 @@ impl DoxydeRmcpService {
             .ok_or_else(|| anyhow::anyhow!("Page not found"))?;
 
         // Publish and clean up orphaned files + old versions
-        let result = crate::cleanup::publish_and_cleanup(&self.pool, page_id).await?;
+        let result =
+            crate::cleanup::publish_and_cleanup(&self.pool, page_id, &self.site_directory).await?;
 
         // Get version info for the response
         let version_repo = PageVersionRepository::new(self.pool.clone());
@@ -3120,8 +3121,23 @@ impl DoxydeRmcpService {
         let metadata = extract_image_metadata(&image_data)
             .map_err(|e| anyhow::anyhow!("Invalid image format: {}", e))?;
 
-        // Save image with hash-based naming and thumbnail
-        let saved = save_image_with_thumbnail(&image_data, &self.upload_dir, &metadata)?;
+        // Save image with hash-based naming and thumbnail into site images dir
+        let images_dir = self.site_directory.join("images");
+        let saved = save_image_with_thumbnail(&image_data, &images_dir, &metadata)?;
+
+        // Convert to relative paths for DB storage
+        let rel_path = saved.file_path
+            .strip_prefix(&self.site_directory)
+            .ok()
+            .and_then(|p| p.to_str())
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
+        let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
+            tp.strip_prefix(&self.site_directory)
+                .ok()
+                .and_then(|p| p.to_str())
+                .map(|s| s.to_string())
+        });
 
         // Determine original filename for metadata
         let original_filename = if req.uri.starts_with("data:") {
@@ -3153,14 +3169,14 @@ impl DoxydeRmcpService {
             }
         }
 
-        // Create component content
+        // Create component content with relative paths
         let mut content = serde_json::json!({
             "slug": req.slug,
             "title": req.title.clone().unwrap_or_else(|| req.slug.clone()),
             "description": req.description.unwrap_or_default(),
             "alt_text": req.alt_text.unwrap_or_default(),
             "format": metadata.format.extension(),
-            "file_path": saved.file_path.to_string_lossy(),
+            "file_path": rel_path,
             "content_hash": saved.content_hash,
             "original_name": original_filename,
             "mime_type": metadata.format.mime_type(),
@@ -3168,8 +3184,8 @@ impl DoxydeRmcpService {
         });
 
         // Add thumbnail path if available
-        if let Some(ref thumb) = saved.thumb_file_path {
-            content["thumb_file_path"] = serde_json::json!(thumb.to_string_lossy());
+        if let Some(ref thumb_rel) = rel_thumb {
+            content["thumb_file_path"] = serde_json::json!(thumb_rel);
         }
 
         // Add dimensions if available (not available for SVG)
@@ -3985,7 +4001,7 @@ mod tests {
 
     fn create_test_service(pool: SqlitePool) -> (DoxydeRmcpService, tempfile::TempDir) {
         let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-        let service = DoxydeRmcpService::with_upload_dir(pool, temp_dir.path().to_path_buf());
+        let service = DoxydeRmcpService::with_site_directory(pool, temp_dir.path().to_path_buf());
         (service, temp_dir)
     }
 

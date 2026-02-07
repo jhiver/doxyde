@@ -31,6 +31,7 @@ pub struct CleanupResult {
 pub async fn publish_and_cleanup(
     pool: &SqlitePool,
     page_id: i64,
+    site_directory: &std::path::Path,
 ) -> Result<CleanupResult> {
     let version_repo = PageVersionRepository::new(pool.clone());
     let component_repo = ComponentRepository::new(pool.clone());
@@ -83,6 +84,7 @@ pub async fn publish_and_cleanup(
     let files_deleted = delete_orphaned_files(
         &component_repo,
         &removed_files,
+        site_directory,
     )
     .await?;
 
@@ -171,6 +173,7 @@ async fn delete_old_versions(
 async fn delete_orphaned_files(
     component_repo: &ComponentRepository,
     removed_files: &[&(String, Option<String>)],
+    site_directory: &std::path::Path,
 ) -> Result<u64> {
     let mut deleted = 0u64;
 
@@ -189,33 +192,53 @@ async fn delete_orphaned_files(
             continue;
         }
 
-        // Delete the main file
-        if try_delete_file(file_path) {
+        // Resolve to absolute path for deletion
+        let resolved = resolve_file_path(file_path, site_directory);
+        if try_delete_file(&resolved) {
             deleted += 1;
         }
 
         // Delete the thumbnail if present
         if let Some(thumb) = thumb_path {
-            try_delete_file(thumb);
+            let resolved_thumb = resolve_file_path(thumb, site_directory);
+            try_delete_file(&resolved_thumb);
         }
     }
 
     Ok(deleted)
 }
 
+/// Resolve a file path (which may be relative to site dir) to an absolute path
+fn resolve_file_path(
+    file_path: &str,
+    site_directory: &std::path::Path,
+) -> std::path::PathBuf {
+    let p = std::path::Path::new(file_path);
+    if p.is_absolute() {
+        p.to_path_buf()
+    } else if file_path.starts_with("images/") {
+        site_directory.join(file_path)
+    } else if file_path.starts_with("./") || file_path.starts_with("sites/") {
+        std::path::PathBuf::from(file_path)
+    } else {
+        site_directory.join(file_path)
+    }
+}
+
 /// Try to delete a file, logging on failure. Returns true if deleted.
-fn try_delete_file(path: &str) -> bool {
+fn try_delete_file(path: &std::path::Path) -> bool {
+    let path_str = path.to_string_lossy();
     match std::fs::remove_file(path) {
         Ok(()) => {
-            tracing::info!(path, "Deleted orphaned file");
+            tracing::info!(%path_str, "Deleted orphaned file");
             true
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            tracing::debug!(path, "Orphaned file already missing");
+            tracing::debug!(%path_str, "Orphaned file already missing");
             false
         }
         Err(e) => {
-            tracing::warn!(path, error = %e, "Failed to delete orphaned file");
+            tracing::warn!(%path_str, error = %e, "Failed to delete orphaned file");
             false
         }
     }
@@ -339,7 +362,8 @@ mod tests {
         component_repo.create(&text_comp2).await?;
 
         // Publish with cleanup
-        let result = publish_and_cleanup(&pool, page_id).await?;
+        let tmp_dir = tempfile::tempdir()?;
+        let result = publish_and_cleanup(&pool, page_id, tmp_dir.path()).await?;
 
         assert_eq!(result.page_id, page_id);
         assert_eq!(result.published_version_id, v2_id);
@@ -427,8 +451,8 @@ mod tests {
         );
         component_repo.create(&img2_copy).await?;
 
-        // Publish with cleanup
-        let result = publish_and_cleanup(&pool, page_id).await?;
+        // Publish with cleanup (tmp_dir acts as site_directory)
+        let result = publish_and_cleanup(&pool, page_id, tmp_dir.path()).await?;
 
         assert_eq!(result.files_deleted, 1); // img1 deleted
         assert_eq!(result.old_versions_deleted, 1); // v1 deleted
@@ -456,7 +480,8 @@ mod tests {
         let text = Component::new(v1_id, "text".to_string(), 0, json!({"text": "First"}));
         component_repo.create(&text).await?;
 
-        let result = publish_and_cleanup(&pool, page_id).await?;
+        let tmp_dir = tempfile::tempdir()?;
+        let result = publish_and_cleanup(&pool, page_id, tmp_dir.path()).await?;
 
         assert_eq!(result.old_versions_deleted, 0);
         assert_eq!(result.files_deleted, 0);
@@ -515,7 +540,7 @@ mod tests {
         let text = Component::new(v2_id, "text".to_string(), 0, json!({"text": "No image"}));
         component_repo.create(&text).await?;
 
-        let result = publish_and_cleanup(&pool, page_id).await?;
+        let result = publish_and_cleanup(&pool, page_id, tmp_dir.path()).await?;
 
         // File should NOT be deleted because page2 still references it
         assert_eq!(result.files_deleted, 0);
@@ -550,20 +575,20 @@ mod tests {
 
     #[test]
     fn test_try_delete_file_nonexistent() {
-        assert!(!try_delete_file("/nonexistent/path/file.jpg"));
+        assert!(!try_delete_file(std::path::Path::new(
+            "/nonexistent/path/file.jpg"
+        )));
     }
 
     #[test]
     fn test_try_delete_file_exists() {
         let tmp = tempfile::NamedTempFile::new().ok();
         if let Some(tmp) = tmp {
-            let _path = tmp.path().to_string_lossy().to_string();
             // Keep the file alive by leaking the temp handle
             let (_, persisted) = tmp.keep().ok().unzip();
             if let Some(persisted) = persisted {
-                let path = persisted.to_string_lossy().to_string();
-                assert!(try_delete_file(&path));
-                assert!(!std::path::Path::new(&path).exists());
+                assert!(try_delete_file(&persisted));
+                assert!(!persisted.exists());
             }
         }
     }

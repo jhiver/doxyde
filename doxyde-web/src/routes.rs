@@ -27,7 +27,7 @@ use crate::{
     rmcp,
     security_headers::create_security_headers_middleware,
     session_activity::update_session_activity,
-    site_resolver::site_resolver_middleware,
+    site_resolver::{self, site_resolver_middleware},
     AppState,
 };
 use axum::extract::{DefaultBodyLimit, Query, State};
@@ -151,6 +151,7 @@ async fn image_preview(
     State(state): State<AppState>,
     Query(params): Query<handlers::image_serve::ImagePreviewQuery>,
     user: CurrentUser,
+    site_ctx: site_resolver::SiteContext,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     // Use the full host as domain (including port)
@@ -172,7 +173,7 @@ async fn image_preview(
     tracing::debug!("Site found: {:?}", site.id);
 
     // Call the actual handler
-    handlers::image_preview_handler(State(state), site, Query(params), user, SiteDatabase(db)).await
+    handlers::image_preview_handler(State(state), site, Query(params), user, site_ctx, SiteDatabase(db)).await
 }
 
 #[cfg(test)]

@@ -26,11 +26,10 @@ use doxyde_db::repositories::{
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use std::fs;
-use std::path::PathBuf;
 
 use crate::{
-    auth::CurrentUser, db_middleware::SiteDatabase, path_security::validate_safe_path,
-    state::AppState,
+    auth::CurrentUser, db_middleware::SiteDatabase, site_resolver::SiteContext,
+    state::AppState, uploads::resolve_image_path,
 };
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +48,7 @@ pub async fn serve_image_handler(
     _site: Site,
     Path((slug, format)): Path<(String, String)>,
     query: Option<Query<ImageServeQuery>>,
+    site_ctx: SiteContext,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     let want_full = query
@@ -113,30 +113,19 @@ pub async fn serve_image_handler(
                                     .unwrap_or_else(|| file_path.to_string())
                             };
 
-                            let uploads_dir = PathBuf::from(&state.config.uploads_dir);
-                            let base_dir =
-                                if std::path::Path::new(serve_path.as_str()).is_absolute() {
-                                    uploads_dir
-                                        .parent()
-                                        .map(|p| p.to_path_buf())
-                                        .unwrap_or_else(|| PathBuf::from("/"))
-                                } else {
-                                    state
-                                        .config
-                                        .get_sites_directory()
-                                        .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
-                                        .unwrap_or_else(|_| PathBuf::from("."))
-                                };
+                            // Resolve to absolute path using site context
+                            let resolved = resolve_image_path(
+                                &serve_path,
+                                &site_ctx.site_directory,
+                            );
 
                             return serve_image_file(
-                                &serve_path,
+                                &resolved,
                                 &format,
-                                base_dir.to_str().unwrap_or("."),
                                 state.config.static_files_max_age,
                             )
                             .await;
                         } else {
-                            // Log missing file_path for debugging
                             tracing::warn!(
                                 "Image component found but missing file_path. Slug: {}, Component ID: {:?}",
                                 slug,
@@ -153,28 +142,20 @@ pub async fn serve_image_handler(
     Err(StatusCode::NOT_FOUND)
 }
 
-/// Serve an image file from disk with path validation
+/// Serve an image file from disk
 async fn serve_image_file(
-    file_path: &str,
+    resolved_path: &std::path::Path,
     format: &str,
-    uploads_dir: &str,
     max_age: u64,
 ) -> Result<Response, StatusCode> {
-    // Validate the path is safe and within uploads directory
-    let uploads_base = PathBuf::from(uploads_dir);
-    let safe_path = validate_safe_path(file_path, &uploads_base).map_err(|e| {
-        tracing::warn!("Path validation failed for image {}: {}", file_path, e);
-        StatusCode::FORBIDDEN
-    })?;
-
     // Ensure the file exists
-    if !safe_path.exists() {
-        tracing::warn!("Image file not found: {}", file_path);
+    if !resolved_path.exists() {
+        tracing::warn!("Image file not found: {:?}", resolved_path);
         return Err(StatusCode::NOT_FOUND);
     }
 
     // Read the file
-    let data = fs::read(&safe_path).map_err(|e| {
+    let data = fs::read(resolved_path).map_err(|e| {
         tracing::error!("Failed to read image file: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
@@ -207,6 +188,7 @@ pub async fn image_preview_handler(
     site: Site,
     Query(params): Query<ImagePreviewQuery>,
     user: CurrentUser,
+    site_ctx: SiteContext,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, StatusCode> {
     tracing::debug!(
@@ -225,35 +207,19 @@ pub async fn image_preview_handler(
     // Extract image data and serve
     let (file_path, format) = extract_image_data(&component)?;
 
-    // file_path can be absolute (from uploads_dir config) or relative
-    // Use the uploads directory as the base for path validation
-    let uploads_dir = PathBuf::from(&state.config.uploads_dir);
-    let base_dir = if std::path::Path::new(file_path).is_absolute() {
-        // For absolute paths, use the uploads directory or its parent
-        uploads_dir
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("/"))
-    } else {
-        // For relative paths, use the sites directory parent
-        state
-            .config
-            .get_sites_directory()
-            .map(|p| p.parent().map(|p| p.to_path_buf()).unwrap_or(p))
-            .unwrap_or_else(|_| PathBuf::from("."))
-    };
+    // Resolve to absolute path using site context
+    let resolved = resolve_image_path(file_path, &site_ctx.site_directory);
 
     tracing::debug!(
-        "Serving image preview - file_path: {}, format: {}, base_dir: {:?}",
+        "Serving image preview - file_path: {}, resolved: {:?}, format: {}",
         file_path,
+        resolved,
         format,
-        base_dir
     );
 
     serve_image_file(
-        file_path,
+        &resolved,
         format,
-        base_dir.to_str().unwrap_or("."),
         state.config.static_files_max_age,
     )
     .await

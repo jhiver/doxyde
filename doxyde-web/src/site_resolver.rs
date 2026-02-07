@@ -83,10 +83,28 @@ impl SiteContext {
         self.site_directory.join("templates")
     }
 
-    /// Get the uploads directory for this site
-    pub fn uploads_path(&self) -> PathBuf {
-        // Use site-specific uploads
-        self.site_directory.join("uploads")
+    /// Get the images directory for this site
+    pub fn images_path(&self) -> PathBuf {
+        self.site_directory.join("images")
+    }
+}
+
+// Allow SiteContext to be extracted directly from request parts
+impl<S> axum::extract::FromRequestParts<S> for SiteContext
+where
+    S: Send + Sync,
+{
+    type Rejection = axum::http::StatusCode;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        parts
+            .extensions
+            .get::<SiteContext>()
+            .cloned()
+            .ok_or(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
     }
 }
 
@@ -297,15 +315,15 @@ mod tests {
     }
 
     #[test]
-    fn test_uploads_path() {
+    fn test_images_path() {
         let base_path = PathBuf::from("/sites");
         let context = SiteContext::new("example.com".to_string(), &base_path);
-        let uploads_path = context.uploads_path();
-        assert!(uploads_path
+        let images_path = context.images_path();
+        assert!(images_path
             .to_str()
             .unwrap()
             .contains("/sites/example-com-"));
-        assert!(uploads_path.to_str().unwrap().ends_with("/uploads"));
+        assert!(images_path.to_str().unwrap().ends_with("/images"));
     }
 
     #[test]

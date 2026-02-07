@@ -117,39 +117,33 @@ impl DatabaseRouter {
         Ok(pool)
     }
 
-    /// Validate an OAuth token and return the associated database pool
+    /// Validate an OAuth token and return the associated database pool and site directory
     /// This is used by MCP/RMCP handlers that receive OAuth tokens
     pub async fn validate_token_and_get_db(
         &self,
         token: &str,
-    ) -> Result<Option<(TokenInfo, SqlitePool)>> {
-        // OAuth tokens might be stored in a central location or in each site's database
-        // For now, we'll check each site's database until we find a match
-        // This is not optimal for many sites, but works for the current architecture
-
+    ) -> Result<Option<(TokenInfo, SqlitePool, PathBuf)>> {
         let pools = self.site_pools.read().await;
 
-        // If we have cached pools, check them first
         for (site_key, pool) in pools.iter() {
             match validate_token(pool, token).await {
                 Ok(Some(token_info)) => {
-                    // Found valid token, return it with the pool
-                    return Ok(Some((token_info, pool.clone())));
+                    return Ok(Some((
+                        token_info,
+                        pool.clone(),
+                        PathBuf::from(site_key),
+                    )));
                 }
                 Ok(None) => {
-                    // Invalid token in this database, continue checking
                     continue;
                 }
                 Err(e) => {
-                    // Log error but continue checking other databases
                     tracing::debug!("Error validating token in site {}: {}", site_key, e);
                     continue;
                 }
             }
         }
 
-        // If not found in cached pools, we might need to check uncached sites
-        // For now, return None
         Ok(None)
     }
 

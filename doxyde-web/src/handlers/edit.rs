@@ -685,6 +685,7 @@ pub async fn publish_draft_handler(
     site: Site,
     page: Page,
     user: CurrentUser,
+    site_directory: &std::path::Path,
 ) -> Result<Response, StatusCode> {
     // Check permissions
     if !can_edit_page(&state, &db, &site, &user).await? {
@@ -693,7 +694,7 @@ pub async fn publish_draft_handler(
 
     // Publish the draft
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
-    crate::draft::publish_draft(&db, page_id)
+    crate::draft::publish_draft(&db, page_id, site_directory)
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
@@ -1182,8 +1183,16 @@ mod tests {
         );
 
         // Now publish the draft
-        let publish_result =
-            publish_draft_handler(app_state, pool.clone(), site, page, current_user).await;
+        let tmp_dir = tempfile::tempdir()?;
+        let publish_result = publish_draft_handler(
+            app_state,
+            pool.clone(),
+            site,
+            page,
+            current_user,
+            tmp_dir.path(),
+        )
+        .await;
         assert!(
             publish_result.is_ok(),
             "publish_draft_handler should succeed"
