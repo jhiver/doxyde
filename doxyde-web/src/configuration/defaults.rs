@@ -107,7 +107,7 @@ pub fn default_enable_content_type_options() -> bool {
 
 // Security header content defaults
 pub fn default_csp_content() -> Option<String> {
-    Some("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';".to_string())
+    Some("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';".to_string())
 }
 
 pub fn default_hsts_content() -> Option<String> {

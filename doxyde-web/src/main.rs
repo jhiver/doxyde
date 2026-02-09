@@ -59,7 +59,11 @@ async fn main() -> Result<()> {
             "uploads_dir config is deprecated. Images are now stored per-site in sites/<hash>/images/"
         );
     }
-    info!("Max upload size: {} bytes ({} MB)", config.max_upload_size, config.max_upload_size / 1024 / 1024);
+    info!(
+        "Max upload size: {} bytes ({} MB)",
+        config.max_upload_size,
+        config.max_upload_size / 1024 / 1024
+    );
 
     // Create rate limiters
     let login_rate_limiter = create_login_rate_limiter(config.login_attempts_per_minute);

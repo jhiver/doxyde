@@ -319,7 +319,6 @@ impl ComponentHandler for BlogSummaryComponentHandler {
 
         Ok(())
     }
-
 }
 
 /// Create a registry with all built-in component handlers

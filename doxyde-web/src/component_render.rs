@@ -50,32 +50,33 @@ impl TeraFunction for RenderComponentFunction {
             component.component_type, component.template
         );
 
-        let template_content = if let Some(content) = self.site_component_templates.get(&template_key) {
-            content.clone()
-        } else {
-            // Build the filesystem template path
-            let template_path = format!("{}/{}", self.templates_dir, template_key);
-
-            if Path::new(&template_path).exists() {
-                fs::read_to_string(&template_path)
-                    .map_err(|e| tera::Error::msg(format!("Failed to read template: {}", e)))?
+        let template_content =
+            if let Some(content) = self.site_component_templates.get(&template_key) {
+                content.clone()
             } else {
-                // Try default template
-                let default_path = format!(
-                    "{}/components/{}/default.html",
-                    self.templates_dir, component.component_type
-                );
+                // Build the filesystem template path
+                let template_path = format!("{}/{}", self.templates_dir, template_key);
 
-                if Path::new(&default_path).exists() {
-                    fs::read_to_string(&default_path).map_err(|e| {
-                        tera::Error::msg(format!("Failed to read default template: {}", e))
-                    })?
+                if Path::new(&template_path).exists() {
+                    fs::read_to_string(&template_path)
+                        .map_err(|e| tera::Error::msg(format!("Failed to read template: {}", e)))?
                 } else {
-                    // Fallback to inline template for backward compatibility
-                    return Ok(to_value(render_component_inline(&component)?)?);
+                    // Try default template
+                    let default_path = format!(
+                        "{}/components/{}/default.html",
+                        self.templates_dir, component.component_type
+                    );
+
+                    if Path::new(&default_path).exists() {
+                        fs::read_to_string(&default_path).map_err(|e| {
+                            tera::Error::msg(format!("Failed to read default template: {}", e))
+                        })?
+                    } else {
+                        // Fallback to inline template for backward compatibility
+                        return Ok(to_value(render_component_inline(&component)?)?);
+                    }
                 }
-            }
-        };
+            };
 
         // Create a Tera instance and render the template
         let mut tera = tera::Tera::default();

@@ -43,5 +43,4 @@ impl ComponentRenderer for CustomComponent {
             serde_json::to_string_pretty(&self.content).unwrap_or_else(|_| "{}".to_string())
         )
     }
-
 }

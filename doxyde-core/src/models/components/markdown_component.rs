@@ -127,5 +127,4 @@ impl ComponentRenderer for MarkdownComponent {
             _ => self.render("default"),
         }
     }
-
 }

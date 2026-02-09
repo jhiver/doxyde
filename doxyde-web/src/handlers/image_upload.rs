@@ -34,8 +34,8 @@ use crate::{
     site_resolver::SiteContext,
     state::AppState,
     uploads::{
-        extract_image_metadata, sanitize_slug, save_image_with_thumbnail,
-        to_relative_image_path, validate_upload_filename,
+        extract_image_metadata, sanitize_slug, save_image_with_thumbnail, to_relative_image_path,
+        validate_upload_filename,
     },
 };
 
@@ -192,9 +192,10 @@ pub async fn upload_image_handler(
     // Convert to relative path for DB storage
     let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
         .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
-    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
-        to_relative_image_path(tp, &site_ctx.site_directory)
-    });
+    let rel_thumb = saved
+        .thumb_file_path
+        .as_ref()
+        .and_then(|tp| to_relative_image_path(tp, &site_ctx.site_directory));
 
     // Get or create draft version
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
@@ -324,9 +325,10 @@ pub async fn upload_image_ajax_handler(
     // Convert to relative path for storage
     let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
         .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
-    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
-        to_relative_image_path(tp, &site_ctx.site_directory)
-    });
+    let rel_thumb = saved
+        .thumb_file_path
+        .as_ref()
+        .and_then(|tp| to_relative_image_path(tp, &site_ctx.site_directory));
 
     // Generate a suggested slug from the filename
     let suggested_slug = sanitize_slug(
@@ -494,9 +496,10 @@ pub async fn upload_component_image_handler(
     // Convert to relative paths for DB storage
     let rel_path = to_relative_image_path(&saved.file_path, &site_ctx.site_directory)
         .unwrap_or_else(|| saved.file_path.to_string_lossy().to_string());
-    let rel_thumb = saved.thumb_file_path.as_ref().and_then(|tp| {
-        to_relative_image_path(tp, &site_ctx.site_directory)
-    });
+    let rel_thumb = saved
+        .thumb_file_path
+        .as_ref()
+        .and_then(|tp| to_relative_image_path(tp, &site_ctx.site_directory));
 
     // Update the component with the new image data
     let component_repo = ComponentRepository::new(db.clone());

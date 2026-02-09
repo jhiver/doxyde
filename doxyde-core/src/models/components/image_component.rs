@@ -219,5 +219,4 @@ impl ComponentRenderer for ImageComponent {
             _ => self.render("default"),
         }
     }
-
 }

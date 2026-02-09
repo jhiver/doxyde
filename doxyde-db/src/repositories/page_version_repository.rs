@@ -18,9 +18,7 @@ use anyhow::{Context, Result};
 use doxyde_core::models::version::PageVersion;
 use sqlx::SqlitePool;
 
-fn parse_version_row(
-    row: (i64, i64, i32, Option<String>, bool, String),
-) -> Result<PageVersion> {
+fn parse_version_row(row: (i64, i64, i32, Option<String>, bool, String)) -> Result<PageVersion> {
     let (id, page_id, version_number, created_by, is_published, created_at_str) = row;
     let created_at = if created_at_str.contains('T') {
         chrono::DateTime::parse_from_rfc3339(&created_at_str)
@@ -378,9 +376,7 @@ impl PageVersionRepository {
         .await
         .context("Failed to list old versions")?;
 
-        rows.into_iter()
-            .map(parse_version_row)
-            .collect()
+        rows.into_iter().map(parse_version_row).collect()
     }
 
     /// Delete multiple versions by ID (CASCADE deletes their components)
@@ -996,12 +992,18 @@ mod tests {
 
         // Publish it first
         repo.publish(v1_id).await?;
-        let found = repo.find_by_id(v1_id).await?.ok_or(anyhow::anyhow!("not found"))?;
+        let found = repo
+            .find_by_id(v1_id)
+            .await?
+            .ok_or(anyhow::anyhow!("not found"))?;
         assert!(found.is_published);
 
         // Unpublish
         repo.unpublish(v1_id).await?;
-        let found = repo.find_by_id(v1_id).await?.ok_or(anyhow::anyhow!("not found"))?;
+        let found = repo
+            .find_by_id(v1_id)
+            .await?
+            .ok_or(anyhow::anyhow!("not found"))?;
         assert!(!found.is_published);
 
         Ok(())

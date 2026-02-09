@@ -37,34 +37,19 @@ pub async fn publish_and_cleanup(
     let component_repo = ComponentRepository::new(pool.clone());
 
     // Get the draft to publish
-    let draft = version_repo
-        .get_draft(page_id)
-        .await?
-        .ok_or_else(|| {
-            anyhow::anyhow!(
-                "No draft version exists for this page. Use get_or_create_draft first."
-            )
-        })?;
-    let draft_id = draft
-        .id
-        .ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
+    let draft = version_repo.get_draft(page_id).await?.ok_or_else(|| {
+        anyhow::anyhow!("No draft version exists for this page. Use get_or_create_draft first.")
+    })?;
+    let draft_id = draft.id.ok_or_else(|| anyhow::anyhow!("Draft has no ID"))?;
 
     // Step 1: Collect image files from old published version
-    let old_files = collect_published_image_paths(
-        &version_repo,
-        &component_repo,
-        page_id,
-    )
-    .await?;
+    let old_files = collect_published_image_paths(&version_repo, &component_repo, page_id).await?;
 
     // Step 2: Collect image files from the draft
     let new_files = component_repo
         .collect_image_paths_for_version(draft_id)
         .await?;
-    let new_file_set: HashSet<&str> = new_files
-        .iter()
-        .map(|(fp, _)| fp.as_str())
-        .collect();
+    let new_file_set: HashSet<&str> = new_files.iter().map(|(fp, _)| fp.as_str()).collect();
 
     // Step 3: Compute removed files (in old but not in new)
     let removed_files = compute_removed_files(&old_files, &new_file_set);
@@ -73,20 +58,11 @@ pub async fn publish_and_cleanup(
     publish_draft_with_unpublish(&version_repo, page_id, draft_id).await?;
 
     // Step 5: Delete old versions from DB
-    let old_versions_deleted = delete_old_versions(
-        &version_repo,
-        page_id,
-        draft_id,
-    )
-    .await?;
+    let old_versions_deleted = delete_old_versions(&version_repo, page_id, draft_id).await?;
 
     // Step 6-7: Delete orphaned files from disk
-    let files_deleted = delete_orphaned_files(
-        &component_repo,
-        &removed_files,
-        site_directory,
-    )
-    .await?;
+    let files_deleted =
+        delete_orphaned_files(&component_repo, &removed_files, site_directory).await?;
 
     Ok(CleanupResult {
         page_id,
@@ -161,10 +137,7 @@ async fn delete_old_versions(
         return Ok(0);
     }
 
-    let ids: Vec<i64> = old_versions
-        .iter()
-        .filter_map(|v| v.id)
-        .collect();
+    let ids: Vec<i64> = old_versions.iter().filter_map(|v| v.id).collect();
 
     version_repo.delete_versions(&ids).await
 }
@@ -209,10 +182,7 @@ async fn delete_orphaned_files(
 }
 
 /// Resolve a file path (which may be relative to site dir) to an absolute path
-fn resolve_file_path(
-    file_path: &str,
-    site_directory: &std::path::Path,
-) -> std::path::PathBuf {
+fn resolve_file_path(file_path: &str, site_directory: &std::path::Path) -> std::path::PathBuf {
     let p = std::path::Path::new(file_path);
     if p.is_absolute() {
         p.to_path_buf()
@@ -349,16 +319,14 @@ mod tests {
         // Create and publish v1 with a text component
         let v1 = PageVersion::new(page_id, 1, None);
         let v1_id = version_repo.create(&v1).await?;
-        let text_comp =
-            Component::new(v1_id, "text".to_string(), 0, json!({"text": "Hello"}));
+        let text_comp = Component::new(v1_id, "text".to_string(), 0, json!({"text": "Hello"}));
         component_repo.create(&text_comp).await?;
         version_repo.publish(v1_id).await?;
 
         // Create draft v2
         let v2 = PageVersion::new(page_id, 2, None);
         let v2_id = version_repo.create(&v2).await?;
-        let text_comp2 =
-            Component::new(v2_id, "text".to_string(), 0, json!({"text": "Updated"}));
+        let text_comp2 = Component::new(v2_id, "text".to_string(), 0, json!({"text": "Updated"}));
         component_repo.create(&text_comp2).await?;
 
         // Publish with cleanup
@@ -504,12 +472,11 @@ mod tests {
         let shared_str = shared_path.to_string_lossy().to_string();
 
         // Create a second page that also uses this image
-        let page2_id = sqlx::query(
-            "INSERT INTO pages (site_id, slug, title) VALUES (1, 'page2', 'Page 2')",
-        )
-        .execute(&pool)
-        .await?
-        .last_insert_rowid();
+        let page2_id =
+            sqlx::query("INSERT INTO pages (site_id, slug, title) VALUES (1, 'page2', 'Page 2')")
+                .execute(&pool)
+                .await?
+                .last_insert_rowid();
 
         let other_v = PageVersion::new(page2_id, 1, None);
         let other_vid = version_repo.create(&other_v).await?;

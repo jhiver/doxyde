@@ -481,7 +481,9 @@ pub async fn content_post_handler(
             .ok_or_else(|| AppError::internal_server_error("Site context missing"))?;
 
         // Extract multipart from request - note this consumes the request
-        let content_length = request.headers().get("content-length")
+        let content_length = request
+            .headers()
+            .get("content-length")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse::<usize>().ok());
         tracing::debug!(
@@ -490,14 +492,13 @@ pub async fn content_post_handler(
             state.config.max_upload_size
         );
         let templates = state.templates.clone();
-        let multipart =
-            match axum::extract::Multipart::from_request(request, &state).await {
-                Ok(mp) => mp,
-                Err(_) => {
-                    return Err(AppError::bad_request("Invalid multipart data")
-                        .with_templates(templates.clone()))
-                }
-            };
+        let multipart = match axum::extract::Multipart::from_request(request, &state).await {
+            Ok(mp) => mp,
+            Err(_) => {
+                return Err(AppError::bad_request("Invalid multipart data")
+                    .with_templates(templates.clone()))
+            }
+        };
 
         // Handle upload based on action
         let response = if content_path.action.as_deref() == Some(".upload-component-image") {
@@ -563,7 +564,13 @@ pub async fn content_post_handler(
 
         // Call the existing action handler
         match crate::handlers::handle_action(
-            Host(host), uri, State(state.clone()), db, user, site_ctx, body,
+            Host(host),
+            uri,
+            State(state.clone()),
+            db,
+            user,
+            site_ctx,
+            body,
         )
         .await
         {

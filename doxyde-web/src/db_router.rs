@@ -128,11 +128,7 @@ impl DatabaseRouter {
         for (site_key, pool) in pools.iter() {
             match validate_token(pool, token).await {
                 Ok(Some(token_info)) => {
-                    return Ok(Some((
-                        token_info,
-                        pool.clone(),
-                        PathBuf::from(site_key),
-                    )));
+                    return Ok(Some((token_info, pool.clone(), PathBuf::from(site_key))));
                 }
                 Ok(None) => {
                     continue;

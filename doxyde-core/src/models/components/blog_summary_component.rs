@@ -94,7 +94,6 @@ impl ComponentRenderer for BlogSummaryComponent {
             _ => self.render_cards(), // Default to cards
         }
     }
-
 }
 
 impl BlogSummaryComponent {

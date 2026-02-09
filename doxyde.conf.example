@@ -44,7 +44,7 @@ security_headers_frame_options = true
 security_headers_content_type_options = true
 
 # Security header content (optional - if not specified, defaults are used)
-security_headers_csp_content = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: https:; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
+security_headers_csp_content = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';"
 security_hsts_content = "max-age=31536000; includeSubDomains"
 security_frame_options_content = "DENY"
 security_referrer_policy = "strict-origin-when-cross-origin"

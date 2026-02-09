@@ -134,7 +134,6 @@ impl ComponentRenderer for TextComponent {
             _ => self.render("default"),
         }
     }
-
 }
 
 #[cfg(test)]

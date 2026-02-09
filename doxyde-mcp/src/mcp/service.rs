@@ -2019,9 +2019,7 @@ impl DoxydeRmcpService {
     }
 
     async fn internal_publish_draft(&self, page_id: i64) -> Result<DraftInfo> {
-        use doxyde_db::repositories::{
-            ComponentRepository, PageRepository, PageVersionRepository,
-        };
+        use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 
         // Verify page exists and belongs to this site
         let page_repo = PageRepository::new(self.pool.clone());
@@ -3126,7 +3124,8 @@ impl DoxydeRmcpService {
         let saved = save_image_with_thumbnail(&image_data, &images_dir, &metadata)?;
 
         // Convert to relative paths for DB storage
-        let rel_path = saved.file_path
+        let rel_path = saved
+            .file_path
             .strip_prefix(&self.site_directory)
             .ok()
             .and_then(|p| p.to_str())

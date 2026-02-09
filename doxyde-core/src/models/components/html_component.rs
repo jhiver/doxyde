@@ -42,5 +42,4 @@ impl ComponentRenderer for HtmlComponent {
             _ => self.render("default"),
         }
     }
-
 }

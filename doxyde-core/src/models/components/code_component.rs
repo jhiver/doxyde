@@ -74,5 +74,4 @@ impl ComponentRenderer for CodeComponent {
             _ => self.render("default"),
         }
     }
-
 }

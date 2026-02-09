@@ -2170,12 +2170,7 @@ mod tests {
         repo.create(&img2).await?;
 
         // Create a text component (should be ignored)
-        let text = Component::new(
-            version_id,
-            "text".to_string(),
-            2,
-            json!({"text": "Hello"}),
-        );
+        let text = Component::new(version_id, "text".to_string(), 2, json!({"text": "Hello"}));
         repo.create(&text).await?;
 
         let paths = repo.collect_image_paths_for_version(version_id).await?;
@@ -2259,7 +2254,8 @@ mod tests {
             1
         );
         assert_eq!(
-            repo.count_references_to_file("/uploads/nonexistent.jpg").await?,
+            repo.count_references_to_file("/uploads/nonexistent.jpg")
+                .await?,
             0
         );
 

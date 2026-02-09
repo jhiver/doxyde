@@ -489,8 +489,7 @@ mod tests {
     #[test]
     fn test_resolve_image_path_mcp_hash_dotslash_thumb() {
         let site_dir = Path::new("/data/sites/example-com-abc12345");
-        let resolved =
-            resolve_image_path("./ab/cd/abcdef1234567890_thumb.jpg", site_dir);
+        let resolved = resolve_image_path("./ab/cd/abcdef1234567890_thumb.jpg", site_dir);
         assert_eq!(
             resolved,
             PathBuf::from(

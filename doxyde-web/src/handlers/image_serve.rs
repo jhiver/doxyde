@@ -28,8 +28,8 @@ use sqlx::SqlitePool;
 use std::fs;
 
 use crate::{
-    auth::CurrentUser, db_middleware::SiteDatabase, site_resolver::SiteContext,
-    state::AppState, uploads::resolve_image_path,
+    auth::CurrentUser, db_middleware::SiteDatabase, site_resolver::SiteContext, state::AppState,
+    uploads::resolve_image_path,
 };
 
 #[derive(Debug, Deserialize)]
@@ -180,9 +180,7 @@ async fn navigate_to_page_by_path(
 
     let mut current = root;
     for segment in segments {
-        let current_id = current
-            .id
-            .ok_or_else(|| "Page has no ID".to_string())?;
+        let current_id = current.id.ok_or_else(|| "Page has no ID".to_string())?;
         let children = page_repo
             .list_children(current_id)
             .await
@@ -271,12 +269,7 @@ pub async fn image_preview_handler(
         format,
     );
 
-    serve_image_file(
-        &resolved,
-        format,
-        state.config.static_files_max_age,
-    )
-    .await
+    serve_image_file(&resolved, format, state.config.static_files_max_age).await
 }
 
 /// Get component and validate it's an image type

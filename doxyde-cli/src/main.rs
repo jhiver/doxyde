@@ -403,8 +403,7 @@ fn resolve_database_url(base_url: &str, site: Option<&str>) -> Result<String> {
     match site {
         Some(domain) => {
             // Get sites directory (default: "./sites")
-            let sites_dir =
-                std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
+            let sites_dir = std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
             let sites_path = PathBuf::from(sites_dir);
             let site_dir = resolve_site_directory(&sites_path, domain);
@@ -435,8 +434,7 @@ async fn create_site(domain: &str, title: &str) -> Result<()> {
     }
 
     // Get sites directory
-    let sites_dir =
-        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
+    let sites_dir = std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
     let sites_path = PathBuf::from(&sites_dir);
     let site_dir = resolve_site_directory(&sites_path, domain);
@@ -486,8 +484,7 @@ async fn create_site(domain: &str, title: &str) -> Result<()> {
 /// Lists all sites
 async fn list_sites() -> Result<()> {
     // Get sites directory
-    let sites_dir =
-        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
+    let sites_dir = std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
 
     let sites_path = PathBuf::from(&sites_dir);
 
@@ -668,8 +665,7 @@ async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
     println!("Migrating images for site: {}", domain);
 
     // Connect to the site database
-    let sites_dir =
-        std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
+    let sites_dir = std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
     let sites_path = PathBuf::from(&sites_dir);
     let site_dir = resolve_site_directory(&sites_path, domain);
     let db_path = site_dir.join("site.db");
@@ -775,19 +771,14 @@ async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
 
 async fn handle_storage_command(command: StorageCommands) -> Result<()> {
     match command {
-        StorageCommands::Migrate {
-            site,
-            all,
-            dry_run,
-        } => {
+        StorageCommands::Migrate { site, all, dry_run } => {
             if !all && site.is_none() {
                 return Err(anyhow!(
                     "Specify --site <domain> or --all to migrate all sites"
                 ));
             }
 
-            let sites_dir = std::env::var("SITES_DIR")
-                .unwrap_or_else(|_| "./sites".to_string());
+            let sites_dir = std::env::var("SITES_DIR").unwrap_or_else(|_| "./sites".to_string());
             let sites_path = PathBuf::from(&sites_dir);
 
             if dry_run {
@@ -906,11 +897,7 @@ fn merge_directories(src: &Path, dest: &Path) -> Result<()> {
 }
 
 /// Rewrite image paths in component content to be relative
-async fn rewrite_image_paths(
-    pool: &SqlitePool,
-    site_dir: &Path,
-    dry_run: bool,
-) -> Result<u32> {
+async fn rewrite_image_paths(pool: &SqlitePool, site_dir: &Path, dry_run: bool) -> Result<u32> {
     let rows: Vec<(i64, String)> =
         sqlx::query_as("SELECT id, content FROM components WHERE component_type = 'image'")
             .fetch_all(pool)
@@ -1063,20 +1050,16 @@ mod tests {
     #[test]
     fn test_compute_relative_path_absolute_with_uploads() {
         let site_dir = Path::new("/sites/twaki-la-029e5816");
-        let result = compute_relative_path(
-            "/sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
-            site_dir,
-        );
+        let result =
+            compute_relative_path("/sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg", site_dir);
         assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
     }
 
     #[test]
     fn test_compute_relative_path_cwd_relative() {
         let site_dir = Path::new("/sites/twaki-la-029e5816");
-        let result = compute_relative_path(
-            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
-            site_dir,
-        );
+        let result =
+            compute_relative_path("./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg", site_dir);
         assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
     }
 
@@ -1090,26 +1073,21 @@ mod tests {
     #[test]
     fn test_compute_relative_path_cross_site() {
         let site_dir = Path::new("/sites/rusty-pelican-12345678");
-        let result = compute_relative_path(
-            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
-            site_dir,
-        );
+        let result =
+            compute_relative_path("./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg", site_dir);
         assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
     }
 
     #[test]
     fn test_extract_hash_subpath_uploads() {
-        let result = extract_hash_subpath(
-            "./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg",
-        );
+        let result = extract_hash_subpath("./sites/twaki-la-029e5816/uploads/ab/cd/hash.jpg");
         assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
     }
 
     #[test]
     fn test_extract_hash_subpath_images() {
-        let result = extract_hash_subpath(
-            "/home/user/sites/twaki-la-029e5816/images/ab/cd/hash.jpg",
-        );
+        let result =
+            extract_hash_subpath("/home/user/sites/twaki-la-029e5816/images/ab/cd/hash.jpg");
         assert_eq!(result, Some("images/ab/cd/hash.jpg".to_string()));
     }
 
@@ -1174,10 +1152,7 @@ mod tests {
         // dest/a.txt should be unchanged (not overwritten)
         assert_eq!(fs::read_to_string(dest.join("a.txt")).unwrap(), "dest-a");
         // dest/sub/b.txt should be copied from src
-        assert_eq!(
-            fs::read_to_string(dest.join("sub/b.txt")).unwrap(),
-            "src-b"
-        );
+        assert_eq!(fs::read_to_string(dest.join("sub/b.txt")).unwrap(), "src-b");
         // dest/c.txt should be unchanged
         assert_eq!(fs::read_to_string(dest.join("c.txt")).unwrap(), "dest-c");
     }
