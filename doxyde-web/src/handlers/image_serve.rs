@@ -28,8 +28,11 @@ use sqlx::SqlitePool;
 use std::fs;
 
 use crate::{
-    auth::CurrentUser, db_middleware::SiteDatabase, site_resolver::SiteContext, state::AppState,
-    uploads::resolve_image_path,
+    auth::CurrentUser,
+    db_middleware::SiteDatabase,
+    site_resolver::SiteContext,
+    state::AppState,
+    uploads::{build_variant_path, generate_variant, resolve_image_path, ALLOWED_WIDTHS},
 };
 
 #[derive(Debug, Deserialize)]
@@ -40,6 +43,8 @@ pub struct ImagePreviewQuery {
 #[derive(Debug, Deserialize, Default)]
 pub struct ImageServeQuery {
     pub full: Option<u8>,
+    pub w: Option<u32>,
+    pub fmt: Option<String>,
 }
 
 /// Serve an image by slug and format, searching within a specific page
@@ -134,7 +139,24 @@ pub async fn serve_image_handler(
             }
         };
 
-        // Choose thumbnail or original
+        let max_age = state.config.static_files_max_age;
+        let q = query.as_ref().map(|q| &q.0);
+        let default_query = ImageServeQuery::default();
+        let effective_query = q.unwrap_or(&default_query);
+
+        // If variant transformation requested, always use original file
+        let has_transform = effective_query.w.is_some() || effective_query.fmt.is_some();
+
+        if has_transform {
+            let original = resolve_image_path(file_path, &site_ctx.site_directory);
+            if let Some(response) =
+                maybe_serve_variant(&original, &format, effective_query, max_age)?
+            {
+                return Ok(response);
+            }
+        }
+
+        // Choose thumbnail or original for non-variant requests
         let serve_path = if want_full {
             file_path.to_string()
         } else {
@@ -146,10 +168,8 @@ pub async fn serve_image_handler(
                 .unwrap_or_else(|| file_path.to_string())
         };
 
-        // Resolve to absolute path using site context
         let resolved = resolve_image_path(&serve_path, &site_ctx.site_directory);
-
-        return serve_image_file(&resolved, &format, state.config.static_files_max_age).await;
+        return serve_image_file(&resolved, &format, max_age).await;
     }
 
     // Image not found in this page
@@ -192,6 +212,95 @@ async fn navigate_to_page_by_path(
     }
 
     Ok(current)
+}
+
+/// Check if variant transformations are requested and serve accordingly
+fn maybe_serve_variant(
+    source_path: &std::path::Path,
+    original_format: &str,
+    query: &ImageServeQuery,
+    max_age: u64,
+) -> Result<Option<Response>, StatusCode> {
+    let requested_width = query.w;
+    let requested_fmt = query.fmt.as_deref();
+
+    // No transformations requested
+    if requested_width.is_none() && requested_fmt.is_none() {
+        return Ok(None);
+    }
+
+    // Skip transformations for SVG and GIF
+    if original_format == "svg" || original_format == "gif" {
+        return Ok(None);
+    }
+
+    // Validate width if provided
+    if let Some(w) = requested_width {
+        if !ALLOWED_WIDTHS.contains(&w) {
+            tracing::warn!("Invalid width requested: {}", w);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    }
+
+    // Validate format if provided
+    let target_format = match requested_fmt {
+        Some("webp") => "webp",
+        Some(other) => {
+            tracing::warn!("Invalid format requested: {}", other);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+        None => original_format,
+    };
+
+    // Build variant path
+    let variant_path =
+        build_variant_path(source_path, requested_width, target_format).map_err(|e| {
+            tracing::error!("Failed to build variant path: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    // Fast path: variant already exists on disk
+    let variant_data = if variant_path.exists() {
+        fs::read(&variant_path).map_err(|e| {
+            tracing::error!("Failed to read cached variant: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+    } else {
+        // Generate variant on the fly
+        let data = generate_variant(source_path, requested_width, target_format).map_err(|e| {
+            tracing::error!("Failed to generate variant: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+        // Write variant to disk for future requests
+        if let Some(parent) = variant_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Err(e) = fs::write(&variant_path, &data) {
+            tracing::warn!("Failed to cache variant to {:?}: {}", variant_path, e);
+        }
+
+        data
+    };
+
+    let content_type = match target_format {
+        "webp" => "image/webp",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        _ => "application/octet-stream",
+    };
+
+    let cache_control = format!("public, max-age={}", max_age);
+    Ok(Some(
+        (
+            [
+                (header::CONTENT_TYPE, content_type),
+                (header::CACHE_CONTROL, cache_control.as_str()),
+            ],
+            variant_data,
+        )
+            .into_response(),
+    ))
 }
 
 /// Serve an image file from disk
@@ -458,6 +567,8 @@ mod tests {
     fn test_image_serve_query_default() {
         let query: ImageServeQuery = Default::default();
         assert!(query.full.is_none());
+        assert!(query.w.is_none());
+        assert!(query.fmt.is_none());
     }
 
     #[test]
@@ -470,5 +581,26 @@ mod tests {
     fn test_image_serve_query_parse_empty() {
         let query: ImageServeQuery = serde_urlencoded::from_str("").unwrap();
         assert!(query.full.is_none());
+    }
+
+    #[test]
+    fn test_image_serve_query_parse_w_and_fmt() {
+        let query: ImageServeQuery = serde_urlencoded::from_str("w=720&fmt=webp").unwrap();
+        assert_eq!(query.w, Some(720));
+        assert_eq!(query.fmt.as_deref(), Some("webp"));
+    }
+
+    #[test]
+    fn test_image_serve_query_parse_w_only() {
+        let query: ImageServeQuery = serde_urlencoded::from_str("w=480").unwrap();
+        assert_eq!(query.w, Some(480));
+        assert!(query.fmt.is_none());
+    }
+
+    #[test]
+    fn test_image_serve_query_parse_fmt_only() {
+        let query: ImageServeQuery = serde_urlencoded::from_str("fmt=webp").unwrap();
+        assert!(query.w.is_none());
+        assert_eq!(query.fmt.as_deref(), Some("webp"));
     }
 }

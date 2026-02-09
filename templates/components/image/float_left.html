@@ -1,11 +1,22 @@
 <div class="image-component image-float-left">
-    
-    <img src="./{{ component.content.slug }}.{{ component.content.format }}"
+    {% set base = "./" ~ component.content.slug ~ "." ~ component.content.format %}
+    {% if component.content.format != "svg" and component.content.format != "gif" %}
+    <img src="{{ base }}"
+         srcset="{{ base }}?w=480 480w, {{ base }}?w=720 720w, {{ base }}?w=1080 1080w"
+         sizes="(max-width: 768px) 100vw, 720px"
          alt="{{ component.content.alt_text | default(value=component.content.title) | default(value='') }}"
          {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
          {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}
          loading="lazy"
          decoding="async">
+    {% else %}
+    <img src="{{ base }}"
+         alt="{{ component.content.alt_text | default(value=component.content.title) | default(value='') }}"
+         {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
+         {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}
+         loading="lazy"
+         decoding="async">
+    {% endif %}
     {% if component.title %}
         <p class="image-caption">{{ component.title }}</p>
     {% endif %}

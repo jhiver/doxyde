@@ -387,6 +387,58 @@ pub fn save_image_with_thumbnail(
     })
 }
 
+/// Allowed widths for on-the-fly image resizing (prevents cache bloat)
+pub const ALLOWED_WIDTHS: [u32; 5] = [480, 720, 1080, 1440, 2048];
+
+/// Build the on-disk path for a resized/converted variant
+pub fn build_variant_path(source: &Path, width: Option<u32>, format: &str) -> Result<PathBuf> {
+    let stem = source
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| anyhow!("Invalid file path for variant"))?;
+    let parent = source
+        .parent()
+        .ok_or_else(|| anyhow!("File has no parent directory"))?;
+
+    match width {
+        Some(w) => Ok(parent.join(format!("{}_w{}.{}", stem, w, format))),
+        None => Ok(parent.join(format!("{}.{}", stem, format))),
+    }
+}
+
+/// Generate a resized and/or format-converted image variant
+pub fn generate_variant(
+    source_path: &Path,
+    width: Option<u32>,
+    target_format: &str,
+) -> Result<Vec<u8>> {
+    let data = fs::read(source_path)
+        .with_context(|| format!("Failed to read source image: {:?}", source_path))?;
+
+    let img = image::load_from_memory(&data).context("Failed to decode source image")?;
+    let (orig_w, _orig_h) = img.dimensions();
+
+    // Resize only if requested width is smaller than original
+    let processed = match width {
+        Some(w) if w < orig_w => img.resize(w, u32::MAX, image::imageops::FilterType::Lanczos3),
+        _ => img,
+    };
+
+    let mut buf = std::io::Cursor::new(Vec::new());
+    let img_format = match target_format {
+        "webp" => image::ImageFormat::WebP,
+        "jpg" | "jpeg" => image::ImageFormat::Jpeg,
+        "png" => image::ImageFormat::Png,
+        other => return Err(anyhow!("Unsupported target format: {}", other)),
+    };
+
+    processed
+        .write_to(&mut buf, img_format)
+        .with_context(|| format!("Failed to encode image as {}", target_format))?;
+
+    Ok(buf.into_inner())
+}
+
 /// Resolve an image file path to an absolute path on disk.
 ///
 /// Handles these formats:
@@ -840,6 +892,143 @@ mod tests {
 
         assert_ne!(hash1, hash2);
         assert_ne!(path1, path2);
+    }
+
+    #[test]
+    fn test_build_variant_path_with_width_and_format() {
+        let source = PathBuf::from("/uploads/a1/b2/hash123.jpg");
+        let result = build_variant_path(&source, Some(720), "webp").unwrap();
+        assert_eq!(result, PathBuf::from("/uploads/a1/b2/hash123_w720.webp"));
+    }
+
+    #[test]
+    fn test_build_variant_path_format_only() {
+        let source = PathBuf::from("/uploads/a1/b2/hash123.jpg");
+        let result = build_variant_path(&source, None, "webp").unwrap();
+        assert_eq!(result, PathBuf::from("/uploads/a1/b2/hash123.webp"));
+    }
+
+    #[test]
+    fn test_build_variant_path_width_only() {
+        let source = PathBuf::from("/uploads/a1/b2/hash123.jpg");
+        let result = build_variant_path(&source, Some(480), "jpg").unwrap();
+        assert_eq!(result, PathBuf::from("/uploads/a1/b2/hash123_w480.jpg"));
+    }
+
+    #[test]
+    fn test_build_variant_path_various_widths() {
+        let source = PathBuf::from("/data/images/ab/cd/img.png");
+        for &w in &ALLOWED_WIDTHS {
+            let result = build_variant_path(&source, Some(w), "webp").unwrap();
+            let expected = format!("/data/images/ab/cd/img_w{}.webp", w);
+            assert_eq!(result, PathBuf::from(expected));
+        }
+    }
+
+    #[test]
+    fn test_allowed_widths_validation() {
+        let valid = [480, 720, 1080, 1440, 2048];
+        let invalid = [100, 500, 800, 1920, 3000];
+
+        for w in valid {
+            assert!(ALLOWED_WIDTHS.contains(&w));
+        }
+        for w in invalid {
+            assert!(!ALLOWED_WIDTHS.contains(&w));
+        }
+    }
+
+    #[test]
+    fn test_generate_variant_webp_conversion() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a small test JPEG image (2x2 red pixels)
+        let img = image::RgbImage::from_pixel(100, 100, image::Rgb([255, 0, 0]));
+        let source_path = temp_dir.path().join("test.jpg");
+        img.save(&source_path).unwrap();
+
+        // Convert to WebP
+        let result = generate_variant(&source_path, None, "webp").unwrap();
+        assert!(!result.is_empty());
+
+        // Verify it's a valid WebP (starts with RIFF...WEBP)
+        assert!(result.len() > 12);
+        assert_eq!(&result[0..4], b"RIFF");
+        assert_eq!(&result[8..12], b"WEBP");
+    }
+
+    #[test]
+    fn test_generate_variant_resize() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a 2000x1000 test image
+        let img = image::RgbImage::from_pixel(2000, 1000, image::Rgb([0, 128, 0]));
+        let source_path = temp_dir.path().join("large.jpg");
+        img.save(&source_path).unwrap();
+
+        // Resize to 720px wide
+        let result = generate_variant(&source_path, Some(720), "jpg").unwrap();
+        assert!(!result.is_empty());
+
+        // Load result and check dimensions
+        let decoded = image::load_from_memory(&result).unwrap();
+        assert_eq!(decoded.dimensions().0, 720);
+    }
+
+    #[test]
+    fn test_generate_variant_no_upscale() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        // Create a 200x200 test image
+        let img = image::RgbImage::from_pixel(200, 200, image::Rgb([0, 0, 255]));
+        let source_path = temp_dir.path().join("small.jpg");
+        img.save(&source_path).unwrap();
+
+        // Request 720px wide - should NOT upscale
+        let result = generate_variant(&source_path, Some(720), "jpg").unwrap();
+        let decoded = image::load_from_memory(&result).unwrap();
+        assert_eq!(decoded.dimensions().0, 200);
+    }
+
+    #[test]
+    fn test_generate_variant_resize_and_convert() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+
+        let img = image::RgbImage::from_pixel(1600, 1200, image::Rgb([128, 128, 128]));
+        let source_path = temp_dir.path().join("photo.jpg");
+        img.save(&source_path).unwrap();
+
+        let result = generate_variant(&source_path, Some(480), "webp").unwrap();
+        assert!(!result.is_empty());
+
+        // Verify WebP format
+        assert_eq!(&result[0..4], b"RIFF");
+        assert_eq!(&result[8..12], b"WEBP");
+
+        // Verify dimensions
+        let decoded = image::load_from_memory(&result).unwrap();
+        assert_eq!(decoded.dimensions().0, 480);
+    }
+
+    #[test]
+    fn test_generate_variant_unsupported_format() {
+        use tempfile::TempDir;
+
+        let temp_dir = TempDir::new().unwrap();
+        let img = image::RgbImage::from_pixel(100, 100, image::Rgb([0, 0, 0]));
+        let source_path = temp_dir.path().join("test.jpg");
+        img.save(&source_path).unwrap();
+
+        let result = generate_variant(&source_path, None, "bmp");
+        assert!(result.is_err());
     }
 
     #[test]
