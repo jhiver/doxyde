@@ -201,7 +201,12 @@ pub async fn show_page_handler(
                                         .and_then(|img| {
                                             let slug = img.content.get("slug")?.as_str()?;
                                             let format = img.content.get("format")?.as_str()?;
-                                            Some(format!("/{}.{}", slug, format))
+                                            Some(format!(
+                                                "{}/{}.{}",
+                                                child_url.trim_end_matches('/'),
+                                                slug,
+                                                format
+                                            ))
                                         })
                                 } else {
                                     None

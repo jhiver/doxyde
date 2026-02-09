@@ -272,10 +272,18 @@ pub async fn content_handler(
         );
     }
 
-    // Check if this is an image request (format: /slug.extension)
-    if let Some((slug, format)) = check_image_pattern(path) {
+    // Check if this is an image request (format: /path/slug.extension)
+    if let Some((page_path, slug, format)) = check_image_pattern(path) {
         let query_string = uri.query().map(|q| q.to_string());
-        return handle_image_request(state, host.to_string(), slug, format, query_string).await;
+        return handle_image_request(
+            state,
+            host.to_string(),
+            page_path,
+            slug,
+            format,
+            query_string,
+        )
+        .await;
     }
 
     let content_path = ContentPath::parse(path);
@@ -326,35 +334,50 @@ pub async fn content_handler(
     }
 }
 
-/// Check if a path matches the image URL pattern
-fn check_image_pattern(path: &str) -> Option<(String, String)> {
-    // Skip if path contains '/' beyond the first character
+/// Check if a path ends with an image filename pattern.
+///
+/// Returns (page_path, slug, format) if the last segment matches slug.ext.
+/// For example, `/activities/kitesurf/kitesurf-hero.jpg` returns
+/// `("/activities/kitesurf", "kitesurf-hero", "jpg")`.
+fn check_image_pattern(path: &str) -> Option<(String, String, String)> {
     let trimmed = path.trim_start_matches('/');
-    if trimmed.contains('/') {
+    if trimmed.is_empty() {
         return None;
     }
 
-    // Check for pattern: slug.extension
-    if let Some(dot_pos) = trimmed.rfind('.') {
-        if dot_pos > 0 && dot_pos < trimmed.len() - 1 {
-            let slug = &trimmed[..dot_pos];
-            let format = &trimmed[dot_pos + 1..];
+    // Get the last segment
+    let last_segment = trimmed.rsplit('/').next()?;
 
-            // Validate format is a known image extension
-            let valid_formats = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
-            if valid_formats.contains(&format) {
-                return Some((slug.to_string(), format.to_string()));
-            }
-        }
+    // Check for pattern: slug.extension
+    let dot_pos = last_segment.rfind('.')?;
+    if dot_pos == 0 || dot_pos >= last_segment.len() - 1 {
+        return None;
     }
 
-    None
+    let slug = &last_segment[..dot_pos];
+    let format = &last_segment[dot_pos + 1..];
+
+    // Validate format is a known image extension
+    let valid_formats = ["jpg", "jpeg", "png", "gif", "webp", "svg"];
+    if !valid_formats.contains(&format) {
+        return None;
+    }
+
+    // Extract the page path (everything before the last segment)
+    let page_path = if let Some(slash_pos) = trimmed.rfind('/') {
+        format!("/{}", &trimmed[..slash_pos])
+    } else {
+        "/".to_string()
+    };
+
+    Some((page_path, slug.to_string(), format.to_string()))
 }
 
 /// Handle image request
 async fn handle_image_request(
     state: AppState,
     host: String,
+    page_path: String,
     slug: String,
     format: String,
     query_string: Option<String>,
@@ -395,6 +418,7 @@ async fn handle_image_request(
         image_query,
         site_context,
         crate::db_middleware::SiteDatabase(db.clone()),
+        page_path,
     )
     .await
     {
@@ -654,5 +678,65 @@ mod tests {
         let path = ContentPath::parse("/about/team/.edit/");
         assert_eq!(path.path, "/about/team");
         assert_eq!(path.action, Some(".edit".to_string()));
+    }
+
+    #[test]
+    fn test_check_image_pattern_root_level() {
+        let result = check_image_pattern("/hero.jpg");
+        assert_eq!(
+            result,
+            Some(("/".to_string(), "hero".to_string(), "jpg".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_check_image_pattern_deep_path() {
+        let result = check_image_pattern("/activities/kitesurf/kitesurf-hero.jpg");
+        assert_eq!(
+            result,
+            Some((
+                "/activities/kitesurf".to_string(),
+                "kitesurf-hero".to_string(),
+                "jpg".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_check_image_pattern_one_level() {
+        let result = check_image_pattern("/apartments/photo.png");
+        assert_eq!(
+            result,
+            Some((
+                "/apartments".to_string(),
+                "photo".to_string(),
+                "png".to_string()
+            ))
+        );
+    }
+
+    #[test]
+    fn test_check_image_pattern_svg() {
+        let result = check_image_pattern("/logo.svg");
+        assert_eq!(
+            result,
+            Some(("/".to_string(), "logo".to_string(), "svg".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_check_image_pattern_not_image() {
+        assert!(check_image_pattern("/about/team").is_none());
+        assert!(check_image_pattern("/file.txt").is_none());
+        assert!(check_image_pattern("/script.js").is_none());
+        assert!(check_image_pattern("/").is_none());
+        assert!(check_image_pattern("").is_none());
+    }
+
+    #[test]
+    fn test_check_image_pattern_dot_prefix_action() {
+        // Actions like /.edit should NOT be treated as images
+        assert!(check_image_pattern("/.edit").is_none());
+        assert!(check_image_pattern("/about/.edit").is_none());
     }
 }

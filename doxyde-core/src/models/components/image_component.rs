@@ -41,7 +41,7 @@ impl ImageComponent {
             .get("format")
             .and_then(|f| f.as_str())
             .unwrap_or("jpg");
-        let src = format!("/{}.{}", slug, format);
+        let src = format!("./{}.{}", slug, format);
 
         // Use alt_text field, fallback to title or description
         let alt = component

@@ -389,8 +389,11 @@ pub fn save_image_with_thumbnail(
 
 /// Resolve an image file path to an absolute path on disk.
 ///
-/// Handles both new relative paths (`images/ab/cd/hash.jpg`) and
-/// legacy absolute paths or paths starting with `./sites/`.
+/// Handles these formats:
+/// - `images/ab/cd/hash.jpg` -> site_directory/images/ab/cd/hash.jpg
+/// - `./ab/cd/hash.jpg` -> site_directory/images/ab/cd/hash.jpg (MCP-uploaded)
+/// - `/absolute/path.jpg` -> /absolute/path.jpg (legacy)
+/// - `./sites/domain/uploads/...` -> ./sites/domain/uploads/... (legacy)
 pub fn resolve_image_path(file_path: &str, site_directory: &Path) -> PathBuf {
     let p = Path::new(file_path);
 
@@ -404,8 +407,22 @@ pub fn resolve_image_path(file_path: &str, site_directory: &Path) -> PathBuf {
         return site_directory.join(file_path);
     }
 
-    // Legacy relative format: ./sites/domain-hash/uploads/ab/cd/hash.jpg
-    if file_path.starts_with("./") || file_path.starts_with("sites/") {
+    // Handle ./ prefix paths
+    if file_path.starts_with("./") {
+        let stripped = &file_path[2..];
+
+        // Legacy format: ./sites/domain-hash/uploads/...
+        if stripped.starts_with("sites/") {
+            return PathBuf::from(file_path);
+        }
+
+        // Hash-based path from MCP uploads: ./ab/cd/hash.ext
+        // -> resolve as site_directory/images/ab/cd/hash.ext
+        return site_directory.join("images").join(stripped);
+    }
+
+    // Legacy: sites/domain-hash/uploads/...
+    if file_path.starts_with("sites/") {
         return PathBuf::from(file_path);
     }
 
@@ -456,6 +473,29 @@ mod tests {
         assert_eq!(
             resolved,
             PathBuf::from("./sites/example-com-abc12345/uploads/ab/cd/hash.jpg")
+        );
+    }
+
+    #[test]
+    fn test_resolve_image_path_mcp_hash_dotslash() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved = resolve_image_path("./ab/cd/abcdef1234567890.jpg", site_dir);
+        assert_eq!(
+            resolved,
+            PathBuf::from("/data/sites/example-com-abc12345/images/ab/cd/abcdef1234567890.jpg")
+        );
+    }
+
+    #[test]
+    fn test_resolve_image_path_mcp_hash_dotslash_thumb() {
+        let site_dir = Path::new("/data/sites/example-com-abc12345");
+        let resolved =
+            resolve_image_path("./ab/cd/abcdef1234567890_thumb.jpg", site_dir);
+        assert_eq!(
+            resolved,
+            PathBuf::from(
+                "/data/sites/example-com-abc12345/images/ab/cd/abcdef1234567890_thumb.jpg"
+            )
         );
     }
 

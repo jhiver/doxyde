@@ -42,7 +42,7 @@ pub struct ImageServeQuery {
     pub full: Option<u8>,
 }
 
-/// Serve an image by slug and format
+/// Serve an image by slug and format, searching within a specific page
 pub async fn serve_image_handler(
     State(state): State<AppState>,
     _site: Site,
@@ -50,96 +50,150 @@ pub async fn serve_image_handler(
     query: Option<Query<ImageServeQuery>>,
     site_ctx: SiteContext,
     SiteDatabase(db): SiteDatabase,
+    page_path: String,
 ) -> Result<Response, StatusCode> {
     let want_full = query
         .as_ref()
         .and_then(|q| q.full)
         .map(|v| v == 1)
         .unwrap_or(false);
-    // Search for an image component with this slug
+
     let component_repo = ComponentRepository::new(db.clone());
     let page_version_repo = PageVersionRepository::new(db.clone());
+    let page_repo = PageRepository::new(db.clone());
 
-    // Find all published page versions (per-site DB, no site_id filter needed)
-    let published_versions = page_version_repo.find_all_published().await.map_err(|e| {
-        tracing::error!("Failed to find published versions: {}", e);
+    // Navigate to the specific page from the path
+    let page = navigate_to_page_by_path(&page_repo, &page_path)
+        .await
+        .map_err(|e| {
+            tracing::debug!("Page not found for image: {} - {}", page_path, e);
+            StatusCode::NOT_FOUND
+        })?;
+
+    let page_id = page.id.ok_or_else(|| {
+        tracing::error!("Page has no ID");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
 
-    // Search through all published versions for an image with this slug
-    for version in published_versions {
-        let version_id = version.id.ok_or_else(|| {
-            tracing::error!("Version has no ID");
+    // Get published version for this page
+    let version = page_version_repo
+        .get_published(page_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to get published version: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .ok_or(StatusCode::NOT_FOUND)?;
+
+    let version_id = version.id.ok_or_else(|| {
+        tracing::error!("Version has no ID");
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Search for the image component in this page version
+    let components = component_repo
+        .list_by_page_version(version_id)
+        .await
+        .map_err(|e| {
+            tracing::error!("Failed to list components: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
 
-        let components = component_repo
-            .list_by_page_version(version_id)
-            .await
-            .map_err(|e| {
-                tracing::error!("Failed to list components: {}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?;
+    for component in components {
+        if component.component_type != "image" {
+            continue;
+        }
 
-        for component in components {
-            if component.component_type != "image" {
+        let component_slug = match component.content.get("slug").and_then(|s| s.as_str()) {
+            Some(s) => s,
+            None => continue,
+        };
+
+        if component_slug != slug {
+            continue;
+        }
+
+        let component_format = match component.content.get("format").and_then(|f| f.as_str()) {
+            Some(f) => f,
+            None => continue,
+        };
+
+        if component_format != format {
+            continue;
+        }
+
+        let file_path = match component.content.get("file_path").and_then(|p| p.as_str()) {
+            Some(p) => p,
+            None => {
+                tracing::warn!(
+                    "Image component missing file_path. Slug: {}, ID: {:?}",
+                    slug,
+                    component.id
+                );
                 continue;
             }
+        };
 
-            // Check if this component has the requested slug
-            if let Some(component_slug) = component.content.get("slug").and_then(|s| s.as_str()) {
-                if component_slug == slug {
-                    // Check format matches
-                    if let Some(component_format) =
-                        component.content.get("format").and_then(|f| f.as_str())
-                    {
-                        if component_format != format {
-                            continue; // Format doesn't match
-                        }
+        // Choose thumbnail or original
+        let serve_path = if want_full {
+            file_path.to_string()
+        } else {
+            component
+                .content
+                .get("thumb_file_path")
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| file_path.to_string())
+        };
 
-                        // Get file path - prefer thumbnail unless full requested
-                        if let Some(file_path) =
-                            component.content.get("file_path").and_then(|p| p.as_str())
-                        {
-                            // Choose thumbnail or original
-                            let serve_path = if want_full {
-                                file_path.to_string()
-                            } else {
-                                component
-                                    .content
-                                    .get("thumb_file_path")
-                                    .and_then(|p| p.as_str())
-                                    .map(|s| s.to_string())
-                                    .unwrap_or_else(|| file_path.to_string())
-                            };
+        // Resolve to absolute path using site context
+        let resolved = resolve_image_path(&serve_path, &site_ctx.site_directory);
 
-                            // Resolve to absolute path using site context
-                            let resolved = resolve_image_path(
-                                &serve_path,
-                                &site_ctx.site_directory,
-                            );
-
-                            return serve_image_file(
-                                &resolved,
-                                &format,
-                                state.config.static_files_max_age,
-                            )
-                            .await;
-                        } else {
-                            tracing::warn!(
-                                "Image component found but missing file_path. Slug: {}, Component ID: {:?}",
-                                slug,
-                                component.id
-                            );
-                        }
-                    }
-                }
-            }
-        }
+        return serve_image_file(&resolved, &format, state.config.static_files_max_age).await;
     }
 
-    // Image not found
+    // Image not found in this page
     Err(StatusCode::NOT_FOUND)
+}
+
+/// Navigate to a page by its URL path
+async fn navigate_to_page_by_path(
+    page_repo: &PageRepository,
+    path: &str,
+) -> Result<doxyde_core::models::page::Page, String> {
+    let root = page_repo
+        .get_root_page()
+        .await
+        .map_err(|e| format!("Failed to get root page: {}", e))?
+        .ok_or_else(|| "Root page not found".to_string())?;
+
+    if path == "/" {
+        return Ok(root);
+    }
+
+    let segments: Vec<&str> = path
+        .trim_start_matches('/')
+        .trim_end_matches('/')
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let mut current = root;
+    for segment in segments {
+        let current_id = current
+            .id
+            .ok_or_else(|| "Page has no ID".to_string())?;
+        let children = page_repo
+            .list_children(current_id)
+            .await
+            .map_err(|e| format!("Failed to list children: {}", e))?;
+        current = children
+            .into_iter()
+            .find(|p| p.slug == segment)
+            .ok_or_else(|| format!("Child page not found: {}", segment))?;
+    }
+
+    Ok(current)
 }
 
 /// Serve an image file from disk

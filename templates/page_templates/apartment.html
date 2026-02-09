@@ -83,7 +83,7 @@
                 {% if component.component_type == "image" and img_index < 5 %}
                     {% set_global img_index = img_index + 1 %}
                     <div class="gallery-item gallery-item-{{ img_index }}" onclick="openGallery(galleryImages, {{ img_index - 1 }})">
-                        <img src="/{{ component.content.slug }}.{{ component.content.format }}"
+                        <img src="./{{ component.content.slug }}.{{ component.content.format }}"
                              alt="{{ component.content.alt_text | default(value=component.title) | default(value='') }}"
                              loading="{% if img_index == 1 %}eager{% else %}lazy{% endif %}">
                     </div>
@@ -107,7 +107,7 @@
     var galleryImages = [
         {% for component in components %}
             {% if component.component_type == "image" %}
-            { src: "/{{ component.content.slug }}.{{ component.content.format }}?full=1", alt: "{{ component.content.alt_text | default(value='') | escape }}" },
+            { src: "./{{ component.content.slug }}.{{ component.content.format }}?full=1", alt: "{{ component.content.alt_text | default(value='') | escape }}" },
             {% endif %}
         {% endfor %}
     ];
