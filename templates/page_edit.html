@@ -3,8 +3,6 @@
 {% block title %}Edit: {{ page.title }} - {{ super() }}{% endblock %}
 
 {% block head %}
-<link rel="stylesheet" href="/.static/css/sweetalert2.min.css">
-<script src="/.static/js/sweetalert2.min.js"></script>
 <style>
     /* Component editor - more compact */
     .component-editor {
@@ -588,33 +586,45 @@ function submitComponentsForm(action) {
 }
 
 
+function loadSweetAlert() {
+    if (window.Swal) return Promise.resolve();
+    return new Promise(function(resolve, reject) {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = '/.static/css/sweetalert2.min.css';
+        document.head.appendChild(link);
+        var script = document.createElement('script');
+        script.src = '/.static/js/sweetalert2.min.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+
 function deleteComponent(componentId) {
-    Swal.fire({
-        title: 'Are you sure?',
-        text: "This will permanently delete this component",
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonColor: '#d33',
-        cancelButtonColor: '#3085d6',
-        confirmButtonText: 'Yes, delete it',
-        cancelButtonText: 'Cancel'
-    }).then((result) => {
-        if (result.isConfirmed) {
-            // First save all current component data
-            const form = document.getElementById('components-form');
-            const actionInput = form.querySelector('input[name="action"]');
-            actionInput.value = 'delete_component';
-            
-            // Add the component ID to delete
-            const deleteInput = document.createElement('input');
-            deleteInput.type = 'hidden';
-            deleteInput.name = 'delete_component_id';
-            deleteInput.value = componentId;
-            form.appendChild(deleteInput);
-            
-            // Submit the form
-            form.submit();
-        }
+    loadSweetAlert().then(function() {
+        Swal.fire({
+            title: 'Are you sure?',
+            text: "This will permanently delete this component",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Yes, delete it',
+            cancelButtonText: 'Cancel'
+        }).then(function(result) {
+            if (result.isConfirmed) {
+                var form = document.getElementById('components-form');
+                var actionInput = form.querySelector('input[name="action"]');
+                actionInput.value = 'delete_component';
+                var deleteInput = document.createElement('input');
+                deleteInput.type = 'hidden';
+                deleteInput.name = 'delete_component_id';
+                deleteInput.value = componentId;
+                form.appendChild(deleteInput);
+                form.submit();
+            }
+        });
     });
 }
 

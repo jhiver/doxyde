@@ -41,6 +41,7 @@ use axum::{
 use axum_extra::extract::Host;
 use std::sync::Arc;
 use tower::ServiceBuilder;
+use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::trace::TraceLayer;
 
@@ -134,6 +135,7 @@ pub fn create_router(state: AppState) -> Router {
         ))
         .layer(
             ServiceBuilder::new()
+                .layer(CompressionLayer::new())
                 .layer(DefaultBodyLimit::max(max_upload_size))
                 .layer(TraceLayer::new_for_http()),
         )

@@ -1,7 +1,9 @@
 <div class="image-component image-hero">
     <img src="./{{ component.content.slug }}.{{ component.content.format }}"
          alt="{{ component.content.alt_text | default(value=component.content.title) | default(value='') }}"
-         loading="eager">
+         loading="eager"
+         fetchpriority="high"
+         decoding="async">
     {% if component.title %}
         <div class="hero-overlay">
             <h1 class="hero-title">{{ component.title }}</h1>

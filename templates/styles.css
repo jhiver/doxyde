@@ -3485,3 +3485,21 @@ footer a:hover {
         font-size: 2rem;
     }
 }
+
+/* Skip-to-content link (accessibility) */
+.skip-link {
+    position: absolute;
+    top: -100%;
+    left: 0;
+    padding: 0.75rem 1.5rem;
+    background: var(--primary-color);
+    color: #fff;
+    z-index: 10000;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0 0 var(--border-radius) 0;
+}
+
+.skip-link:focus {
+    top: 0;
+}

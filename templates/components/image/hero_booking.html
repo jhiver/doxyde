@@ -1,7 +1,9 @@
 <div class="image-component image-hero-booking">
     <img src="./{{ component.content.slug }}.{{ component.content.format }}"
          alt="{{ component.content.alt_text | default(value='') }}"
-         loading="eager">
+         loading="eager"
+         fetchpriority="high"
+         decoding="async">
 
     <div class="hero-booking-overlay">
         <div class="hero-booking-content">
@@ -42,7 +44,7 @@
 <link rel="stylesheet" href="/.static/vendor/flatpickr/airbnb.css">
 
 <!-- Flatpickr JS -->
-<script src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
+<script defer src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
 
 <script>
 function formatDateISO(d) {

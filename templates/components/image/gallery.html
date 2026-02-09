@@ -4,7 +4,8 @@
          alt="{{ component.content.alt_text | default(value=component.content.title) | default(value='') }}"
          {% if component.content.display_width %}width="{{ component.content.display_width }}"{% endif %}
          {% if component.content.display_height %}height="{{ component.content.display_height }}"{% endif %}
-         loading="lazy">
+         loading="lazy"
+         decoding="async">
     {% if component.title %}
         <p class="gallery-caption">{{ component.title }}</p>
     {% endif %}
