@@ -1,3 +1,11 @@
+---
+status: stable
+last_updated: 2026-06-18
+confidence: medium
+source: "normalisation wikimd aios"
+related: ["[[INDEX]]"]
+---
+
 # Doxyde
 
 ## Introduction
