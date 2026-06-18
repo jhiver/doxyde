@@ -42,6 +42,7 @@ cobertura.xml
 # Local configuration
 doxyde.toml
 .mcp.json
+deploy.sh
 
 # Site data (databases + uploads)
 sites/
@@ -51,4 +52,3 @@ sites/
 
 # Temporary workspaces
 migration-workspace/
-docs/
