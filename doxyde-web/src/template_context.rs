@@ -20,14 +20,14 @@ use doxyde_db::repositories::PageRepository;
 use tera::Context;
 
 use crate::{
-    csrf::CsrfToken, locale_middleware::RequestLocale, logo::get_logo_data, ui_labels,
-    AppState,
+    content_translate::TranslationPolicy, csrf::CsrfToken, locale_middleware::RequestLocale,
+    logo::get_logo_data, ui_labels, AppState,
 };
 use sqlx::SqlitePool;
 
 /// Build the canonical dot-action URL that serves `current_path` in `code`,
 /// e.g. ("/about", "fr") -> "/about/.fr" and ("/", "fr") -> "/.fr".
-fn lang_action_url(current_path: &str, code: &str) -> String {
+pub(crate) fn lang_action_url(current_path: &str, code: &str) -> String {
     let base = current_path.trim_end_matches('/');
     if base.is_empty() {
         format!("/.{code}")
@@ -47,6 +47,7 @@ pub async fn add_locale_context(
     site: &Site,
     locale: &RequestLocale,
     current_path: &str,
+    policy: TranslationPolicy,
 ) {
     context.insert("lang", &locale.lang);
     context.insert("dir", &locale.dir);
@@ -59,6 +60,7 @@ pub async fn add_locale_context(
         &locale.lang,
         &locale.source_lang,
         &site.domain,
+        policy,
     )
     .await;
     context.insert("labels", &labels);

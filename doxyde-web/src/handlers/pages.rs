@@ -422,10 +422,15 @@ pub async fn render_page(
         })?;
 
     // Add locale context (lang/dir, UI labels, switcher, hreflang alternates).
-    add_locale_context(&mut context, &state, &db, &site, &locale, &current_path).await;
-    if let Some(canonical) = &lang_canonical {
-        context.insert("lang_canonical", canonical);
-    }
+    add_locale_context(&mut context, &state, &db, &site, &locale, &current_path, policy).await;
+
+    // Per-language canonical. The `/.fr` `/.en` handlers pass an explicit one;
+    // for the cookie-served bare URL we default to the served language's
+    // dot-action URL, so the same content isn't indexed at both `/about/` and
+    // `/about/.<lang>` (the dot URL is the deterministic indexable canonical).
+    let canonical = lang_canonical
+        .unwrap_or_else(|| crate::template_context::lang_action_url(&current_path, &locale.lang));
+    context.insert("lang_canonical", &canonical);
 
     context.insert("page", &page);
     context.insert("components", &components);

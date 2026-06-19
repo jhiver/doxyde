@@ -3595,3 +3595,33 @@ footer a:hover {
     text-transform: uppercase;
 }
 .lang-switcher-item.is-current .lang-switcher-abbr { opacity: 0.85; }
+
+/* Language switcher — mobile drawer variant (pill row on the light drawer) */
+.mobile-nav-langs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0 1.5rem;
+}
+.mobile-nav-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--gray-200);
+    border-radius: 999px;
+    background: #fff;
+    color: var(--gray-700);
+    font-size: 0.9375rem;
+    text-decoration: none;
+}
+.mobile-nav-lang:active { background: var(--gray-100); }
+.mobile-nav-lang.is-current {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: #fff;
+    font-weight: 600;
+}
+.mobile-nav-lang-check { font-size: 0.85em; }
+.mobile-nav-lang-abbr { font-size: 0.75rem; opacity: 0.6; text-transform: uppercase; }
+.mobile-nav-lang.is-current .mobile-nav-lang-abbr { opacity: 0.85; }
