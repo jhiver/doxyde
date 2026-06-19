@@ -3008,7 +3008,7 @@ footer a:hover {
 .booking-hero-gallery img:first-child { grid-row: span 2; }
 .booking-hero-gallery img:nth-child(n+6) { display: none; }
 
-.booking-book-title { font-family: var(--font-body); font-size: 1.6rem; font-weight: 700; margin: 0 0 0.25rem; }
+.booking-book-title { font-family: var(--font-body); font-size: 1.6rem; font-weight: 700; margin: 0 0 0.25rem; text-transform: none; letter-spacing: 0; }
 .booking-book-meta { color: var(--gray-600,#4b5563); margin: 0 0 1.5rem; }
 
 .booking-book-layout { display: grid; grid-template-columns: 1fr 320px; gap: 2.5rem; align-items: start; }

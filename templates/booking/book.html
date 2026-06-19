@@ -46,9 +46,7 @@
             <div class="booking-book-layout">
                 <div class="booking-book-main">
                     <p class="booking-book-meta">
-                        {% if quote %}{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}{% endif %}
-                        · {{ q_adults }} {{ labels["booking.adults"] | default(value="Adults") }}{% if q_children and q_children > 0 %} · {{ q_children }} {{ labels["booking.children"] | default(value="Children") }}{% endif %}
-                        {% if quote and quote.person_capacity %} · {{ labels["booking.guests"] | default(value="Guests") }} {{ quote.person_capacity }}{% endif %}
+                        {% if quote %}{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }} · {% endif %}{{ q_adults }} {{ labels["booking.adults"] | default(value="Adults") }}{% if q_children and q_children > 0 %} · {{ q_children }} {{ labels["booking.children"] | default(value="Children") }}{% endif %}
                     </p>
 
                     <form class="booking-contact-form" action="/.book" method="POST">
