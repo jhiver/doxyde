@@ -16,7 +16,8 @@
 
 use anyhow::{Context, Result};
 use doxyde_core::models::site_template::SiteTemplate;
-use sqlx::SqlitePool;
+use sqlx::sqlite::SqliteRow;
+use sqlx::{Row, SqlitePool};
 
 pub struct SiteTemplateRepository {
     pool: SqlitePool,
@@ -47,7 +48,7 @@ impl SiteTemplateRepository {
     }
 
     pub async fn find_by_id(&self, id: i64) -> Result<Option<SiteTemplate>> {
-        let row = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+        let row = sqlx::query(
             r#"
             SELECT id, template_name, content, is_active, created_at, updated_at
             FROM site_templates
@@ -59,11 +60,11 @@ impl SiteTemplateRepository {
         .await
         .context("Failed to find site template by ID")?;
 
-        row.map(|r| row_to_template(r)).transpose()
+        row.map(|r| row_to_template(&r)).transpose()
     }
 
     pub async fn find_by_name(&self, name: &str) -> Result<Option<SiteTemplate>> {
-        let row = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+        let row = sqlx::query(
             r#"
             SELECT id, template_name, content, is_active, created_at, updated_at
             FROM site_templates
@@ -75,11 +76,11 @@ impl SiteTemplateRepository {
         .await
         .context("Failed to find site template by name")?;
 
-        row.map(|r| row_to_template(r)).transpose()
+        row.map(|r| row_to_template(&r)).transpose()
     }
 
     pub async fn find_active_by_name(&self, name: &str) -> Result<Option<SiteTemplate>> {
-        let row = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+        let row = sqlx::query(
             r#"
             SELECT id, template_name, content, is_active, created_at, updated_at
             FROM site_templates
@@ -91,11 +92,11 @@ impl SiteTemplateRepository {
         .await
         .context("Failed to find active site template by name")?;
 
-        row.map(|r| row_to_template(r)).transpose()
+        row.map(|r| row_to_template(&r)).transpose()
     }
 
     pub async fn list_all_active(&self) -> Result<Vec<SiteTemplate>> {
-        let rows = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+        let rows = sqlx::query(
             r#"
             SELECT id, template_name, content, is_active, created_at, updated_at
             FROM site_templates
@@ -107,11 +108,11 @@ impl SiteTemplateRepository {
         .await
         .context("Failed to list active site templates")?;
 
-        rows.into_iter().map(|r| row_to_template(r)).collect()
+        rows.iter().map(row_to_template).collect()
     }
 
     pub async fn list_all(&self) -> Result<Vec<SiteTemplate>> {
-        let rows = sqlx::query_as::<_, (i64, String, String, bool, String, String)>(
+        let rows = sqlx::query(
             r#"
             SELECT id, template_name, content, is_active, created_at, updated_at
             FROM site_templates
@@ -122,7 +123,7 @@ impl SiteTemplateRepository {
         .await
         .context("Failed to list site templates")?;
 
-        rows.into_iter().map(|r| row_to_template(r)).collect()
+        rows.iter().map(row_to_template).collect()
     }
 
     pub async fn update(&self, template: &SiteTemplate) -> Result<()> {
@@ -180,13 +181,28 @@ fn parse_datetime(s: &str) -> Result<chrono::DateTime<chrono::Utc>> {
     }
 }
 
-fn row_to_template(row: (i64, String, String, bool, String, String)) -> Result<SiteTemplate> {
-    let (id, template_name, content, is_active, created_at_str, updated_at_str) = row;
+/// Read a column as text, tolerating values stored with BLOB affinity (decoded
+/// as UTF-8 lossily). Historically some `site_templates.content` rows were
+/// written as BLOB, which a strict `String` decode would reject and 500 the
+/// whole page render. This keeps rendering resilient regardless of affinity.
+fn text_or_bytes(row: &SqliteRow, col: &str) -> Result<String> {
+    if let Ok(s) = row.try_get::<String, _>(col) {
+        return Ok(s);
+    }
+    let bytes: Vec<u8> = row
+        .try_get(col)
+        .with_context(|| format!("Failed to read column '{col}' as text or bytes"))?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+fn row_to_template(row: &SqliteRow) -> Result<SiteTemplate> {
+    let created_at_str: String = row.try_get("created_at").context("missing created_at")?;
+    let updated_at_str: String = row.try_get("updated_at").context("missing updated_at")?;
     Ok(SiteTemplate {
-        id: Some(id),
-        template_name,
-        content,
-        is_active,
+        id: Some(row.try_get("id").context("missing id")?),
+        template_name: text_or_bytes(row, "template_name")?,
+        content: text_or_bytes(row, "content")?,
+        is_active: row.try_get("is_active").context("missing is_active")?,
         created_at: parse_datetime(&created_at_str)?,
         updated_at: parse_datetime(&updated_at_str)?,
     })
@@ -371,6 +387,36 @@ mod tests {
         let t2 = SiteTemplate::new("base.html".to_string(), "second".to_string());
         let result = repo.create(&t2).await;
         assert!(result.is_err());
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_reads_blob_content_as_text() -> Result<()> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        setup_test_db(&pool).await?;
+
+        // Insert a row whose `content` is stored with BLOB affinity, as some
+        // legacy rows were. A strict String decode would 500 here.
+        sqlx::query(
+            r#"
+            INSERT INTO site_templates (template_name, content, is_active, created_at, updated_at)
+            VALUES (?, CAST(? AS BLOB), 1, datetime('now'), datetime('now'))
+            "#,
+        )
+        .bind("blobby.html")
+        .bind("<h1>Blob</h1>")
+        .execute(&pool)
+        .await?;
+
+        let repo = SiteTemplateRepository::new(pool);
+
+        let found = repo.find_by_name("blobby.html").await?.expect("row exists");
+        assert_eq!(found.content, "<h1>Blob</h1>");
+
+        // Listing must not error on the blob row.
+        let active = repo.list_all_active().await?;
+        assert!(active.iter().any(|t| t.template_name == "blobby.html"));
 
         Ok(())
     }

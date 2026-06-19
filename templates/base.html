@@ -11,10 +11,10 @@
     {% if page.keywords %}<meta name="keywords" content="{{ page.keywords }}">{% endif %}
     <meta name="robots" content="{{ page.meta_robots | default(value='index,follow') }}">
     {% if page.canonical_url %}<link rel="canonical" href="{{ page.canonical_url }}">
-    {% elif lang_canonical is defined %}<link rel="canonical" href="{{ lang_canonical }}">{% endif %}
+    {% elif lang_canonical is defined %}<link rel="canonical" href="{{ lang_canonical | safe }}">{% endif %}
 
     <!-- hreflang alternates (per-language canonical URLs + x-default) -->
-    {% if hreflang_alternates is defined %}{% for alt in hreflang_alternates %}<link rel="alternate" hreflang="{{ alt.hreflang }}" href="{{ alt.href }}">
+    {% if hreflang_alternates is defined %}{% for alt in hreflang_alternates %}<link rel="alternate" hreflang="{{ alt.hreflang }}" href="{{ alt.href | safe }}">
     {% endfor %}{% endif %}
 
     <!-- Open Graph / Facebook -->
