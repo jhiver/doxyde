@@ -146,6 +146,15 @@ pub struct ReservationResponse {
     pub payment_status: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CalendarResponse {
+    pub listing_id: i64,
+    pub min_date: String,
+    pub max_date: String,
+    #[serde(default)]
+    pub blocked: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Contact {
     pub first_name: String,
@@ -216,6 +225,17 @@ impl SejoursClient {
             .send()
             .await
             .context("sejours-api /v1/availability request failed")?;
+        Self::json(resp).await
+    }
+
+    pub async fn calendar(&self, listing_id: i64) -> Result<CalendarResponse> {
+        let resp = self
+            .client
+            .get(self.url(&format!("/v1/calendar/{listing_id}")))
+            .header(SECRET_HEADER, &self.secret)
+            .send()
+            .await
+            .context("sejours-api /v1/calendar request failed")?;
         Self::json(resp).await
     }
 

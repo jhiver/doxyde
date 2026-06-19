@@ -287,6 +287,13 @@ pub async fn book_quote_handler(
         }
     }
 
+    // Availability calendar for the date picker (blocked dates, like Airbnb).
+    if let Ok(cal) = client.calendar(q.listing).await {
+        context.insert("blocked_dates", &cal.blocked);
+        context.insert("cal_min", &cal.min_date);
+        context.insert("cal_max", &cal.max_date);
+    }
+
     context.insert("listing_id", &q.listing);
     context.insert("q_from", &q.from);
     context.insert("q_to", &q.to);

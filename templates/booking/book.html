@@ -2,7 +2,9 @@
 
 {% block title %}{% if quote and quote.name %}{{ quote.name }} · {% endif %}{{ labels["booking.book"] | default(value="Book") }} · {{ site_title }}{% endblock %}
 
-{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+{% block head %}<meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/.static/vendor/flatpickr/flatpickr.min.css">
+<link rel="stylesheet" href="/.static/vendor/flatpickr/airbnb.css">{% endblock %}
 
 {% block content %}
 <div class="booking-page booking-book">
@@ -23,83 +25,133 @@
         <p class="booking-notice">{{ labels["booking.not_configured"] | default(value="Booking is not configured for this site yet.") }}</p>
 
     {% else %}
-        {% if booking_error %}
-        <p class="booking-notice booking-notice-error">{{ labels["booking.booking_error"] | default(value="We could not complete your booking. Please try again or contact us.") }}</p>
+        {% if booking_error %}<p class="booking-notice booking-notice-error">{{ labels["booking.booking_error"] | default(value="We could not complete your booking. Please try again or contact us.") }}</p>{% endif %}
+        {% if service_error %}<p class="booking-notice booking-notice-error">{{ labels["booking.service_error"] | default(value="The booking service is temporarily unavailable. Please try again shortly.") }}</p>{% endif %}
+
+        {% if quote and quote.name %}<h1 class="booking-book-title">{{ quote.name }}</h1>{% endif %}
+
+        {# Photo gallery (compact, Airbnb-style) #}
+        {% if quote and quote.images and quote.images | length > 0 %}
+        <div class="booking-hero-gallery">
+            {% for img in quote.images %}<img src="{{ img }}" alt="{{ quote.name | default(value='') }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}">{% endfor %}
+        </div>
         {% endif %}
-        {% if service_error %}
-        <p class="booking-notice booking-notice-error">{{ labels["booking.service_error"] | default(value="The booking service is temporarily unavailable. Please try again shortly.") }}</p>
-        {% endif %}
 
-        {% if quote and not quote.available %}
-            <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }}</p>
-            <a class="booking-book-btn" href="/.stay?from={{ q_from }}&to={{ q_to }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">{{ labels["booking.search_again"] | default(value="Search again") }}</a>
-        {% else %}
-            {# Photo gallery (Airbnb-style) #}
-            {% if quote and quote.images and quote.images | length > 0 %}
-            <div class="booking-hero-gallery">
-                {% for img in quote.images %}<img src="{{ img }}" alt="{{ quote.name | default(value='') }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}">{% endfor %}
-            </div>
-            {% endif %}
+        <div class="booking-book-layout">
+            <div class="booking-book-main">
+                {% if quote and not quote.available %}
+                    <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }} {{ labels["booking.invalid_dates"] | default(value="Pick other dates on the right.") }}</p>
+                {% else %}
+                <form class="booking-contact-form" action="/.book" method="POST">
+                    <input type="hidden" name="listing_id" value="{{ listing_id }}">
+                    <input type="hidden" name="from" value="{{ q_from }}">
+                    <input type="hidden" name="to" value="{{ q_to }}">
+                    <input type="hidden" name="adults" value="{{ q_adults }}">
+                    <input type="hidden" name="children" value="{{ q_children }}">
+                    <input type="hidden" name="infants" value="{{ q_infants }}">
 
-            {% if quote and quote.name %}<h1 class="booking-book-title">{{ quote.name }}</h1>{% endif %}
-
-            <div class="booking-book-layout">
-                <div class="booking-book-main">
-                    <p class="booking-book-meta">
-                        {% if quote %}{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }} · {% endif %}{{ q_adults }} {{ labels["booking.adults"] | default(value="Adults") }}{% if q_children and q_children > 0 %} · {{ q_children }} {{ labels["booking.children"] | default(value="Children") }}{% endif %}
-                    </p>
-
-                    <form class="booking-contact-form" action="/.book" method="POST">
-                        <input type="hidden" name="listing_id" value="{{ listing_id }}">
-                        <input type="hidden" name="from" value="{{ q_from }}">
-                        <input type="hidden" name="to" value="{{ q_to }}">
-                        <input type="hidden" name="adults" value="{{ q_adults }}">
-                        <input type="hidden" name="children" value="{{ q_children }}">
-                        <input type="hidden" name="infants" value="{{ q_infants }}">
-
-                        <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
-                        <div class="booking-form-row">
-                            <div class="booking-field">
-                                <label for="first_name">{{ labels["booking.first_name"] | default(value="First name") }}</label>
-                                <input type="text" id="first_name" name="first_name" required>
-                            </div>
-                            <div class="booking-field">
-                                <label for="last_name">{{ labels["booking.last_name"] | default(value="Last name") }}</label>
-                                <input type="text" id="last_name" name="last_name" required>
-                            </div>
-                        </div>
-                        <div class="booking-form-row">
-                            <div class="booking-field">
-                                <label for="email">{{ labels["booking.email"] | default(value="Email") }}</label>
-                                <input type="email" id="email" name="email" required>
-                            </div>
-                            <div class="booking-field">
-                                <label for="phone">{{ labels["booking.phone"] | default(value="Phone") }}</label>
-                                <input type="tel" id="phone" name="phone">
-                            </div>
+                    <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
+                    <div class="booking-form-row">
+                        <div class="booking-field">
+                            <label for="first_name">{{ labels["booking.first_name"] | default(value="First name") }}</label>
+                            <input type="text" id="first_name" name="first_name" required>
                         </div>
                         <div class="booking-field">
-                            <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
-                            <textarea id="note" name="note" rows="3"></textarea>
+                            <label for="last_name">{{ labels["booking.last_name"] | default(value="Last name") }}</label>
+                            <input type="text" id="last_name" name="last_name" required>
                         </div>
-                        <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
-                    </form>
-                </div>
-
-                {# Sticky price summary #}
-                {% if quote %}
-                <aside class="booking-book-aside">
-                    <div class="booking-price-card">
-                        {% if quote.total_price %}
-                        <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
-                        <div class="booking-price-card-label">{{ labels["booking.total_price"] | default(value="Total price") }}</div>
-                        {% endif %}
-                        <div class="booking-price-card-row"><span>{{ q_from }} → {{ q_to }}</span><span>{{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}</span></div>
                     </div>
-                </aside>
+                    <div class="booking-form-row">
+                        <div class="booking-field">
+                            <label for="email">{{ labels["booking.email"] | default(value="Email") }}</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div class="booking-field">
+                            <label for="phone">{{ labels["booking.phone"] | default(value="Phone") }}</label>
+                            <input type="tel" id="phone" name="phone">
+                        </div>
+                    </div>
+                    <div class="booking-field">
+                        <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
+                        <textarea id="note" name="note" rows="3"></textarea>
+                    </div>
+                    <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
+                </form>
                 {% endif %}
             </div>
-        {% endif %}
+
+            <aside class="booking-book-aside">
+                <div class="booking-price-card">
+                    {% if quote and quote.total_price %}
+                    <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
+                    <div class="booking-price-card-label">{{ labels["booking.total_price"] | default(value="Total price") }}{% if quote.nights %} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}{% endif %}</div>
+                    {% endif %}
+
+                    <div class="booking-datepick">
+                        <div class="booking-datepick-dates">
+                            <div class="booking-field">
+                                <label for="bk-checkin">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
+                                <input type="text" id="bk-checkin" value="{{ q_from }}" readonly placeholder="{{ labels['booking.select_date'] | default(value='Select date') }}">
+                            </div>
+                            <div class="booking-field">
+                                <label for="bk-checkout">{{ labels["booking.checkout"] | default(value="Check-out") }}</label>
+                                <input type="text" id="bk-checkout" value="{{ q_to }}" readonly placeholder="{{ labels['booking.select_date'] | default(value='Select date') }}">
+                            </div>
+                        </div>
+                        <div class="booking-datepick-guests">
+                            <div class="booking-field">
+                                <label for="bk-adults">{{ labels["booking.adults"] | default(value="Adults") }}</label>
+                                <select id="bk-adults">{% for n in [1,2,3,4,5,6] %}<option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                            </div>
+                            <div class="booking-field">
+                                <label for="bk-children">{{ labels["booking.children"] | default(value="Children") }}</label>
+                                <select id="bk-children">{% for n in [0,1,2,3,4] %}<option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
     {% endif %}
 </div>
+
+<script defer src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
+<script>
+(function () {
+    var listingId = "{{ listing_id }}";
+    var blocked = {{ blocked_dates | default(value=[]) | json_encode | safe }};
+    var calMin = "{{ cal_min | default(value='') }}", calMax = "{{ cal_max | default(value='') }}";
+    function requote() {
+        var ci = document.getElementById('bk-checkin').value;
+        var co = document.getElementById('bk-checkout').value;
+        var a = document.getElementById('bk-adults').value;
+        var c = document.getElementById('bk-children').value;
+        if (!ci || !co || co <= ci) return;
+        window.location.href = '/.book?listing=' + encodeURIComponent(listingId) +
+            '&from=' + ci + '&to=' + co + '&adults=' + a + '&children=' + c + '&infants={{ q_infants }}';
+    }
+    function init() {
+        if (typeof flatpickr === 'undefined') { setTimeout(init, 100); return; }
+        var ciEl = document.getElementById('bk-checkin'), coEl = document.getElementById('bk-checkout');
+        if (!ciEl) return;
+        var common = { dateFormat: 'Y-m-d', disable: blocked, disableMobile: true };
+        if (calMin) common.minDate = calMin; if (calMax) common.maxDate = calMax;
+        var coPicker = flatpickr(coEl, common);
+        var ciPicker = flatpickr(ciEl, Object.assign({}, common, {
+            onChange: function (dates, str) {
+                if (dates[0]) {
+                    var min = new Date(dates[0]); min.setDate(min.getDate() + 1);
+                    coPicker.set('minDate', min);
+                    if (!coEl.value || coEl.value <= str) { /* wait for checkout pick */ }
+                    else requote();
+                }
+            }
+        }));
+        coEl.addEventListener('change', requote);
+        document.getElementById('bk-adults').addEventListener('change', requote);
+        document.getElementById('bk-children').addEventListener('change', requote);
+    }
+    document.addEventListener('DOMContentLoaded', init);
+})();
+</script>
 {% endblock %}
