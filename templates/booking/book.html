@@ -75,6 +75,7 @@
                         <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
                         <textarea id="note" name="note" rows="3"></textarea>
                     </div>
+                    <p class="booking-reassure">&#10003; {{ labels["booking.pay_later"] | default(value="Reserve now — no card needed. We'll email you payment instructions after you book.") }}</p>
                     <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
                 </form>
                 {% endif %}
@@ -86,6 +87,7 @@
                     <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
                     <div class="booking-price-card-label">{{ labels["booking.total_price"] | default(value="Total price") }}{% if quote.nights %} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}{% endif %}</div>
                     {% endif %}
+                    <p class="booking-reassure booking-reassure-sm">&#10003; {{ labels["booking.no_card_required"] | default(value="No credit card required") }}</p>
 
                     <div class="booking-datepick">
                         <div class="booking-datepick-dates">

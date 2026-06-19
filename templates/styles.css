@@ -3076,6 +3076,7 @@ footer a:hover {
     box-shadow: 0 8px 24px rgba(0,0,0,0.10);
     transform: translateY(-2px);
 }
+.booking-card-clickable { cursor: pointer; }
 /* Image carousel inside a result card */
 .booking-gallery {
     position: relative;
@@ -3173,6 +3174,26 @@ footer a:hover {
     margin: 1rem 0;
 }
 .booking-notice-error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+
+/* "No credit card required" reassurance (payment is collected later by email) */
+.booking-reassure {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #15803d;
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin: 0.25rem 0 0.75rem;
+}
+.booking-reassure-sm { font-size: 0.82rem; margin: 0.85rem 0 0; }
+.booking-reassure-banner {
+    justify-content: center;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 0.6rem 1rem;
+    margin: -1rem 0 2rem;
+}
 
 /* Quote + contact form (/.book) */
 .booking-quote {

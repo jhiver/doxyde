@@ -33,6 +33,7 @@
         </div>
         <button type="submit" class="booking-submit">{{ labels["booking.search"] | default(value="Search") }}</button>
     </form>
+    <p class="booking-reassure booking-reassure-banner">&#10003; {{ labels["booking.no_card_required"] | default(value="No credit card required") }}</p>
 
     {% if not_configured %}
         <p class="booking-notice">{{ labels["booking.not_configured"] | default(value="Booking is not configured for this site yet.") }}</p>
@@ -63,6 +64,11 @@
 function bkGallery(btn, dir) {
     var track = btn.parentElement.querySelector('.booking-gallery-track');
     if (track) track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+}
+function bkCard(e, url) {
+    // Let inner links/buttons (Book button, gallery arrows) handle their own clicks.
+    if (e.target.closest('a, button')) return;
+    window.location.href = url;
 }
 (function () {
     var from = document.getElementById('from'), to = document.getElementById('to');
