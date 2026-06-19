@@ -3018,7 +3018,7 @@ footer a:hover {
 
 .booking-book-btn {
     display: inline-block;
-    background: var(--primary-color);
+    background: linear-gradient(135deg, #ff8c42 0%, var(--tropical-sunset, #ff6b35) 100%);
     color: #fff;
     text-decoration: none;
     text-align: center;
@@ -3026,9 +3026,9 @@ footer a:hover {
     border-radius: 8px;
     font-weight: 600;
     font-size: 0.95rem;
-    transition: background 0.2s, transform 0.1s;
+    transition: filter 0.2s, transform 0.1s;
 }
-.booking-book-btn:hover { background: var(--primary-hover); color: #fff; transform: translateY(-1px); }
+.booking-book-btn:hover { filter: brightness(0.95); color: #fff; transform: translateY(-1px); }
 
 .booking-notice {
     background: var(--gray-50, #f9fafb);
