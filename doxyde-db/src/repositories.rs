@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+pub mod booking_repository;
 pub mod component_repository;
 pub mod page_repository;
 pub mod page_version_repository;
@@ -24,6 +25,7 @@ pub mod site_template_repository;
 pub mod site_user_repository;
 pub mod user_repository;
 
+pub use booking_repository::*;
 pub use component_repository::*;
 pub use page_repository::*;
 pub use page_version_repository::*;

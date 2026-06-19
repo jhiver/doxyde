@@ -24,6 +24,41 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     // Guest-count option: singular noun ("1 Guest"); plural reuses booking.guests.
     ("booking.guest_one", "Guest"),
     ("booking.show_all_photos", "Show all photos"),
+    // Search results + booking flow (lot 2)
+    ("booking.results_title", "Available stays"),
+    ("booking.no_results", "No availability for these dates. Try different dates."),
+    ("booking.sister_house", "Also available at our sister house"),
+    ("booking.multi_stay_note", "Combination of stays — each leg is booked separately."),
+    ("booking.estimated", "estimated"),
+    ("booking.nights", "nights"),
+    ("booking.from_label", "From"),
+    ("booking.to_label", "To"),
+    ("booking.book_now", "Book now"),
+    ("booking.your_details", "Your details"),
+    ("booking.first_name", "First name"),
+    ("booking.last_name", "Last name"),
+    ("booking.email", "Email"),
+    ("booking.phone", "Phone"),
+    ("booking.special_requests", "Special requests"),
+    ("booking.confirm_booking", "Confirm booking"),
+    ("booking.total_price", "Total price"),
+    ("booking.unavailable", "These dates are no longer available."),
+    ("booking.search_again", "Search again"),
+    ("booking.not_configured", "Booking is not configured for this site yet."),
+    (
+        "booking.service_error",
+        "The booking service is temporarily unavailable. Please try again shortly.",
+    ),
+    ("booking.confirmed_title", "Booking confirmed"),
+    (
+        "booking.confirmed_intro",
+        "Thank you — your reservation is confirmed. You will receive an email with payment instructions shortly.",
+    ),
+    ("booking.confirmation_code", "Confirmation code"),
+    (
+        "booking.booking_error",
+        "We could not complete your booking. Please try again or contact us.",
+    ),
 ];
 
 /// Canonical English source for a key, if known.

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block title %}{{ labels["booking.results_title"] | default(value="Available stays") }} · {{ site_title }}{% endblock %}
+
+{% block head %}<meta name="robots" content="noindex,follow">{% endblock %}
+
+{% block content %}
+<div class="booking-page booking-stay">
+    <form class="booking-search-bar" action="/.stay" method="GET">
+        <div class="booking-field">
+            <label for="from">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
+            <input type="date" id="from" name="from" value="{{ q_from | default(value='') }}" required>
+        </div>
+        <div class="booking-field">
+            <label for="to">{{ labels["booking.checkout"] | default(value="Check-out") }}</label>
+            <input type="date" id="to" name="to" value="{{ q_to | default(value='') }}" required>
+        </div>
+        <div class="booking-field">
+            <label for="adults">{{ labels["booking.adults"] | default(value="Adults") }}</label>
+            <select id="adults" name="adults">
+                {% for n in [1,2,3,4,5,6] %}
+                <option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="booking-field">
+            <label for="children">{{ labels["booking.children"] | default(value="Children") }}</label>
+            <select id="children" name="children">
+                {% for n in [0,1,2,3,4] %}
+                <option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="booking-submit">{{ labels["booking.search"] | default(value="Search") }}</button>
+    </form>
+
+    {% if not_configured %}
+        <p class="booking-notice">{{ labels["booking.not_configured"] | default(value="Booking is not configured for this site yet.") }}</p>
+    {% elif service_error %}
+        <p class="booking-notice booking-notice-error">{{ labels["booking.service_error"] | default(value="The booking service is temporarily unavailable. Please try again shortly.") }}</p>
+    {% elif searched %}
+        {% if primary_results and primary_results | length > 0 %}
+            <h2 class="booking-section-title">{{ labels["booking.results_title"] | default(value="Available stays") }}</h2>
+            <div class="booking-results">
+                {% for r in primary_results %}{% include "booking/_result_card.html" %}{% endfor %}
+            </div>
+        {% else %}
+            <p class="booking-notice">{{ labels["booking.no_results"] | default(value="No availability for these dates. Try different dates.") }}</p>
+        {% endif %}
+
+        {% if secondary_results and secondary_results | length > 0 %}
+            <h2 class="booking-section-title booking-section-secondary">{{ labels["booking.sister_house"] | default(value="Also available at our sister house") }}</h2>
+            <div class="booking-results">
+                {% for r in secondary_results %}{% include "booking/_result_card.html" %}{% endfor %}
+            </div>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

@@ -127,8 +127,7 @@
 
         <aside class="apartment-sidebar">
             <div class="booking-widget">
-                <form class="booking-form" action="/reserver" method="GET">
-                    <input type="hidden" name="apartment" value="{{ page.slug }}">
+                <form class="booking-form" action="/.stay" method="GET" onsubmit="return apartmentSearch(this)">
 
                     <div class="booking-dates">
                         <div class="booking-field booking-field-checkin">
@@ -187,6 +186,22 @@ document.addEventListener('DOMContentLoaded', function() {
         defaultDate: tomorrow
     });
 });
+
+function apartmentSearch(form) {
+    function iso(d) {
+        var y = d.getFullYear();
+        var m = String(d.getMonth() + 1).padStart(2, '0');
+        var day = String(d.getDate()).padStart(2, '0');
+        return y + '-' + m + '-' + day;
+    }
+    var ci = document.getElementById('checkin')._flatpickr.selectedDates[0];
+    var co = document.getElementById('checkout')._flatpickr.selectedDates[0];
+    var guests = document.getElementById('guests').value;
+    if (!ci || !co) return false;
+    window.location.href = '/.stay?from=' + encodeURIComponent(iso(ci)) +
+        '&to=' + encodeURIComponent(iso(co)) + '&adults=' + encodeURIComponent(guests);
+    return false;
+}
 </script>
 
 {# Gallery Modal #}

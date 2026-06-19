@@ -70,9 +70,10 @@ function submitBooking(form) {
     var co = document.getElementById('checkout')._flatpickr.selectedDates[0];
     var guests = document.getElementById('guests').value;
     if (!ci || !co) return false;
-    // Override this template per-site with the correct booking URL
-    console.warn('hero_booking: no site-specific booking URL configured');
-    alert('Booking not configured for this site.');
+    var qs = 'from=' + encodeURIComponent(formatDateISO(ci)) +
+             '&to=' + encodeURIComponent(formatDateISO(co)) +
+             '&adults=' + encodeURIComponent(guests);
+    window.location.href = '/.stay?' + qs;
     return false;
 }
 

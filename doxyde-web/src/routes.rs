@@ -105,6 +105,18 @@ pub fn create_router(state: AppState) -> Router {
             "/.oauth/token",
             post(rmcp::token).options(rmcp::oauth_options),
         )
+        // Booking (séjours) routes
+        .route("/.stay", get(handlers::booking::stay_handler))
+        .route(
+            "/.book",
+            get(handlers::booking::book_quote_handler)
+                .post(handlers::booking::book_create_handler),
+        )
+        .route(
+            "/.booking-config",
+            get(handlers::booking::booking_config_get)
+                .post(handlers::booking::booking_config_post),
+        )
         // Per-site CSS and assets
         .route("/.site-css", get(handlers::site_assets::site_css_handler))
         .route(

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+
+{% block title %}{{ labels["booking.book"] | default(value="Book") }} · {{ site_title }}{% endblock %}
+
+{% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
+
+{% block content %}
+<div class="booking-page booking-book">
+    {% if confirmed %}
+        <div class="booking-confirmation">
+            <h1>{{ labels["booking.confirmed_title"] | default(value="Booking confirmed") }}</h1>
+            <p>{{ labels["booking.confirmed_intro"] | default(value="Thank you — your reservation is confirmed. You will receive an email with payment instructions shortly.") }}</p>
+            <ul class="booking-summary">
+                <li><strong>{{ labels["booking.from_label"] | default(value="From") }}:</strong> {{ reservation.check_in }}</li>
+                <li><strong>{{ labels["booking.to_label"] | default(value="To") }}:</strong> {{ reservation.check_out }}</li>
+                <li><strong>{{ labels["booking.nights"] | default(value="nights") }}:</strong> {{ reservation.nights }}</li>
+                {% if reservation.total_price %}<li><strong>{{ labels["booking.total_price"] | default(value="Total price") }}:</strong> {{ reservation.total_price }} {{ reservation.currency_code | default(value='') }}</li>{% endif %}
+                {% if reservation.confirmation_code %}<li><strong>{{ labels["booking.confirmation_code"] | default(value="Confirmation code") }}:</strong> {{ reservation.confirmation_code }}</li>{% endif %}
+            </ul>
+        </div>
+
+    {% elif not_configured %}
+        <p class="booking-notice">{{ labels["booking.not_configured"] | default(value="Booking is not configured for this site yet.") }}</p>
+
+    {% else %}
+        {% if booking_error %}
+        <p class="booking-notice booking-notice-error">{{ labels["booking.booking_error"] | default(value="We could not complete your booking. Please try again or contact us.") }}</p>
+        {% endif %}
+        {% if service_error %}
+        <p class="booking-notice booking-notice-error">{{ labels["booking.service_error"] | default(value="The booking service is temporarily unavailable. Please try again shortly.") }}</p>
+        {% endif %}
+
+        {% if quote and not quote.available %}
+            <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }}</p>
+            <a class="booking-book-btn" href="/.stay?from={{ q_from }}&to={{ q_to }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">{{ labels["booking.search_again"] | default(value="Search again") }}</a>
+        {% else %}
+            {% if quote %}
+            <div class="booking-quote">
+                <div class="booking-quote-dates">{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}</div>
+                {% if quote.total_price %}
+                <div class="booking-quote-price">
+                    <span class="booking-quote-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</span>
+                    <span class="booking-quote-label">{{ labels["booking.total_price"] | default(value="Total price") }}</span>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <form class="booking-contact-form" action="/.book" method="POST">
+                <input type="hidden" name="listing_id" value="{{ listing_id }}">
+                <input type="hidden" name="from" value="{{ q_from }}">
+                <input type="hidden" name="to" value="{{ q_to }}">
+                <input type="hidden" name="adults" value="{{ q_adults }}">
+                <input type="hidden" name="children" value="{{ q_children }}">
+                <input type="hidden" name="infants" value="{{ q_infants }}">
+
+                <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
+                <div class="booking-form-row">
+                    <div class="booking-field">
+                        <label for="first_name">{{ labels["booking.first_name"] | default(value="First name") }}</label>
+                        <input type="text" id="first_name" name="first_name" required>
+                    </div>
+                    <div class="booking-field">
+                        <label for="last_name">{{ labels["booking.last_name"] | default(value="Last name") }}</label>
+                        <input type="text" id="last_name" name="last_name" required>
+                    </div>
+                </div>
+                <div class="booking-form-row">
+                    <div class="booking-field">
+                        <label for="email">{{ labels["booking.email"] | default(value="Email") }}</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    <div class="booking-field">
+                        <label for="phone">{{ labels["booking.phone"] | default(value="Phone") }}</label>
+                        <input type="tel" id="phone" name="phone">
+                    </div>
+                </div>
+                <div class="booking-field">
+                    <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
+                    <textarea id="note" name="note" rows="3"></textarea>
+                </div>
+                <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
+            </form>
+        {% endif %}
+    {% endif %}
+</div>
+{% endblock %}

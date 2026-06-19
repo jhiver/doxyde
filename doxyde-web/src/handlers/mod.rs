@@ -16,6 +16,7 @@
 
 pub mod action;
 pub mod auth;
+pub mod booking;
 pub mod delete_page;
 pub mod edit;
 pub mod image_serve;

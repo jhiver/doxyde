@@ -1,0 +1,37 @@
+{# Renders one availability result `r`. Expects q_adults/q_children/q_infants in context. #}
+<div class="booking-card{% if r.is_multi_stay %} booking-card-multi{% endif %}">
+    <div class="booking-card-head">
+        <h3 class="booking-card-name">{{ r.name }}</h3>
+        <div class="booking-card-meta">
+            {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }}
+            {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
+        </div>
+    </div>
+
+    {% if r.total_price %}
+    <div class="booking-card-price">
+        <span class="booking-card-amount">{{ r.total_price }} {{ r.currency_code | default(value='') }}</span>
+        {% if r.price_is_estimate %}<span class="booking-card-estimate">{{ labels["booking.estimated"] | default(value="estimated") }}</span>{% endif %}
+    </div>
+    {% endif %}
+
+    {% if r.is_multi_stay %}
+    <p class="booking-card-note">{{ labels["booking.multi_stay_note"] | default(value="Combination of stays — each leg is booked separately.") }}</p>
+    {% endif %}
+
+    <div class="booking-card-legs">
+        {% for leg in r.legs %}
+        <div class="booking-leg">
+            {% if r.is_multi_stay %}
+            <div class="booking-leg-info">
+                <span class="booking-leg-name">{{ leg.name }}</span>
+                <span class="booking-leg-dates">{{ leg.check_in }} → {{ leg.check_out }} · {{ leg.nights }} {{ labels["booking.nights"] | default(value="nights") }}</span>
+            </div>
+            {% endif %}
+            <a class="booking-book-btn" href="/.book?listing={{ leg.listing_id }}&from={{ leg.check_in }}&to={{ leg.check_out }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">
+                {{ labels["booking.book_now"] | default(value="Book now") }}{% if r.is_multi_stay %} · {{ leg.name }}{% endif %}
+            </a>
+        </div>
+        {% endfor %}
+    </div>
+</div>
