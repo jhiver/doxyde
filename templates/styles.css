@@ -2935,6 +2935,152 @@ footer a:hover {
     box-shadow: 0 6px 20px rgba(255,107,53,0.4);
 }
 
+/* ===== Booking results / quote / confirmation pages (lot 2) ===== */
+.booking-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 2rem 1.25rem 4rem;
+}
+
+/* Search bar on the /.stay and /.book pages */
+.booking-search-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+    background: var(--gray-50, #f9fafb);
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2rem;
+}
+.booking-search-bar .booking-submit { flex: 0 0 auto; }
+
+/* Readable titles regardless of the per-site heading font */
+.booking-page .booking-section-title {
+    font-family: var(--font-body);
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--gray-800, #1f2937);
+    margin: 2rem 0 1rem;
+}
+.booking-section-secondary {
+    border-top: 1px solid var(--gray-200, #e5e7eb);
+    padding-top: 1.5rem;
+    color: var(--gray-700, #374151);
+}
+
+.booking-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+}
+
+.booking-card {
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    transition: box-shadow 0.2s, transform 0.2s;
+}
+.booking-card:hover {
+    box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+    transform: translateY(-2px);
+}
+.booking-card .booking-card-name {
+    font-family: var(--font-body);
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0;
+    text-transform: none;
+    letter-spacing: 0;
+}
+.booking-card-name a { color: var(--gray-900, #111827); text-decoration: none; }
+.booking-card-name a:hover { color: var(--primary-color); text-decoration: underline; }
+.booking-card-meta { font-size: 0.9rem; color: var(--gray-600, #4b5563); }
+.booking-card-price { display: flex; align-items: baseline; gap: 0.5rem; }
+.booking-card-amount { font-size: 1.25rem; font-weight: 700; color: var(--gray-900, #111827); }
+.booking-card-estimate {
+    font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--gray-500, #6b7280); background: var(--gray-100, #f3f4f6);
+    padding: 0.1rem 0.45rem; border-radius: 999px;
+}
+.booking-card-note { font-size: 0.85rem; color: var(--gray-600, #4b5563); font-style: italic; }
+.booking-card-legs { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; }
+.booking-leg { display: flex; flex-direction: column; gap: 0.35rem; }
+.booking-leg-info { display: flex; flex-direction: column; font-size: 0.85rem; color: var(--gray-600,#4b5563); }
+.booking-leg-name { font-weight: 600; color: var(--gray-800,#1f2937); }
+
+.booking-book-btn {
+    display: inline-block;
+    background: var(--primary-color);
+    color: #fff;
+    text-decoration: none;
+    text-align: center;
+    padding: 0.6rem 1.1rem;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    transition: background 0.2s, transform 0.1s;
+}
+.booking-book-btn:hover { background: var(--primary-hover); color: #fff; transform: translateY(-1px); }
+
+.booking-notice {
+    background: var(--gray-50, #f9fafb);
+    border: 1px solid var(--gray-200, #e5e7eb);
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    color: var(--gray-700, #374151);
+    margin: 1rem 0;
+}
+.booking-notice-error { border-color: #fca5a5; background: #fef2f2; color: #991b1b; }
+
+/* Quote + contact form (/.book) */
+.booking-quote {
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+    border: 1px solid var(--gray-200, #e5e7eb); border-radius: 12px;
+    padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; background: #fff;
+}
+.booking-quote-dates { font-size: 1rem; color: var(--gray-700,#374151); }
+.booking-quote-price { text-align: right; }
+.booking-quote-amount { display: block; font-size: 1.5rem; font-weight: 700; color: var(--gray-900,#111827); }
+.booking-quote-label { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--gray-500,#6b7280); }
+
+.booking-contact-form { display: flex; flex-direction: column; gap: 1rem; max-width: 640px; }
+.booking-contact-form h2 { font-family: var(--font-body); font-size: 1.2rem; font-weight: 700; margin: 0.5rem 0 0; }
+.booking-form-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+.booking-form-row .booking-field { flex: 1; min-width: 180px; }
+.booking-contact-form textarea {
+    padding: 0.875rem 1rem; border: 2px solid var(--gray-200,#e5e7eb); border-radius: 8px;
+    font-family: var(--font-body); font-size: 1rem; width: 100%; resize: vertical;
+}
+.booking-contact-form .booking-submit { align-self: flex-start; }
+
+/* Confirmation */
+.booking-confirmation h1 { font-family: var(--font-body); }
+.booking-summary { list-style: none; padding: 0; margin: 1rem 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.booking-summary li { color: var(--gray-700,#374151); }
+
+/* Admin config (/.booking-config) */
+.booking-config fieldset { border: 1px solid var(--gray-200,#e5e7eb); border-radius: 10px; padding: 1.25rem 1.5rem; margin-bottom: 1.5rem; }
+.booking-config legend { font-weight: 700; padding: 0 0.5rem; }
+.booking-config .booking-field { margin-bottom: 1rem; }
+.booking-config-hint { font-size: 0.85rem; color: var(--gray-600,#4b5563); margin: 0 0 1rem; }
+.booking-config-table { width: 100%; border-collapse: collapse; }
+.booking-config-table th, .booking-config-table td { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--gray-200,#e5e7eb); font-size: 0.9rem; }
+.booking-config-id { color: var(--gray-400,#9ca3af); font-size: 0.8rem; }
+
+@media (max-width: 640px) {
+    .booking-search-bar { flex-direction: column; align-items: stretch; }
+    .booking-search-bar .booking-submit { width: 100%; }
+    .booking-results { grid-template-columns: 1fr; }
+}
+
 /* Flatpickr customization */
 .flatpickr-calendar {
     font-family: var(--font-body);
