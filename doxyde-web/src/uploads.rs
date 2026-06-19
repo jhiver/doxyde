@@ -460,9 +460,7 @@ pub fn resolve_image_path(file_path: &str, site_directory: &Path) -> PathBuf {
     }
 
     // Handle ./ prefix paths
-    if file_path.starts_with("./") {
-        let stripped = &file_path[2..];
-
+    if let Some(stripped) = file_path.strip_prefix("./") {
         // Legacy format: ./sites/domain-hash/uploads/...
         if stripped.starts_with("sites/") {
             return PathBuf::from(file_path);

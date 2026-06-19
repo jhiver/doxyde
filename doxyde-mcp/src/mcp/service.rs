@@ -1716,16 +1716,16 @@ impl DoxydeRmcpService {
         if draft_is_stale {
             tracing::info!(
                 page_id = page_id,
-                draft_version = existing_draft.as_ref().and_then(|d| Some(d.version_number)),
-                published_version = published.as_ref().and_then(|p| Some(p.version_number)),
+                draft_version = existing_draft.as_ref().map(|d| d.version_number),
+                published_version = published.as_ref().map(|p| p.version_number),
                 "Deleting stale draft, will create fresh one from published version"
             );
             version_repo.delete_draft(page_id).await?;
         }
 
         // Now get or create the draft
-        let (draft, is_new) = if !draft_is_stale && existing_draft.is_some() {
-            (existing_draft.unwrap(), false)
+        let (draft, is_new) = if let Some(existing) = existing_draft.filter(|_| !draft_is_stale) {
+            (existing, false)
         } else if let Some(ref published) = published {
             // Copy components from published version
             let published_id = published

@@ -186,12 +186,13 @@ pub async fn render_page(
                 // Sort pages based on order_by
                 match order_by {
                     "created_at_desc" => {
-                        child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at))
+                        child_pages.sort_by_key(|a| std::cmp::Reverse(a.created_at))
                     }
-                    "created_at_asc" => child_pages.sort_by(|a, b| a.created_at.cmp(&b.created_at)),
+                    "created_at_asc" => child_pages.sort_by_key(|a| a.created_at),
                     "title_asc" => child_pages.sort_by(|a, b| a.title.cmp(&b.title)),
                     "title_desc" => child_pages.sort_by(|a, b| b.title.cmp(&a.title)),
-                    _ => child_pages.sort_by(|a, b| b.created_at.cmp(&a.created_at)), // Default to newest first
+                    // Default to newest first
+                    _ => child_pages.sort_by_key(|a| std::cmp::Reverse(a.created_at)),
                 }
 
                 // Get item count

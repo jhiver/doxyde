@@ -99,7 +99,7 @@ impl HtmlTagger {
 
         // Sort expressions by length (longest first)
         let mut sorted_expressions = self.expressions.clone();
-        sorted_expressions.sort_by(|a, b| b.expression.len().cmp(&a.expression.len()));
+        sorted_expressions.sort_by_key(|e| std::cmp::Reverse(e.expression.len()));
 
         // Apply each expression to the text
         for expr in &sorted_expressions {

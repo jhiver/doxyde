@@ -22,7 +22,7 @@ use axum::{
     response::Response,
 };
 use axum_extra::extract::Host;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{config::Config, domain_utils};
 
@@ -41,7 +41,7 @@ pub struct SiteContext {
 
 impl SiteContext {
     /// Create a site context
-    pub fn new(domain: String, base_path: &PathBuf) -> Self {
+    pub fn new(domain: String, base_path: &Path) -> Self {
         let site_dir = domain_utils::resolve_site_directory(base_path, &domain);
         let sanitized = site_dir
             .file_name()
@@ -349,7 +349,7 @@ mod tests {
         let base_path = PathBuf::from("/sites");
 
         // All subdomains should normalize to base domain
-        let domains = vec![
+        let domains = [
             "www.example.com",
             "api.example.com",
             "blog.example.com",

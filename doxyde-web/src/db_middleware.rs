@@ -131,7 +131,7 @@ mod tests {
             csrf_header_name: "X-CSRF-Token".to_string(),
             static_files_max_age: 86400,
             oauth_token_expiry: 3600,
-            sites_directory: sites_directory.unwrap_or_else(|| "".to_string()),
+            sites_directory: sites_directory.unwrap_or_default(),
             multi_site_mode: has_sites_dir,
             i18n_service_addr: "127.0.0.1:4003".to_string(),
             translation_workers: 4,

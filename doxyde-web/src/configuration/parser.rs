@@ -28,7 +28,7 @@ use std::{
 
 /// Raw TOML configuration structure that mirrors the main Configuration
 /// but with all fields optional to support partial configuration files
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlConfig {
     pub server: Option<TomlServerConfig>,
     pub session: Option<TomlSessionConfig>,
@@ -43,33 +43,33 @@ pub struct TomlConfig {
     pub multi_site_mode: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlServerConfig {
     pub host: Option<String>,
     pub port: Option<u16>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlSessionConfig {
     pub session_timeout_minutes: Option<i64>,
     pub secure_cookies: Option<bool>,
     pub session_secret: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlUploadConfig {
     pub max_upload_size: Option<usize>,
     pub uploads_dir: Option<String>,
     pub upload_allowed_types: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlRateLimitConfig {
     pub rate_limit_login_attempts: Option<u32>,
     pub rate_limit_api_requests: Option<u32>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlSecurityConfig {
     #[serde(flatten)]
     pub csrf: Option<TomlCsrfConfig>,
@@ -77,7 +77,7 @@ pub struct TomlSecurityConfig {
     pub headers: Option<TomlHeadersConfig>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlCsrfConfig {
     pub csrf_enabled: Option<bool>,
     pub csrf_token_expiry_hours: Option<u64>,
@@ -85,7 +85,7 @@ pub struct TomlCsrfConfig {
     pub csrf_header_name: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlHeadersConfig {
     pub security_headers_hsts: Option<bool>,
     pub security_headers_csp: Option<bool>,
@@ -98,38 +98,20 @@ pub struct TomlHeadersConfig {
     pub security_permissions_policy: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlPathConfig {
     pub sites_dir: Option<String>,
     pub templates_dir: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlCacheConfig {
     pub cache_static_files_max_age: Option<u64>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct TomlMcpConfig {
     pub mcp_oauth_token_expiry: Option<u64>,
-}
-
-impl Default for TomlConfig {
-    fn default() -> Self {
-        Self {
-            server: None,
-            session: None,
-            upload: None,
-            rate_limit: None,
-            security: None,
-            path: None,
-            cache: None,
-            mcp: None,
-            database_url: None,
-            development_mode: None,
-            multi_site_mode: None,
-        }
-    }
 }
 
 /// Parse a TOML configuration file if it exists
@@ -335,105 +317,6 @@ pub fn merge_toml_configs(configs: Vec<TomlConfig>) -> TomlConfig {
     merged
 }
 
-impl Default for TomlServerConfig {
-    fn default() -> Self {
-        Self {
-            host: None,
-            port: None,
-        }
-    }
-}
-
-impl Default for TomlSessionConfig {
-    fn default() -> Self {
-        Self {
-            session_timeout_minutes: None,
-            secure_cookies: None,
-            session_secret: None,
-        }
-    }
-}
-
-impl Default for TomlUploadConfig {
-    fn default() -> Self {
-        Self {
-            max_upload_size: None,
-            uploads_dir: None,
-            upload_allowed_types: None,
-        }
-    }
-}
-
-impl Default for TomlRateLimitConfig {
-    fn default() -> Self {
-        Self {
-            rate_limit_login_attempts: None,
-            rate_limit_api_requests: None,
-        }
-    }
-}
-
-impl Default for TomlSecurityConfig {
-    fn default() -> Self {
-        Self {
-            csrf: None,
-            headers: None,
-        }
-    }
-}
-
-impl Default for TomlCsrfConfig {
-    fn default() -> Self {
-        Self {
-            csrf_enabled: None,
-            csrf_token_expiry_hours: None,
-            csrf_token_length: None,
-            csrf_header_name: None,
-        }
-    }
-}
-
-impl Default for TomlHeadersConfig {
-    fn default() -> Self {
-        Self {
-            security_headers_hsts: None,
-            security_headers_csp: None,
-            security_headers_csp_content: None,
-            security_headers_frame_options: None,
-            security_headers_content_type_options: None,
-            security_hsts_content: None,
-            security_frame_options_content: None,
-            security_referrer_policy: None,
-            security_permissions_policy: None,
-        }
-    }
-}
-
-impl Default for TomlPathConfig {
-    fn default() -> Self {
-        Self {
-            sites_dir: None,
-            templates_dir: None,
-        }
-    }
-}
-
-impl Default for TomlCacheConfig {
-    fn default() -> Self {
-        Self {
-            cache_static_files_max_age: None,
-        }
-    }
-}
-
-impl Default for TomlMcpConfig {
-    fn default() -> Self {
-        Self {
-            mcp_oauth_token_expiry: None,
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -443,7 +326,7 @@ mod tests {
     #[test]
     fn test_parse_empty_toml_file() -> Result<()> {
         let mut file = NamedTempFile::new()?;
-        writeln!(file, "")?;
+        writeln!(file)?;
 
         let config = parse_toml_file(file.path())?;
         assert!(config.database_url.is_none());

@@ -59,7 +59,7 @@ impl SiteAssetRepository {
         .await
         .context("Failed to find site asset by ID")?;
 
-        row.map(|r| row_to_asset(r)).transpose()
+        row.map(row_to_asset).transpose()
     }
 
     pub async fn find_by_path(&self, path: &str) -> Result<Option<SiteAsset>> {
@@ -75,7 +75,7 @@ impl SiteAssetRepository {
         .await
         .context("Failed to find site asset by path")?;
 
-        row.map(|r| row_to_asset(r)).transpose()
+        row.map(row_to_asset).transpose()
     }
 
     pub async fn list_all(&self) -> Result<Vec<SiteAssetMeta>> {
@@ -91,7 +91,7 @@ impl SiteAssetRepository {
         .await
         .context("Failed to list site assets")?;
 
-        rows.into_iter().map(|r| row_to_asset_meta(r)).collect()
+        rows.into_iter().map(row_to_asset_meta).collect()
     }
 
     pub async fn update(&self, asset: &SiteAsset) -> Result<()> {

@@ -80,7 +80,7 @@ pub async fn try_translate(
             if stale == 1 {
                 enqueue(in_flight, tx, pool, site_key, content, lang, context, &hash).await;
             }
-            return content.to_string();
+            content.to_string()
         }
         Ok(None) => {
             // Cache miss — enqueue a background job (best-effort).

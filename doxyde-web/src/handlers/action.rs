@@ -62,30 +62,43 @@ pub async fn handle_action(
     let site = resolve_site(&db, &host).await?;
     let page = resolve_page(&db, &site, &content_path).await?;
 
-    route_to_handler(
+    let ctx = ActionContext {
         state,
         db,
         site,
         page,
         user,
         site_directory,
-        body,
-        content_path,
-    )
-    .await
+    };
+    route_to_handler(ctx, body, content_path).await
 }
 
-/// Route to the appropriate handler based on action
-async fn route_to_handler(
+/// Request context threaded through the action-dispatch chain. Bundles the
+/// fields every action handler needs so dispatchers stay within the argument
+/// limit; leaf handlers still receive the individual fields.
+struct ActionContext {
     state: AppState,
     db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: CurrentUser,
     site_directory: PathBuf,
+}
+
+/// Route to the appropriate handler based on action
+async fn route_to_handler(
+    ctx: ActionContext,
     body: String,
     content_path: ContentPath,
 ) -> Result<Response, StatusCode> {
+    let ActionContext {
+        state,
+        db,
+        site,
+        page,
+        user,
+        site_directory,
+    } = ctx;
     match content_path.action.as_deref() {
         Some(".edit") | Some(".content") => {
             handle_edit_action(state, db, site, page, user, site_directory, body).await
@@ -114,17 +127,12 @@ async fn handle_edit_action(
 
     match action.as_deref() {
         Some("save_draft") | Some("publish_draft") => {
-            handle_save_or_publish(
-                state,
-                db,
-                site,
-                page,
-                user,
-                site_directory,
-                form_data,
-                &action,
-            )
-            .await
+            let save_form = parse_save_draft_form(&form_data)?;
+            if action.as_deref() == Some("save_draft") {
+                save_draft(state, db, site, page, user, save_form).await
+            } else {
+                save_and_publish(state, db, site, page, user, site_directory, save_form).await
+            }
         }
         Some("discard_draft") => handle_discard_draft(state, db, site, page, user).await,
         Some("add_component") => handle_add_component(state, db, site, page, user, form_data).await,
@@ -135,28 +143,6 @@ async fn handle_edit_action(
             handle_move_component(state, db, site, page, user, form_data).await
         }
         _ => Err(StatusCode::BAD_REQUEST),
-    }
-}
-
-/// Handle save_draft or publish_draft actions
-async fn handle_save_or_publish(
-    state: AppState,
-    db: sqlx::SqlitePool,
-    site: Site,
-    page: Page,
-    user: CurrentUser,
-    site_directory: PathBuf,
-    form_data: Vec<(String, String)>,
-    action: &Option<String>,
-) -> Result<Response, StatusCode> {
-    tracing::info!("Processing save_draft/publish_draft action");
-
-    let save_form = parse_save_draft_form(&form_data)?;
-
-    if action.as_deref() == Some("save_draft") {
-        save_draft(state, db, site, page, user, save_form).await
-    } else {
-        save_and_publish(state, db, site, page, user, site_directory, save_form).await
     }
 }
 

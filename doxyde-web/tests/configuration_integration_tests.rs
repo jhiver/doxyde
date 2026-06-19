@@ -557,8 +557,8 @@ fn test_configuration_project_root_detection() -> Result<()> {
     let config = Configuration::load()?;
 
     // Verify that paths are reasonable (contain expected directory structure)
-    assert!(config.path.sites.len() > 0);
-    assert!(config.path.templates.len() > 0);
+    assert!(!config.path.sites.is_empty());
+    assert!(!config.path.templates.is_empty());
 
     // In a real project, these should be relative to the project root
     // We can't test exact paths since they depend on the environment,

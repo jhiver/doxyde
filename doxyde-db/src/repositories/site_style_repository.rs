@@ -60,7 +60,7 @@ impl SiteStyleRepository {
         .await
         .context("Failed to find site style by ID")?;
 
-        row.map(|r| row_to_style(r)).transpose()
+        row.map(row_to_style).transpose()
     }
 
     pub async fn find_by_name(&self, name: &str) -> Result<Option<SiteStyle>> {
@@ -76,7 +76,7 @@ impl SiteStyleRepository {
         .await
         .context("Failed to find site style by name")?;
 
-        row.map(|r| row_to_style(r)).transpose()
+        row.map(row_to_style).transpose()
     }
 
     pub async fn list_all(&self) -> Result<Vec<SiteStyle>> {
@@ -91,7 +91,7 @@ impl SiteStyleRepository {
         .await
         .context("Failed to list site styles")?;
 
-        rows.into_iter().map(|r| row_to_style(r)).collect()
+        rows.into_iter().map(row_to_style).collect()
     }
 
     pub async fn list_active_ordered(&self) -> Result<Vec<SiteStyle>> {
@@ -107,7 +107,7 @@ impl SiteStyleRepository {
         .await
         .context("Failed to list active site styles")?;
 
-        rows.into_iter().map(|r| row_to_style(r)).collect()
+        rows.into_iter().map(row_to_style).collect()
     }
 
     pub async fn update(&self, style: &SiteStyle) -> Result<()> {

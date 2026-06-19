@@ -246,7 +246,7 @@ pub fn replace_expression_in_text(
     }
 
     // Sort matches by position (descending) to replace from end to start
-    matches.sort_by(|a, b| b.0.cmp(&a.0));
+    matches.sort_by_key(|m| std::cmp::Reverse(m.0));
 
     // Create placeholder regex once outside the loop
     let placeholder_regex = match Regex::new(r"(\&\(\d+\))") {

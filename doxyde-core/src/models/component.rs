@@ -93,10 +93,8 @@ impl Component {
         }
 
         match self.component_type.as_str() {
-            "text" => {
-                if !self.content.is_object() || self.content.get("text").is_none() {
-                    return Err("Text component must have a 'text' field".to_string());
-                }
+            "text" if (!self.content.is_object() || self.content.get("text").is_none()) => {
+                return Err("Text component must have a 'text' field".to_string());
             }
             "image" => {
                 if !self.content.is_object() {

@@ -5,14 +5,13 @@ use axum::{
     middleware::Next,
 };
 
+/// Boxed future returned by the security-headers middleware closure.
+type HeadersFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send>>;
+
 pub fn create_security_headers_middleware(
     config: HeadersConfig,
-) -> impl Fn(
-    Request<Body>,
-    Next,
-) -> std::pin::Pin<
-    Box<dyn std::future::Future<Output = Result<Response<Body>, StatusCode>> + Send>,
-> + Clone {
+) -> impl Fn(Request<Body>, Next) -> HeadersFuture + Clone {
     move |request: Request<Body>, next: Next| {
         let config = config.clone();
         Box::pin(async move {

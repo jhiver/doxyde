@@ -161,7 +161,7 @@ impl Configuration {
                 toml_config
                     .database_url
                     .clone()
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_database_url());
 
@@ -170,7 +170,7 @@ impl Configuration {
                 toml_config
                     .development_mode
                     .map(|b| b.to_string())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_development_mode().to_string())
             .parse()
@@ -181,7 +181,7 @@ impl Configuration {
                 toml_config
                     .multi_site_mode
                     .map(|b| b.to_string())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_multi_site_mode().to_string())
             .parse()
@@ -334,7 +334,7 @@ impl ServerConfig {
                     .server
                     .as_ref()
                     .and_then(|s| s.host.clone())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_host());
 
@@ -344,7 +344,7 @@ impl ServerConfig {
                     .server
                     .as_ref()
                     .and_then(|s| s.port.map(|p| p.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_port().to_string())
             .parse()
@@ -362,7 +362,7 @@ impl SessionConfig {
                     .session
                     .as_ref()
                     .and_then(|s| s.session_timeout_minutes.map(|t| t.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_session_timeout_minutes().to_string())
             .parse()
@@ -374,7 +374,7 @@ impl SessionConfig {
                     .session
                     .as_ref()
                     .and_then(|s| s.secure_cookies.map(|c| c.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_secure_cookies().to_string())
             .parse()
@@ -388,7 +388,7 @@ impl SessionConfig {
                     .as_ref()
                     .and_then(|s| s.session_secret.clone())
             })
-            .or_else(|| defaults::default_session_secret());
+            .or_else(defaults::default_session_secret);
 
         Ok(Self {
             timeout_minutes,
@@ -406,7 +406,7 @@ impl UploadConfig {
                     .upload
                     .as_ref()
                     .and_then(|u| u.max_upload_size.map(|s| s.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_max_upload_size().to_string())
             .parse()
@@ -418,7 +418,7 @@ impl UploadConfig {
                     .upload
                     .as_ref()
                     .and_then(|u| u.uploads_dir.clone())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_uploads_directory());
 
@@ -431,7 +431,7 @@ impl UploadConfig {
                     .as_ref()
                     .and_then(|u| u.upload_allowed_types.clone())
             })
-            .or_else(|| defaults::default_upload_allowed_types());
+            .or_else(defaults::default_upload_allowed_types);
 
         Ok(Self {
             max_size,
@@ -449,7 +449,7 @@ impl RateLimitConfig {
                     .rate_limit
                     .as_ref()
                     .and_then(|r| r.rate_limit_login_attempts.map(|a| a.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_login_attempts_per_minute().to_string())
             .parse()
@@ -461,7 +461,7 @@ impl RateLimitConfig {
                     .rate_limit
                     .as_ref()
                     .and_then(|r| r.rate_limit_api_requests.map(|a| a.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_api_requests_per_minute().to_string())
             .parse()
@@ -492,7 +492,7 @@ impl CsrfConfig {
                     .as_ref()
                     .and_then(|s| s.csrf.as_ref())
                     .and_then(|c| c.csrf_enabled.map(|e| e.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_csrf_enabled().to_string())
             .parse()
@@ -505,7 +505,7 @@ impl CsrfConfig {
                     .as_ref()
                     .and_then(|s| s.csrf.as_ref())
                     .and_then(|c| c.csrf_token_expiry_hours.map(|h| h.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_csrf_token_expiry_hours().to_string())
             .parse()
@@ -518,7 +518,7 @@ impl CsrfConfig {
                     .as_ref()
                     .and_then(|s| s.csrf.as_ref())
                     .and_then(|c| c.csrf_token_length.map(|l| l.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_csrf_token_length().to_string())
             .parse()
@@ -531,7 +531,7 @@ impl CsrfConfig {
                     .as_ref()
                     .and_then(|s| s.csrf.as_ref())
                     .and_then(|c| c.csrf_header_name.clone())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_csrf_header_name());
 
@@ -555,7 +555,7 @@ impl HeadersConfig {
             .or_else(|_| {
                 headers_ref
                     .and_then(|h| h.security_headers_hsts.map(|b| b.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_enable_hsts().to_string())
             .parse()
@@ -565,7 +565,7 @@ impl HeadersConfig {
             .or_else(|_| {
                 headers_ref
                     .and_then(|h| h.security_headers_csp.map(|b| b.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_enable_csp().to_string())
             .parse()
@@ -575,7 +575,7 @@ impl HeadersConfig {
             .or_else(|_| {
                 headers_ref
                     .and_then(|h| h.security_headers_frame_options.map(|b| b.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_enable_frame_options().to_string())
             .parse()
@@ -588,7 +588,7 @@ impl HeadersConfig {
                         h.security_headers_content_type_options
                             .map(|b| b.to_string())
                     })
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_enable_content_type_options().to_string())
             .parse()
@@ -597,27 +597,27 @@ impl HeadersConfig {
         let csp_content = env::var("SECURITY_HEADERS_CSP_CONTENT")
             .ok()
             .or_else(|| headers_ref.and_then(|h| h.security_headers_csp_content.clone()))
-            .or_else(|| defaults::default_csp_content());
+            .or_else(defaults::default_csp_content);
 
         let hsts_content = env::var("SECURITY_HSTS_CONTENT")
             .ok()
             .or_else(|| headers_ref.and_then(|h| h.security_hsts_content.clone()))
-            .or_else(|| defaults::default_hsts_content());
+            .or_else(defaults::default_hsts_content);
 
         let frame_options_content = env::var("SECURITY_FRAME_OPTIONS_CONTENT")
             .ok()
             .or_else(|| headers_ref.and_then(|h| h.security_frame_options_content.clone()))
-            .or_else(|| defaults::default_frame_options_content());
+            .or_else(defaults::default_frame_options_content);
 
         let referrer_policy = env::var("SECURITY_REFERRER_POLICY")
             .ok()
             .or_else(|| headers_ref.and_then(|h| h.security_referrer_policy.clone()))
-            .or_else(|| defaults::default_referrer_policy());
+            .or_else(defaults::default_referrer_policy);
 
         let permissions_policy = env::var("SECURITY_PERMISSIONS_POLICY")
             .ok()
             .or_else(|| headers_ref.and_then(|h| h.security_permissions_policy.clone()))
-            .or_else(|| defaults::default_permissions_policy());
+            .or_else(defaults::default_permissions_policy);
 
         Ok(Self {
             enable_hsts,
@@ -641,7 +641,7 @@ impl PathConfig {
                     .path
                     .as_ref()
                     .and_then(|p| p.sites_dir.clone())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_sites_directory(project_root));
 
@@ -651,7 +651,7 @@ impl PathConfig {
                     .path
                     .as_ref()
                     .and_then(|p| p.templates_dir.clone())
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_templates_directory(project_root));
 
@@ -667,7 +667,7 @@ impl CacheConfig {
                     .cache
                     .as_ref()
                     .and_then(|c| c.cache_static_files_max_age.map(|a| a.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_static_files_max_age().to_string())
             .parse()
@@ -687,7 +687,7 @@ impl McpConfig {
                     .mcp
                     .as_ref()
                     .and_then(|m| m.mcp_oauth_token_expiry.map(|e| e.to_string()))
-                    .ok_or_else(|| env::VarError::NotPresent)
+                    .ok_or(env::VarError::NotPresent)
             })
             .unwrap_or_else(|_| defaults::default_mcp_oauth_token_expiry().to_string())
             .parse()

@@ -280,7 +280,7 @@ async fn translate_unique(
             out
         }
     };
-    uniques.into_iter().zip(translations.into_iter()).collect()
+    uniques.into_iter().zip(translations).collect()
 }
 
 /// Translate the navigation/breadcrumb title strings already inserted into the
@@ -317,7 +317,7 @@ pub async fn translate_context_titles(
         note(s, &mut uniques, &mut seen);
     }
     for key in ARRAY_KEYS {
-        if let Some(arr) = context.get(*key).and_then(|v| v.as_array()) {
+        if let Some(arr) = context.get(key).and_then(|v| v.as_array()) {
             for item in arr {
                 if let Some(t) = item.get("title").and_then(|v| v.as_str()) {
                     note(t, &mut uniques, &mut seen);
@@ -356,7 +356,7 @@ pub async fn translate_context_titles(
         context.insert("root_page_title", &t);
     }
     for key in ARRAY_KEYS {
-        if let Some(arr) = context.get(*key).and_then(|v| v.as_array()).cloned() {
+        if let Some(arr) = context.get(key).and_then(|v| v.as_array()).cloned() {
             let rewritten: Vec<serde_json::Value> = arr
                 .into_iter()
                 .map(|mut item| {
