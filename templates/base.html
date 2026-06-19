@@ -119,6 +119,28 @@
                     </nav>
                 {% endif %}
 
+                {% if available_locales is defined and available_locales | length > 1 %}
+                    <details class="lang-switcher">
+                        <summary class="lang-switcher-trigger" title="{{ labels['lang.switch'] | default(value='Language') }}" aria-label="{{ labels['lang.switch'] | default(value='Language') }}">
+                            <svg class="lang-switcher-globe" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/>
+                            </svg>
+                            <span class="lang-switcher-code">{{ lang | default(value='en') | upper }}</span>
+                            <svg class="lang-switcher-caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+                        </summary>
+                        <div class="lang-switcher-menu" role="menu">
+                            {% for loc in available_locales %}
+                                <a class="lang-switcher-item{% if loc.is_current %} is-current{% endif %}" href="{{ loc.switch_url | safe }}" hreflang="{{ loc.code }}" lang="{{ loc.code }}" dir="{{ loc.dir }}" role="menuitem"{% if loc.is_current %} aria-current="true"{% endif %}>
+                                    <span class="lang-switcher-check" aria-hidden="true">{% if loc.is_current %}&#10003;{% endif %}</span>
+                                    <span class="lang-switcher-name">{{ loc.label }}</span>
+                                    <span class="lang-switcher-abbr">{{ loc.code | upper }}</span>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    </details>
+                {% endif %}
+
                 {% if user %}
                     <div class="auth-controls">
                         <a href="/.logout" class="btn btn-sm btn-secondary">Logout</a>
@@ -148,6 +170,20 @@
 
     <!-- Mobile navigation functionality -->
     <script defer src="/.static/js/mobile-nav.js"></script>
+
+    <!-- Language switcher: close on outside-click / Escape (progressive enhancement) -->
+    <script>
+    (function () {
+        var sw = document.querySelector('.lang-switcher');
+        if (!sw) return;
+        document.addEventListener('click', function (e) {
+            if (sw.open && !sw.contains(e.target)) sw.removeAttribute('open');
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && sw.open) sw.removeAttribute('open');
+        });
+    })();
+    </script>
 
     {% include "site_scripts.html" %}
 </body>
