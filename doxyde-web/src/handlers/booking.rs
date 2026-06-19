@@ -84,6 +84,38 @@ async fn booking_context(
     Ok(context)
 }
 
+/// Attach the CMS page URL (if mapped) to each availability result and its legs
+/// so the search cards can deep-link to the rich apartment page.
+fn enrich_with_pages(
+    results: &[crate::services::sejours_client::AvailabilityResult],
+    page_map: &HashMap<i64, String>,
+) -> Vec<serde_json::Value> {
+    results
+        .iter()
+        .map(|r| {
+            let mut value = serde_json::to_value(r).unwrap_or(serde_json::Value::Null);
+            if let Some(legs) = value.get_mut("legs").and_then(|l| l.as_array_mut()) {
+                for leg in legs.iter_mut() {
+                    if let Some(id) = leg.get("listing_id").and_then(|v| v.as_i64()) {
+                        if let Some(path) = page_map.get(&id) {
+                            leg["page_url"] = serde_json::json!(path);
+                        }
+                    }
+                }
+            }
+            // Single-stay convenience: surface the (only) leg's page at result level.
+            if !r.is_multi_stay {
+                if let Some(first) = r.legs.first() {
+                    if let Some(path) = page_map.get(&first.listing_id) {
+                        value["page_url"] = serde_json::json!(path);
+                    }
+                }
+            }
+            value
+        })
+        .collect()
+}
+
 fn render(state: &AppState, template: &str, context: &Context) -> Result<Html<String>, StatusCode> {
     state
         .templates
@@ -149,8 +181,21 @@ pub async fn stay_handler(
     };
     context.insert("searched", &true);
 
-    let primary_ids = repo.listings_by_role("primary").await.unwrap_or_default();
-    let secondary_ids = repo.listings_by_role("secondary").await.unwrap_or_default();
+    let all = repo.list_listings().await.unwrap_or_default();
+    let page_map: HashMap<i64, String> = all
+        .iter()
+        .filter_map(|l| l.page_path.clone().map(|p| (l.listing_id, p)))
+        .collect();
+    let primary_ids: Vec<i64> = all
+        .iter()
+        .filter(|l| l.role == "primary")
+        .map(|l| l.listing_id)
+        .collect();
+    let secondary_ids: Vec<i64> = all
+        .iter()
+        .filter(|l| l.role == "secondary")
+        .map(|l| l.listing_id)
+        .collect();
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
 
     match client
@@ -159,7 +204,7 @@ pub async fn stay_handler(
     {
         Ok(resp) => {
             context.insert("nights", &resp.nights);
-            context.insert("primary_results", &resp.results);
+            context.insert("primary_results", &enrich_with_pages(&resp.results, &page_map));
         }
         Err(e) => {
             tracing::error!("availability (primary) failed: {:?}", e);
@@ -173,7 +218,9 @@ pub async fn stay_handler(
             .availability(from, to, adults, children, infants, &secondary_ids)
             .await
         {
-            Ok(resp) => context.insert("secondary_results", &resp.results),
+            Ok(resp) => {
+                context.insert("secondary_results", &enrich_with_pages(&resp.results, &page_map))
+            }
             Err(e) => tracing::warn!("availability (secondary) failed: {:?}", e),
         }
     }
@@ -374,13 +421,13 @@ pub async fn booking_config_get(
     context.insert("service_url", &config.service_url);
     context.insert("service_secret", &config.service_secret);
 
-    // Map current selection: listing_id -> role.
-    let selection: HashMap<i64, String> = repo
+    // Map current selection: listing_id -> (role, page_path).
+    let selection: HashMap<i64, (String, Option<String>)> = repo
         .list_listings()
         .await
         .unwrap_or_default()
         .into_iter()
-        .map(|l| (l.listing_id, l.role))
+        .map(|l| (l.listing_id, (l.role, l.page_path)))
         .collect();
 
     // If configured, fetch the full park from the service so the admin can pick.
@@ -391,13 +438,18 @@ pub async fn booking_config_get(
                 let rows: Vec<serde_json::Value> = listings
                     .into_iter()
                     .map(|l| {
-                        let role = selection.get(&l.listing_id).cloned();
+                        let (role, page_path) = selection
+                            .get(&l.listing_id)
+                            .cloned()
+                            .map(|(r, p)| (Some(r), p))
+                            .unwrap_or((None, None));
                         serde_json::json!({
                             "listing_id": l.listing_id,
                             "name": l.name.or(l.internal_name).unwrap_or_default(),
                             "person_capacity": l.person_capacity,
                             "currency_code": l.currency_code,
                             "role": role,
+                            "page_path": page_path,
                         })
                     })
                     .collect();
@@ -466,10 +518,15 @@ pub async fn booking_config_post(
             }
             _ => continue, // "none" / unknown -> not offered
         };
+        let page_path = form
+            .get(&format!("page_{listing_id}"))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
         listings.push(BookingListing {
             listing_id,
             role: role.to_string(),
             position,
+            page_path,
         });
     }
     repo.replace_listings(&listings)

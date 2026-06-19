@@ -31,9 +31,10 @@
         <fieldset>
             <legend>Units</legend>
             <p class="booking-config-hint">Primary units show first; secondary units appear under “our sister house”.</p>
+            <p class="booking-config-hint">Page links a unit to its CMS page (e.g. <code>/stars</code>) so search results deep-link to it and that page can book the unit directly.</p>
             <table class="booking-config-table">
                 <thead>
-                    <tr><th>Unit</th><th>Capacity</th><th>Role</th></tr>
+                    <tr><th>Unit</th><th>Capacity</th><th>Role</th><th>Page</th></tr>
                 </thead>
                 <tbody>
                     {% for l in service_listings %}
@@ -47,6 +48,7 @@
                                 <option value="secondary"{% if l.role == "secondary" %} selected{% endif %}>Secondary</option>
                             </select>
                         </td>
+                        <td><input type="text" name="page_{{ l.listing_id }}" value="{{ l.page_path | default(value='') }}" placeholder="/slug" size="14"></td>
                     </tr>
                     {% endfor %}
                 </tbody>

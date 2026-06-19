@@ -1,7 +1,9 @@
 {# Renders one availability result `r`. Expects q_adults/q_children/q_infants in context. #}
 <div class="booking-card{% if r.is_multi_stay %} booking-card-multi{% endif %}">
     <div class="booking-card-head">
-        <h3 class="booking-card-name">{{ r.name }}</h3>
+        <h3 class="booking-card-name">
+            {% if r.page_url %}<a href="{{ r.page_url }}?from={{ r.check_in }}&to={{ r.check_out }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}
+        </h3>
         <div class="booking-card-meta">
             {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }}
             {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}

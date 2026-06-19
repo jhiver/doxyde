@@ -128,6 +128,7 @@
         <aside class="apartment-sidebar">
             <div class="booking-widget">
                 <form class="booking-form" action="/.stay" method="GET" onsubmit="return apartmentSearch(this)">
+                    {% if booking_listing_id %}<input type="hidden" id="booking_listing_id" value="{{ booking_listing_id }}">{% endif %}
 
                     <div class="booking-dates">
                         <div class="booking-field booking-field-checkin">
@@ -198,10 +199,31 @@ function apartmentSearch(form) {
     var co = document.getElementById('checkout')._flatpickr.selectedDates[0];
     var guests = document.getElementById('guests').value;
     if (!ci || !co) return false;
-    window.location.href = '/.stay?from=' + encodeURIComponent(iso(ci)) +
+    var qs = 'from=' + encodeURIComponent(iso(ci)) +
         '&to=' + encodeURIComponent(iso(co)) + '&adults=' + encodeURIComponent(guests);
+    var listingEl = document.getElementById('booking_listing_id');
+    if (listingEl && listingEl.value) {
+        // This page is a specific unit: book it directly.
+        window.location.href = '/.book?listing=' + encodeURIComponent(listingEl.value) + '&' + qs;
+    } else {
+        window.location.href = '/.stay?' + qs;
+    }
     return false;
 }
+
+// Prefill the pickers from ?from / ?to when arriving from a stay-search card.
+(function () {
+    var params = new URLSearchParams(window.location.search);
+    var from = params.get('from'), to = params.get('to');
+    document.addEventListener('DOMContentLoaded', function () {
+        if (from && document.getElementById('checkin')._flatpickr) {
+            document.getElementById('checkin')._flatpickr.setDate(from, true);
+        }
+        if (to && document.getElementById('checkout')._flatpickr) {
+            document.getElementById('checkout')._flatpickr.setDate(to, true);
+        }
+    });
+})();
 </script>
 
 {# Gallery Modal #}

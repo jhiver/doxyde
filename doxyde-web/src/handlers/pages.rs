@@ -450,6 +450,16 @@ pub async fn render_page(
     context.insert("current_path", &current_path);
     context.insert("has_children", &!children.is_empty());
 
+    // Booking: if this page is mapped to a Hostaway unit, expose its listing id so
+    // the page's booking widget can quote/book that specific unit directly.
+    if let Ok(Some(listing_id)) =
+        doxyde_db::repositories::BookingRepository::new(db.clone())
+            .find_listing_for_page(&current_path)
+            .await
+    {
+        context.insert("booking_listing_id", &listing_id);
+    }
+
     // Translate navigation/breadcrumb titles (borrowed from other pages) using
     // the same policy as the page content. No-op in the source language.
     translate_context_titles(&mut context, &state, &db, &locale, policy, &site.domain).await;

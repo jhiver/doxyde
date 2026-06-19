@@ -38,12 +38,15 @@ impl BookingConfig {
     }
 }
 
-/// A Hostaway unit this site offers, with its display role and ordering.
+/// A Hostaway unit this site offers, with its display role, ordering and the
+/// CMS page (if any) that presents it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BookingListing {
     pub listing_id: i64,
     pub role: String,
     pub position: i64,
+    #[serde(default)]
+    pub page_path: Option<String>,
 }
 
 pub struct BookingRepository {
@@ -94,9 +97,9 @@ impl BookingRepository {
 
     /// All configured units, ordered primary-first then by position.
     pub async fn list_listings(&self) -> Result<Vec<BookingListing>> {
-        let rows = sqlx::query_as::<_, (i64, String, i64)>(
+        let rows = sqlx::query_as::<_, (i64, String, i64, Option<String>)>(
             r#"
-            SELECT listing_id, role, position
+            SELECT listing_id, role, position, page_path
             FROM booking_listing
             ORDER BY CASE role WHEN 'primary' THEN 0 ELSE 1 END, position, listing_id
             "#,
@@ -107,12 +110,25 @@ impl BookingRepository {
 
         Ok(rows
             .into_iter()
-            .map(|(listing_id, role, position)| BookingListing {
+            .map(|(listing_id, role, position, page_path)| BookingListing {
                 listing_id,
                 role,
                 position,
+                page_path,
             })
             .collect())
+    }
+
+    /// The Hostaway listing id presented by a given CMS page path, if any.
+    pub async fn find_listing_for_page(&self, page_path: &str) -> Result<Option<i64>> {
+        let row = sqlx::query_as::<_, (i64,)>(
+            "SELECT listing_id FROM booking_listing WHERE page_path = ? LIMIT 1",
+        )
+        .bind(page_path)
+        .fetch_optional(&self.pool)
+        .await
+        .context("Failed to resolve listing for page")?;
+        Ok(row.map(|(id,)| id))
     }
 
     /// Units of a given role, ordered by position. role is 'primary' or 'secondary'.
@@ -136,11 +152,12 @@ impl BookingRepository {
             .context("clear booking listings")?;
         for l in listings {
             sqlx::query(
-                "INSERT INTO booking_listing (listing_id, role, position) VALUES (?, ?, ?)",
+                "INSERT INTO booking_listing (listing_id, role, position, page_path) VALUES (?, ?, ?, ?)",
             )
             .bind(l.listing_id)
             .bind(&l.role)
             .bind(l.position)
+            .bind(l.page_path.as_deref().filter(|s| !s.trim().is_empty()))
             .execute(&mut *tx)
             .await
             .context("insert booking listing")?;
