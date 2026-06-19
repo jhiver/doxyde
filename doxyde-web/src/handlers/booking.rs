@@ -179,6 +179,12 @@ pub async fn stay_handler(
         (Some(f), Some(t)) if !f.is_empty() && !t.is_empty() => (f, t),
         _ => return Ok(render(&state, "booking/stay.html", &context)?.into_response()),
     };
+    // ISO dates compare lexicographically; reject an empty/reversed range with a
+    // clear message instead of letting the service error look like an outage.
+    if to <= from {
+        context.insert("invalid_dates", &true);
+        return Ok(render(&state, "booking/stay.html", &context)?.into_response());
+    }
     context.insert("searched", &true);
 
     let all = repo.list_listings().await.unwrap_or_default();

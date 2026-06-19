@@ -36,6 +36,8 @@
 
     {% if not_configured %}
         <p class="booking-notice">{{ labels["booking.not_configured"] | default(value="Booking is not configured for this site yet.") }}</p>
+    {% elif invalid_dates %}
+        <p class="booking-notice booking-notice-error">{{ labels["booking.invalid_dates"] | default(value="Please pick a check-out date after your check-in date.") }}</p>
     {% elif service_error %}
         <p class="booking-notice booking-notice-error">{{ labels["booking.service_error"] | default(value="The booking service is temporarily unavailable. Please try again shortly.") }}</p>
     {% elif searched %}
@@ -56,4 +58,30 @@
         {% endif %}
     {% endif %}
 </div>
+
+<script>
+(function () {
+    var from = document.getElementById('from'), to = document.getElementById('to');
+    if (!from || !to) return;
+    function addDay(d) { var x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() + 1); return x.toISOString().slice(0, 10); }
+    var today = new Date().toISOString().slice(0, 10);
+    if (!from.min) from.min = today;
+    function sync() {
+        if (from.value) {
+            to.min = addDay(from.value);
+            if (!to.value || to.value <= from.value) to.value = addDay(from.value);
+        }
+    }
+    from.addEventListener('change', sync);
+    sync();
+    var form = from.closest('form');
+    if (form) form.addEventListener('submit', function (e) {
+        if (from.value && to.value && to.value <= from.value) {
+            e.preventDefault();
+            to.value = addDay(from.value);
+            to.focus();
+        }
+    });
+})();
+</script>
 {% endblock %}

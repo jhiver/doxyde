@@ -44,6 +44,7 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.total_price", "Total price"),
     ("booking.unavailable", "These dates are no longer available."),
     ("booking.search_again", "Search again"),
+    ("booking.invalid_dates", "Please pick a check-out date after your check-in date."),
     ("booking.not_configured", "Booking is not configured for this site yet."),
     (
         "booking.service_error",
