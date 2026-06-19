@@ -57,6 +57,18 @@ impl DatabaseRouter {
         self.get_or_create_site_pool(context).await
     }
 
+    /// Snapshot of the currently-known per-site pools as `(site_key, pool)`
+    /// pairs. After startup migrations this contains every existing site DB.
+    /// Used by the background translation pre-warmer.
+    pub async fn site_pools_snapshot(&self) -> Vec<(String, SqlitePool)> {
+        self.site_pools
+            .read()
+            .await
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
     /// Get or create a site-specific database pool
     async fn get_or_create_site_pool(&self, context: &SiteContext) -> Result<SqlitePool> {
         let site_dir = &context.site_directory;
@@ -258,6 +270,7 @@ mod tests {
             i18n_service_addr: "127.0.0.1:4003".to_string(),
             translation_workers: 4,
             i18n_sync_timeout_ms: 3000,
+            i18n_prewarm: false,
         }
     }
 
@@ -438,6 +451,7 @@ mod tests {
             i18n_service_addr: "127.0.0.1:4003".to_string(),
             translation_workers: 4,
             i18n_sync_timeout_ms: 3000,
+            i18n_prewarm: false,
         };
 
         let router = DatabaseRouter::new(config).await.unwrap();

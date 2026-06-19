@@ -46,6 +46,9 @@ pub struct Config {
     pub translation_workers: usize,
     /// Timeout (ms) for the bounded-synchronous translation path (/.fr, /.en).
     pub i18n_sync_timeout_ms: u64,
+    /// Pre-warm every site's translation cache in the background at startup, so
+    /// translated pages are served warm on the first visit (no source flash).
+    pub i18n_prewarm: bool,
 }
 
 impl Config {
@@ -89,6 +92,10 @@ impl Config {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(3000),
+            i18n_prewarm: std::env::var("DOXYDE_I18N_PREWARM")
+                .ok()
+                .map(|v| !matches!(v.trim().to_ascii_lowercase().as_str(), "0" | "false" | "no"))
+                .unwrap_or(true),
         })
     }
 

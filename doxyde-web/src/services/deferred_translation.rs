@@ -199,6 +199,11 @@ pub async fn run_worker(
                     store_success(&job.pool, &job.target_lang, &job.hash, &tr.translated).await;
                     tracing::debug!(lang = %job.target_lang, hash = %job.hash, "Translation completed");
                 }
+                Err(e) if e.is_transient() => {
+                    // Service unreachable: leave the row absent so it is retried
+                    // freely on the next request/warm, not gated by the cooldown.
+                    tracing::warn!(error = %e, lang = %job.target_lang, "Translation unavailable (transient); not caching failure");
+                }
                 Err(e) => {
                     tracing::warn!(error = %e, lang = %job.target_lang, "Translation failed");
                     store_failure(&job.pool, &job.target_lang, &job.hash, &job.content).await;

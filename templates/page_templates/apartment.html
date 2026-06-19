@@ -97,7 +97,7 @@
                     <rect x="14" y="14" width="7" height="7"></rect>
                     <rect x="3" y="14" width="7" height="7"></rect>
                 </svg>
-                Show all photos
+                {{ labels["booking.show_all_photos"] | default(value="Show all photos") }}
             </button>
             {% endif %}
         </div>
@@ -120,7 +120,7 @@
             {# Render non-image components #}
             {% for component in components %}
                 {% if component.component_type != "image" %}
-                    {{ render_component(component=component) | safe }}
+                    {{ render_component(component=component, labels=labels | default(value="")) | safe }}
                 {% endif %}
             {% endfor %}
         </div>
@@ -132,26 +132,26 @@
 
                     <div class="booking-dates">
                         <div class="booking-field booking-field-checkin">
-                            <label for="checkin">CHECK-IN</label>
-                            <input type="text" id="checkin" name="checkin" placeholder="Add date" readonly>
+                            <label for="checkin">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
+                            <input type="text" id="checkin" name="checkin" placeholder="{{ labels['booking.add_date'] | default(value='Add date') }}" readonly>
                         </div>
                         <div class="booking-field booking-field-checkout">
-                            <label for="checkout">CHECK-OUT</label>
-                            <input type="text" id="checkout" name="checkout" placeholder="Add date" readonly>
+                            <label for="checkout">{{ labels["booking.checkout"] | default(value="Check-out") }}</label>
+                            <input type="text" id="checkout" name="checkout" placeholder="{{ labels['booking.add_date'] | default(value='Add date') }}" readonly>
                         </div>
                     </div>
 
                     <div class="booking-field booking-field-guests">
-                        <label for="guests">GUESTS</label>
+                        <label for="guests">{{ labels["booking.guests"] | default(value="Guests") }}</label>
                         <select id="guests" name="guests">
-                            <option value="1">1 guest</option>
-                            <option value="2" selected>2 guests</option>
-                            <option value="3">3 guests</option>
-                            <option value="4">4 guests</option>
+                            <option value="1">1 {{ labels["booking.guest_one"] | default(value="guest") }}</option>
+                            <option value="2" selected>2 {{ labels["booking.guests"] | default(value="guests") }}</option>
+                            <option value="3">3 {{ labels["booking.guests"] | default(value="guests") }}</option>
+                            <option value="4">4 {{ labels["booking.guests"] | default(value="guests") }}</option>
                         </select>
                     </div>
 
-                    <button type="submit" class="booking-submit">Check availability</button>
+                    <button type="submit" class="booking-submit">{{ labels["booking.check_availability"] | default(value="Check availability") }}</button>
                 </form>
             </div>
         </aside>

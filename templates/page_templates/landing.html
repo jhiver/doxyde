@@ -15,22 +15,22 @@
                     {% set next_comp = components[next_index] | default(value=false) %}
                     <section class="landing-section split-section">
                         <div class="split-left">
-                            {{ render_component(component=component) | safe }}
+                            {{ render_component(component=component, labels=labels | default(value="")) | safe }}
                         </div>
                         <div class="split-right">
                             {% if next_comp %}
-                                {{ render_component(component=next_comp) | safe }}
+                                {{ render_component(component=next_comp, labels=labels | default(value="")) | safe }}
                                 {% set_global skip_next = true %}
                             {% endif %}
                         </div>
                     </section>
                 {% elif component.template == "hero" or component.template == "hero_booking" %}
                     <!-- Hero components render full-width without wrapper -->
-                    {{ render_component(component=component) | safe }}
+                    {{ render_component(component=component, labels=labels | default(value="")) | safe }}
                 {% else %}
                     <section class="landing-section">
                         <div class="landing-section-inner">
-                            {{ render_component(component=component) | safe }}
+                            {{ render_component(component=component, labels=labels | default(value="")) | safe }}
                         </div>
                     </section>
                 {% endif %}

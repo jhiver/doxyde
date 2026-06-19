@@ -351,7 +351,14 @@ pub async fn content_handler(
     if let Some(code) = action_name.strip_prefix('.') {
         if locale.enabled.iter().any(|l| l.code == code) {
             return handle_lang_action(
-                state, db, site, page, user, locale, code, &content_path.path,
+                state,
+                db,
+                site,
+                page,
+                user,
+                locale,
+                code,
+                &content_path.path,
             )
             .await;
         }

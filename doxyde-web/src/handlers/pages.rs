@@ -422,7 +422,16 @@ pub async fn render_page(
         })?;
 
     // Add locale context (lang/dir, UI labels, switcher, hreflang alternates).
-    add_locale_context(&mut context, &state, &db, &site, &locale, &current_path, policy).await;
+    add_locale_context(
+        &mut context,
+        &state,
+        &db,
+        &site,
+        &locale,
+        &current_path,
+        policy,
+    )
+    .await;
 
     // Per-language canonical. The `/.fr` `/.en` handlers pass an explicit one;
     // for the cookie-served bare URL we default to the served language's

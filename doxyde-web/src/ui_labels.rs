@@ -49,8 +49,10 @@ pub async fn resolve_labels(
 
     match policy {
         TranslationPolicy::BoundedSync => {
-            let sources: Vec<String> =
-                UI_LABELS.iter().map(|(_, src)| (*src).to_string()).collect();
+            let sources: Vec<String> = UI_LABELS
+                .iter()
+                .map(|(_, src)| (*src).to_string())
+                .collect();
             let translated = translate_batch_sync_bounded(
                 state,
                 pool,

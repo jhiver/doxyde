@@ -83,30 +83,27 @@ pub async fn load_site_i18n(pool: &SqlitePool) -> I18nSiteConfig {
         }],
     };
 
-    let (default_lang, source_lang) = match sqlx::query(
-        "SELECT default_lang, source_lang FROM i18n_config WHERE id = 1",
-    )
-    .fetch_optional(pool)
-    .await
-    {
-        Ok(Some(row)) => (
-            row.try_get::<String, _>("default_lang")
-                .unwrap_or_else(|_| "en".to_string()),
-            row.try_get::<String, _>("source_lang")
-                .unwrap_or_else(|_| "en".to_string()),
-        ),
-        Ok(None) => return fallback(),
-        Err(e) => {
-            tracing::warn!(error = %e, "i18n_config read failed; using defaults");
-            return fallback();
-        }
-    };
+    let (default_lang, source_lang) =
+        match sqlx::query("SELECT default_lang, source_lang FROM i18n_config WHERE id = 1")
+            .fetch_optional(pool)
+            .await
+        {
+            Ok(Some(row)) => (
+                row.try_get::<String, _>("default_lang")
+                    .unwrap_or_else(|_| "en".to_string()),
+                row.try_get::<String, _>("source_lang")
+                    .unwrap_or_else(|_| "en".to_string()),
+            ),
+            Ok(None) => return fallback(),
+            Err(e) => {
+                tracing::warn!(error = %e, "i18n_config read failed; using defaults");
+                return fallback();
+            }
+        };
 
-    let enabled = match sqlx::query(
-        "SELECT lang FROM i18n_enabled_lang ORDER BY position, lang",
-    )
-    .fetch_all(pool)
-    .await
+    let enabled = match sqlx::query("SELECT lang FROM i18n_enabled_lang ORDER BY position, lang")
+        .fetch_all(pool)
+        .await
     {
         Ok(rows) => rows
             .into_iter()
@@ -150,7 +147,8 @@ pub fn detect_accept_language(header: &str, cfg: &I18nSiteConfig) -> Option<Stri
             let q = bits
                 .find_map(|p| {
                     let p = p.trim();
-                    p.strip_prefix("q=").and_then(|v| v.trim().parse::<f32>().ok())
+                    p.strip_prefix("q=")
+                        .and_then(|v| v.trim().parse::<f32>().ok())
                 })
                 .unwrap_or(1.0);
             Some((lang, q))

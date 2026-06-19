@@ -66,7 +66,9 @@ pub async fn translate_batch_sync_bounded(
         let miss_refs: Vec<&str> = miss_idx.iter().map(|&i| items[i].as_str()).collect();
         match tokio::time::timeout(
             timeout,
-            state.i18n.translate_batch(&miss_refs, Some("en"), lang, context),
+            state
+                .i18n
+                .translate_batch(&miss_refs, Some("en"), lang, context),
         )
         .await
         {
@@ -78,7 +80,10 @@ pub async fn translate_batch_sync_bounded(
                 }
             }
             Ok(Ok(_)) => {
-                tracing::warn!(lang, "batch translate returned mismatched count; serving source");
+                tracing::warn!(
+                    lang,
+                    "batch translate returned mismatched count; serving source"
+                );
             }
             Ok(Err(e)) => {
                 tracing::warn!(error = %e, lang, "batch translate failed; serving source");

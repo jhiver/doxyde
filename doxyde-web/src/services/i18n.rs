@@ -30,6 +30,17 @@ pub enum I18nError {
     FrameTooLarge(u32),
 }
 
+impl I18nError {
+    /// Whether this error is transient (the service was unreachable or the
+    /// connection dropped) rather than a definitive rejection of the content.
+    /// Transient failures must NOT be cached as `is_failed`, so they are retried
+    /// freely instead of being gated behind the failure cooldown — important
+    /// when the pre-warmer runs before the i18n service is ready.
+    pub fn is_transient(&self) -> bool {
+        matches!(self, I18nError::Connect(_) | I18nError::Io(_))
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct I18nClient {
     addr: String,

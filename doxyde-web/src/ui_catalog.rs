@@ -10,7 +10,7 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     // Navigation / chrome
     ("nav.home", "Home"),
     ("lang.switch", "Language"),
-    // Booking (lot 2 — pre-seeded so the search form has labels)
+    // Booking widget (hero_booking + apartment templates)
     ("booking.search", "Search"),
     ("booking.checkin", "Check-in"),
     ("booking.checkout", "Check-out"),
@@ -18,12 +18,15 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.adults", "Adults"),
     ("booking.children", "Children"),
     ("booking.book", "Book"),
+    ("booking.check_availability", "Check availability"),
+    ("booking.select_date", "Select date"),
+    ("booking.add_date", "Add date"),
+    // Guest-count option: singular noun ("1 Guest"); plural reuses booking.guests.
+    ("booking.guest_one", "Guest"),
+    ("booking.show_all_photos", "Show all photos"),
 ];
 
 /// Canonical English source for a key, if known.
 pub fn source(key: &str) -> Option<&'static str> {
-    UI_LABELS
-        .iter()
-        .find(|(k, _)| *k == key)
-        .map(|(_, v)| *v)
+    UI_LABELS.iter().find(|(k, _)| *k == key).map(|(_, v)| *v)
 }

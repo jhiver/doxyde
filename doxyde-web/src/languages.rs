@@ -13,23 +13,91 @@ pub struct LangInfo {
 /// The full set of languages doxyde knows how to label. A site enables a subset
 /// via the `i18n_enabled_lang` table; the canonical/source language is `en`.
 pub const LANGUAGES: &[LangInfo] = &[
-    LangInfo { code: "en", label: "English", dir: "ltr" },
-    LangInfo { code: "fr", label: "Français", dir: "ltr" },
-    LangInfo { code: "es", label: "Español", dir: "ltr" },
-    LangInfo { code: "pt", label: "Português", dir: "ltr" },
-    LangInfo { code: "ar", label: "العربية", dir: "rtl" },
-    LangInfo { code: "sw", label: "Kiswahili", dir: "ltr" },
-    LangInfo { code: "wo", label: "Wolof", dir: "ltr" },
-    LangInfo { code: "ha", label: "Hausa", dir: "ltr" },
-    LangInfo { code: "am", label: "አማርኛ", dir: "ltr" },
-    LangInfo { code: "yo", label: "Yorùbá", dir: "ltr" },
-    LangInfo { code: "ig", label: "Igbo", dir: "ltr" },
-    LangInfo { code: "zu", label: "isiZulu", dir: "ltr" },
-    LangInfo { code: "de", label: "Deutsch", dir: "ltr" },
-    LangInfo { code: "it", label: "Italiano", dir: "ltr" },
-    LangInfo { code: "nl", label: "Nederlands", dir: "ltr" },
-    LangInfo { code: "zh", label: "中文", dir: "ltr" },
-    LangInfo { code: "ja", label: "日本語", dir: "ltr" },
+    LangInfo {
+        code: "en",
+        label: "English",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "fr",
+        label: "Français",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "es",
+        label: "Español",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "pt",
+        label: "Português",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "ar",
+        label: "العربية",
+        dir: "rtl",
+    },
+    LangInfo {
+        code: "sw",
+        label: "Kiswahili",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "wo",
+        label: "Wolof",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "ha",
+        label: "Hausa",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "am",
+        label: "አማርኛ",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "yo",
+        label: "Yorùbá",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "ig",
+        label: "Igbo",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "zu",
+        label: "isiZulu",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "de",
+        label: "Deutsch",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "it",
+        label: "Italiano",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "nl",
+        label: "Nederlands",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "zh",
+        label: "中文",
+        dir: "ltr",
+    },
+    LangInfo {
+        code: "ja",
+        label: "日本語",
+        dir: "ltr",
+    },
 ];
 
 /// Right-to-left languages (broader than the labelled set, for future use).

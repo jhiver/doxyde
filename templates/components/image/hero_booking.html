@@ -25,25 +25,25 @@
             <form class="booking-form" onsubmit="return submitBooking(this)">
                 <div class="booking-fields">
                     <div class="booking-field">
-                        <label for="checkin">Check-In</label>
-                        <input type="text" id="checkin" placeholder="Select date" readonly>
+                        <label for="checkin">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
+                        <input type="text" id="checkin" placeholder="{{ labels['booking.select_date'] | default(value='Select date') }}" readonly>
                     </div>
                     <div class="booking-field">
-                        <label for="checkout">Check-Out</label>
-                        <input type="text" id="checkout" placeholder="Select date" readonly>
+                        <label for="checkout">{{ labels["booking.checkout"] | default(value="Check-out") }}</label>
+                        <input type="text" id="checkout" placeholder="{{ labels['booking.select_date'] | default(value='Select date') }}" readonly>
                     </div>
                     <div class="booking-field">
-                        <label for="guests">Guests</label>
+                        <label for="guests">{{ labels["booking.guests"] | default(value="Guests") }}</label>
                         <select id="guests">
-                            <option value="1">1 Guest</option>
-                            <option value="2" selected>2 Guests</option>
-                            <option value="3">3 Guests</option>
-                            <option value="4">4 Guests</option>
-                            <option value="5">5 Guests</option>
-                            <option value="6">6+ Guests</option>
+                            <option value="1">1 {{ labels["booking.guest_one"] | default(value="Guest") }}</option>
+                            <option value="2" selected>2 {{ labels["booking.guests"] | default(value="Guests") }}</option>
+                            <option value="3">3 {{ labels["booking.guests"] | default(value="Guests") }}</option>
+                            <option value="4">4 {{ labels["booking.guests"] | default(value="Guests") }}</option>
+                            <option value="5">5 {{ labels["booking.guests"] | default(value="Guests") }}</option>
+                            <option value="6">6+ {{ labels["booking.guests"] | default(value="Guests") }}</option>
                         </select>
                     </div>
-                    <button type="submit" class="booking-submit">Search</button>
+                    <button type="submit" class="booking-submit">{{ labels["booking.search"] | default(value="Search") }}</button>
                 </div>
             </form>
         </div>

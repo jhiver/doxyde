@@ -32,7 +32,7 @@
 
             <div class="blog-content">
                 {% for component in components %}
-                    {{ render_component(component=component) | safe }}
+                    {{ render_component(component=component, labels=labels | default(value="")) | safe }}
                 {% endfor %}
             </div>
         </article>

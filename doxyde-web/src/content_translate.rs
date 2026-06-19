@@ -42,12 +42,77 @@ fn translatable_fields(component_type: &str) -> &'static [&'static str] {
     }
 }
 
+/// Every source string on a page that the renderer would translate: page
+/// title/description, each component's title + translatable text fields, and a
+/// `blog_summary`'s stored `display_title`. Used by the background pre-warmer.
+///
+/// A `blog_summary`'s injected child cards (`pages[].title`/`description`) are
+/// NOT included here — they are borrowed from child pages, which the warmer
+/// visits in their own right, so warming every page covers the card data too.
+pub fn collect_warmable_sources(page: &Page, components: &[Component]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let mut add = |s: &str| {
+        if !s.trim().is_empty() {
+            out.push(s.to_string());
+        }
+    };
+
+    add(&page.title);
+    if let Some(desc) = &page.description {
+        add(desc);
+    }
+    for comp in components {
+        if let Some(title) = &comp.title {
+            add(title);
+        }
+        for field in translatable_fields(&comp.component_type) {
+            if let Some(text) = comp.content.get(*field).and_then(|v| v.as_str()) {
+                add(text);
+            }
+        }
+        if comp.component_type == "blog_summary" {
+            if let Some(dt) = comp.content.get("display_title").and_then(|v| v.as_str()) {
+                add(dt);
+            }
+        }
+    }
+    out
+}
+
 /// Where a translated string should be written back.
 enum Slot {
     PageTitle,
     PageDescription,
     ComponentTitle(usize),
     ComponentField(usize, &'static str),
+    /// A `blog_summary`'s `display_title` (the listing heading).
+    ComponentDisplayTitle(usize),
+    /// A field of a `blog_summary`'s injected `pages[j]` entry (`title` /
+    /// `description`), borrowed from a child page.
+    ComponentPageField(usize, usize, &'static str),
+}
+
+/// Collect the translatable strings that `render_page` injects into a
+/// `blog_summary` component (`display_title` + each child `pages[].title` /
+/// `pages[].description`). These are borrowed from other pages and are not
+/// covered by `translatable_fields`, so they are gathered separately.
+fn push_blog_summary_slots(i: usize, comp: &Component, push: &mut dyn FnMut(Slot, &str)) {
+    if comp.component_type != "blog_summary" {
+        return;
+    }
+    if let Some(dt) = comp.content.get("display_title").and_then(|v| v.as_str()) {
+        push(Slot::ComponentDisplayTitle(i), dt);
+    }
+    if let Some(pages) = comp.content.get("pages").and_then(|v| v.as_array()) {
+        for (j, pg) in pages.iter().enumerate() {
+            if let Some(t) = pg.get("title").and_then(|v| v.as_str()) {
+                push(Slot::ComponentPageField(i, j, "title"), t);
+            }
+            if let Some(d) = pg.get("description").and_then(|v| v.as_str()) {
+                push(Slot::ComponentPageField(i, j, "description"), d);
+            }
+        }
+    }
 }
 
 /// Translate page + component text into `locale.lang`, in place. No-op when the
@@ -78,7 +143,12 @@ pub async fn translate_page_content(
         }
     };
 
-    push(Slot::PageTitle, &page.title.clone(), &mut slots, &mut sources);
+    push(
+        Slot::PageTitle,
+        &page.title.clone(),
+        &mut slots,
+        &mut sources,
+    );
     if let Some(desc) = page.description.clone() {
         push(Slot::PageDescription, &desc, &mut slots, &mut sources);
     }
@@ -96,6 +166,10 @@ pub async fn translate_page_content(
                 );
             }
         }
+        // blog_summary listings carry child page titles/descriptions injected by
+        // render_page; gather them so the cards translate too.
+        let mut push_one = |slot: Slot, text: &str| push(slot, text, &mut slots, &mut sources);
+        push_blog_summary_slots(i, comp, &mut push_one);
     }
 
     if sources.is_empty() {
@@ -129,7 +203,7 @@ pub async fn translate_page_content(
     };
 
     // Pass 3: write translations back into the page/components.
-    for (slot, value) in slots.into_iter().zip(translated.into_iter()) {
+    for (slot, value) in slots.into_iter().zip(translated) {
         match slot {
             Slot::PageTitle => page.title = value,
             Slot::PageDescription => page.description = Some(value),
@@ -142,6 +216,27 @@ pub async fn translate_page_content(
                 if let Some(comp) = components.get_mut(i) {
                     if let Some(obj) = comp.content.as_object_mut() {
                         obj.insert(field.to_string(), serde_json::Value::String(value));
+                    }
+                }
+            }
+            Slot::ComponentDisplayTitle(i) => {
+                if let Some(comp) = components.get_mut(i) {
+                    if let Some(obj) = comp.content.as_object_mut() {
+                        obj.insert(
+                            "display_title".to_string(),
+                            serde_json::Value::String(value),
+                        );
+                    }
+                }
+            }
+            Slot::ComponentPageField(i, j, field) => {
+                if let Some(comp) = components.get_mut(i) {
+                    if let Some(pages) =
+                        comp.content.get_mut("pages").and_then(|v| v.as_array_mut())
+                    {
+                        if let Some(obj) = pages.get_mut(j).and_then(|p| p.as_object_mut()) {
+                            obj.insert(field.to_string(), serde_json::Value::String(value));
+                        }
                     }
                 }
             }
@@ -211,11 +306,12 @@ pub async fn translate_context_titles(
     // Pass 1: collect unique non-empty titles across all structures.
     let mut uniques: Vec<String> = Vec::new();
     let mut seen = std::collections::HashSet::new();
-    let note = |t: &str, uniques: &mut Vec<String>, seen: &mut std::collections::HashSet<String>| {
-        if !t.trim().is_empty() && seen.insert(t.to_string()) {
-            uniques.push(t.to_string());
-        }
-    };
+    let note =
+        |t: &str, uniques: &mut Vec<String>, seen: &mut std::collections::HashSet<String>| {
+            if !t.trim().is_empty() && seen.insert(t.to_string()) {
+                uniques.push(t.to_string());
+            }
+        };
 
     if let Some(s) = context.get("root_page_title").and_then(|v| v.as_str()) {
         note(s, &mut uniques, &mut seen);
@@ -250,7 +346,8 @@ pub async fn translate_context_titles(
 
     let map = translate_unique(state, db, lang, policy, site_key, TITLE_CONTEXT, uniques).await;
     let tr = |v: &serde_json::Value| -> Option<String> {
-        v.as_str().map(|s| map.get(s).cloned().unwrap_or_else(|| s.to_string()))
+        v.as_str()
+            .map(|s| map.get(s).cloned().unwrap_or_else(|| s.to_string()))
     };
 
     // Pass 2: rewrite each structure with translated titles, re-inserting.
@@ -273,7 +370,11 @@ pub async fn translate_context_titles(
             context.insert(*key, &rewritten);
         }
     }
-    if let Some(arr) = context.get("navigation_levels").and_then(|v| v.as_array()).cloned() {
+    if let Some(arr) = context
+        .get("navigation_levels")
+        .and_then(|v| v.as_array())
+        .cloned()
+    {
         let rewritten: Vec<serde_json::Value> = arr
             .into_iter()
             .map(|mut level| {
@@ -302,5 +403,74 @@ pub async fn translate_context_titles(
             })
             .collect();
         context.insert("navigation_levels", &rewritten);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn slot_label(slot: &Slot) -> String {
+        match slot {
+            Slot::ComponentDisplayTitle(i) => format!("display@{i}"),
+            Slot::ComponentPageField(i, j, f) => format!("page@{i}:{j}:{f}"),
+            _ => "other".to_string(),
+        }
+    }
+
+    /// `push_blog_summary_slots` gathers the listing heading and each child
+    /// page's title/description, mirroring what `render_page` injects. Empty
+    /// strings are filtered by the caller's `push` (replicated here); null
+    /// fields are skipped at the source.
+    #[test]
+    fn blog_summary_slots_collects_heading_and_child_fields() {
+        let comp = Component::new(
+            1,
+            "blog_summary".to_string(),
+            0,
+            json!({
+                "display_title": "Our Apartments",
+                "pages": [
+                    {"title": "Romantic Retreat", "description": "Cozy 1-bedroom."},
+                    {"title": "Private Apt", "description": null},
+                    {"title": "", "description": "Only desc."}
+                ]
+            }),
+        );
+
+        let mut collected: Vec<(String, String)> = Vec::new();
+        let mut push_one = |slot: Slot, text: &str| {
+            if !text.trim().is_empty() {
+                collected.push((slot_label(&slot), text.to_string()));
+            }
+        };
+        push_blog_summary_slots(5, &comp, &mut push_one);
+
+        assert_eq!(
+            collected,
+            vec![
+                ("display@5".to_string(), "Our Apartments".to_string()),
+                ("page@5:0:title".to_string(), "Romantic Retreat".to_string()),
+                (
+                    "page@5:0:description".to_string(),
+                    "Cozy 1-bedroom.".to_string()
+                ),
+                ("page@5:1:title".to_string(), "Private Apt".to_string()),
+                // page 1 description is null -> skipped at source
+                // page 2 title is empty -> filtered by push
+                ("page@5:2:description".to_string(), "Only desc.".to_string()),
+            ]
+        );
+    }
+
+    /// Non-`blog_summary` components contribute nothing here (handled by the
+    /// generic `translatable_fields` path instead).
+    #[test]
+    fn blog_summary_slots_ignores_other_components() {
+        let comp = Component::new(1, "text".to_string(), 0, json!({"text": "Hello"}));
+        let mut count = 0;
+        push_blog_summary_slots(0, &comp, &mut |_, _| count += 1);
+        assert_eq!(count, 0);
     }
 }

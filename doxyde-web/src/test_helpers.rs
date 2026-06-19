@@ -52,6 +52,7 @@ pub fn create_test_config() -> crate::config::Config {
         i18n_service_addr: "127.0.0.1:4003".to_string(),
         translation_workers: 4,
         i18n_sync_timeout_ms: 3000,
+        i18n_prewarm: false,
     }
 }
 

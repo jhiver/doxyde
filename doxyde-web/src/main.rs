@@ -103,6 +103,10 @@ async fn main() -> Result<()> {
         translation,
     );
 
+    // Pre-warm the translation cache for all sites in the background, so the
+    // first visit of a translated page is served warm (no English flash).
+    doxyde_web::services::warm::spawn_prewarm(state.clone());
+
     // Create router
     let app = routes::create_router(state);
 

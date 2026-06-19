@@ -89,6 +89,19 @@ impl TeraFunction for RenderComponentFunction {
         let mut context = Context::new();
         context.insert("component", &component);
 
+        // Forward the resolved UI-label map when the caller passes it
+        // (`render_component(component=c, labels=labels)`), so component
+        // templates can localize chrome like the booking widget. Normalize to an
+        // object so a missing/placeholder arg (edit/preview renders) yields an
+        // empty map whose `labels["k"] | default(...)` lookups stay safe rather
+        // than erroring on a non-object value.
+        let labels = args
+            .get("labels")
+            .filter(|v| v.is_object())
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Default::default()));
+        context.insert("labels", &labels);
+
         // Render the template
         let html = tera.render("component", &context)?;
 

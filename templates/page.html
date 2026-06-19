@@ -27,7 +27,7 @@
         {% endif %}
         
         {% for component in components %}
-            {{ render_component(component=component) }}
+            {{ render_component(component=component, labels=labels | default(value="")) }}
         {% endfor %}
         
         {% if components|length == 0 %}
