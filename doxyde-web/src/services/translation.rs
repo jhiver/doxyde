@@ -1,15 +1,18 @@
 // Bounded-synchronous translation, used by the canonical per-language URLs
 // (/.fr, /.en). Unlike the deferred path, this awaits the i18n service (with a
 // short timeout) so a crawler receives translated content on the first hit.
-// On timeout or error it falls back to the source text WITHOUT writing a failure
-// sentinel, so a later deferred pass can still succeed.
+//
+// On timeout or error it falls back to the source text, but ALSO enqueues a
+// deferred job for the unresolved strings (via `try_translate`) so the cache
+// warms in the background — the next crawl of the canonical URL is then served
+// the cached translation. No failure sentinel is written on the sync path.
 
 use std::time::Duration;
 
 use sqlx::{Row, SqlitePool};
 
-use super::deferred_translation::{content_hash, store_success};
-use super::i18n::I18nClient;
+use super::deferred_translation::{content_hash, store_success, try_translate};
+use crate::state::AppState;
 
 /// Look up a single (lang, hash) in the cache. Returns the translation if a
 /// non-failed row exists.
@@ -30,48 +33,20 @@ async fn cache_lookup(pool: &SqlitePool, lang: &str, hash: &str) -> Option<Strin
     row.try_get::<String, _>("translated_content").ok()
 }
 
-/// Translate a single string with a bounded wait. Returns the translation on
-/// success (cached or fresh within the timeout), else the source text.
-pub async fn translate_sync_bounded(
-    client: &I18nClient,
-    pool: &SqlitePool,
-    lang: &str,
-    content: &str,
-    context: Option<&str>,
-    timeout: Duration,
-) -> String {
-    let hash = content_hash(content);
-    if let Some(hit) = cache_lookup(pool, lang, &hash).await {
-        return hit;
-    }
-    match tokio::time::timeout(timeout, client.translate(content, Some("en"), lang, context)).await
-    {
-        Ok(Ok(tr)) => {
-            store_success(pool, lang, &hash, &tr.translated).await;
-            tr.translated
-        }
-        Ok(Err(e)) => {
-            tracing::warn!(error = %e, lang, "bounded-sync translate failed; serving source");
-            content.to_string()
-        }
-        Err(_) => {
-            tracing::warn!(lang, "bounded-sync translate timed out; serving source");
-            content.to_string()
-        }
-    }
-}
-
 /// Translate many strings with a single bounded wait, batching the cache misses
 /// into one `translate_batch` round-trip. Returns a Vec aligned with `items`,
 /// each entry being the translation (cached or fresh) or the source on failure.
+/// Unresolved strings are enqueued for deferred translation so the cache warms.
 pub async fn translate_batch_sync_bounded(
-    client: &I18nClient,
+    state: &AppState,
     pool: &SqlitePool,
     lang: &str,
     items: &[String],
     context: Option<&str>,
-    timeout: Duration,
+    site_key: &str,
 ) -> Vec<String> {
+    let timeout = Duration::from_millis(state.config.i18n_sync_timeout_ms);
+
     // Resolve hits from cache; collect misses (with their original index).
     let mut out: Vec<Option<String>> = Vec::with_capacity(items.len());
     let mut miss_idx: Vec<usize> = Vec::new();
@@ -91,7 +66,7 @@ pub async fn translate_batch_sync_bounded(
         let miss_refs: Vec<&str> = miss_idx.iter().map(|&i| items[i].as_str()).collect();
         match tokio::time::timeout(
             timeout,
-            client.translate_batch(&miss_refs, Some("en"), lang, context),
+            state.i18n.translate_batch(&miss_refs, Some("en"), lang, context),
         )
         .await
         {
@@ -114,8 +89,26 @@ pub async fn translate_batch_sync_bounded(
         }
     }
 
-    out.into_iter()
-        .enumerate()
-        .map(|(i, v)| v.unwrap_or_else(|| items[i].clone()))
-        .collect()
+    // Assemble results. Any string still unresolved (timeout/error) is served as
+    // source now and enqueued for deferred translation so the next crawl is warm.
+    let mut result = Vec::with_capacity(items.len());
+    for (i, slot) in out.into_iter().enumerate() {
+        match slot {
+            Some(t) => result.push(t),
+            None => {
+                let v = try_translate(
+                    pool,
+                    &state.translation.in_flight,
+                    &state.translation.tx,
+                    site_key,
+                    &items[i],
+                    lang,
+                    context,
+                )
+                .await;
+                result.push(v);
+            }
+        }
+    }
+    result
 }

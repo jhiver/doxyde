@@ -13,7 +13,6 @@
 //     /.fr, /.en URLs so crawlers get translated content on the first hit).
 
 use std::collections::HashMap;
-use std::time::Duration;
 
 use doxyde_core::models::{component::Component, page::Page};
 use sqlx::SqlitePool;
@@ -106,16 +105,8 @@ pub async fn translate_page_content(
     // Pass 2: resolve translations per policy.
     let translated: Vec<String> = match policy {
         TranslationPolicy::BoundedSync => {
-            let timeout = Duration::from_millis(state.config.i18n_sync_timeout_ms);
-            translate_batch_sync_bounded(
-                &state.i18n,
-                db,
-                lang,
-                &sources,
-                Some(CONTENT_CONTEXT),
-                timeout,
-            )
-            .await
+            translate_batch_sync_bounded(state, db, lang, &sources, Some(CONTENT_CONTEXT), site_key)
+                .await
         }
         TranslationPolicy::Deferred => {
             let mut out = Vec::with_capacity(sources.len());
@@ -172,16 +163,8 @@ async fn translate_unique(
 ) -> HashMap<String, String> {
     let translations = match policy {
         TranslationPolicy::BoundedSync => {
-            let timeout = Duration::from_millis(state.config.i18n_sync_timeout_ms);
-            translate_batch_sync_bounded(
-                &state.i18n,
-                db,
-                lang,
-                &uniques,
-                Some(context_hint),
-                timeout,
-            )
-            .await
+            translate_batch_sync_bounded(state, db, lang, &uniques, Some(context_hint), site_key)
+                .await
         }
         TranslationPolicy::Deferred => {
             let mut out = Vec::with_capacity(uniques.len());

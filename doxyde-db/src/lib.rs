@@ -17,5 +17,5 @@
 pub mod init;
 pub mod repositories;
 
-pub use init::init_database;
+pub use init::{init_database, run_migrations};
 pub use repositories::*;

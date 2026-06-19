@@ -28,13 +28,16 @@ pub async fn init_database(database_url: &str) -> Result<SqlitePool> {
         .context("Failed to connect to database")?;
 
     // Run migrations
-    check_and_run_migrations(&pool).await?;
+    run_migrations(&pool).await?;
 
     Ok(pool)
 }
 
-/// Run database migrations with proper error handling for already-applied migrations
-async fn check_and_run_migrations(pool: &SqlitePool) -> Result<()> {
+/// Run database migrations with proper error handling for already-applied
+/// migrations. Idempotent: skips migrations already recorded in
+/// `_sqlx_migrations`, so it is safe to call on existing databases to apply only
+/// newly added migration files.
+pub async fn run_migrations(pool: &SqlitePool) -> Result<()> {
     tracing::info!("Checking for pending migrations...");
 
     // First ensure the migrations table exists

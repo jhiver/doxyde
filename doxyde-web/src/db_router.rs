@@ -103,12 +103,18 @@ impl DatabaseRouter {
                 .with_context(|| format!("Failed to initialize site database: {}", db_path))?
         } else {
             // Just connect if database already exists with connection pool limits
-            sqlx::sqlite::SqlitePoolOptions::new()
+            let pool = sqlx::sqlite::SqlitePoolOptions::new()
                 .max_connections(5) // Limit per-site connections to prevent resource exhaustion
                 .min_connections(1) // Keep at least one connection alive
                 .connect(&db_path)
                 .await
-                .with_context(|| format!("Failed to connect to site database: {}", db_path))?
+                .with_context(|| format!("Failed to connect to site database: {}", db_path))?;
+            // Apply any migrations added since this DB was created (idempotent).
+            // Without this, new migrations (e.g. i18n) never reach existing sites.
+            doxyde_db::run_migrations(&pool)
+                .await
+                .with_context(|| format!("Failed to migrate site database: {}", db_path))?;
+            pool
         };
 
         // Store pool for future use
