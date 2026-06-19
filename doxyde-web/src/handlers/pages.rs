@@ -28,7 +28,7 @@ use tera::Context;
 
 use crate::{
     auth::OptionalUser,
-    content_translate::{translate_page_content, TranslationPolicy},
+    content_translate::{translate_context_titles, translate_page_content, TranslationPolicy},
     locale_middleware::RequestLocale,
     template_context::{add_base_context, add_locale_context},
     AppState,
@@ -434,6 +434,10 @@ pub async fn render_page(
     context.insert("children", &children_data); // Keep for backward compatibility
     context.insert("current_path", &current_path);
     context.insert("has_children", &!children.is_empty());
+
+    // Translate navigation/breadcrumb titles (borrowed from other pages) using
+    // the same policy as the page content. No-op in the source language.
+    translate_context_titles(&mut context, &state, &db, &locale, policy, &site.domain).await;
 
     // Add user info and check edit permissions if logged in
     let mut can_edit = false;
