@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}{{ labels["booking.book"] | default(value="Book") }} · {{ site_title }}{% endblock %}
+{% block title %}{% if quote and quote.name %}{{ quote.name }} · {% endif %}{{ labels["booking.book"] | default(value="Book") }} · {{ site_title }}{% endblock %}
 
 {% block head %}<meta name="robots" content="noindex,nofollow">{% endblock %}
 
@@ -34,53 +34,73 @@
             <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }}</p>
             <a class="booking-book-btn" href="/.stay?from={{ q_from }}&to={{ q_to }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">{{ labels["booking.search_again"] | default(value="Search again") }}</a>
         {% else %}
-            {% if quote %}
-            <div class="booking-quote">
-                <div class="booking-quote-dates">{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}</div>
-                {% if quote.total_price %}
-                <div class="booking-quote-price">
-                    <span class="booking-quote-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</span>
-                    <span class="booking-quote-label">{{ labels["booking.total_price"] | default(value="Total price") }}</span>
-                </div>
-                {% endif %}
+            {# Photo gallery (Airbnb-style) #}
+            {% if quote and quote.images and quote.images | length > 0 %}
+            <div class="booking-hero-gallery">
+                {% for img in quote.images %}<img src="{{ img }}" alt="{{ quote.name | default(value='') }}" loading="{% if loop.first %}eager{% else %}lazy{% endif %}">{% endfor %}
             </div>
             {% endif %}
 
-            <form class="booking-contact-form" action="/.book" method="POST">
-                <input type="hidden" name="listing_id" value="{{ listing_id }}">
-                <input type="hidden" name="from" value="{{ q_from }}">
-                <input type="hidden" name="to" value="{{ q_to }}">
-                <input type="hidden" name="adults" value="{{ q_adults }}">
-                <input type="hidden" name="children" value="{{ q_children }}">
-                <input type="hidden" name="infants" value="{{ q_infants }}">
+            {% if quote and quote.name %}<h1 class="booking-book-title">{{ quote.name }}</h1>{% endif %}
 
-                <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
-                <div class="booking-form-row">
-                    <div class="booking-field">
-                        <label for="first_name">{{ labels["booking.first_name"] | default(value="First name") }}</label>
-                        <input type="text" id="first_name" name="first_name" required>
-                    </div>
-                    <div class="booking-field">
-                        <label for="last_name">{{ labels["booking.last_name"] | default(value="Last name") }}</label>
-                        <input type="text" id="last_name" name="last_name" required>
-                    </div>
+            <div class="booking-book-layout">
+                <div class="booking-book-main">
+                    <p class="booking-book-meta">
+                        {% if quote %}{{ q_from }} → {{ q_to }} · {{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}{% endif %}
+                        · {{ q_adults }} {{ labels["booking.adults"] | default(value="Adults") }}{% if q_children and q_children > 0 %} · {{ q_children }} {{ labels["booking.children"] | default(value="Children") }}{% endif %}
+                        {% if quote and quote.person_capacity %} · {{ labels["booking.guests"] | default(value="Guests") }} {{ quote.person_capacity }}{% endif %}
+                    </p>
+
+                    <form class="booking-contact-form" action="/.book" method="POST">
+                        <input type="hidden" name="listing_id" value="{{ listing_id }}">
+                        <input type="hidden" name="from" value="{{ q_from }}">
+                        <input type="hidden" name="to" value="{{ q_to }}">
+                        <input type="hidden" name="adults" value="{{ q_adults }}">
+                        <input type="hidden" name="children" value="{{ q_children }}">
+                        <input type="hidden" name="infants" value="{{ q_infants }}">
+
+                        <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
+                        <div class="booking-form-row">
+                            <div class="booking-field">
+                                <label for="first_name">{{ labels["booking.first_name"] | default(value="First name") }}</label>
+                                <input type="text" id="first_name" name="first_name" required>
+                            </div>
+                            <div class="booking-field">
+                                <label for="last_name">{{ labels["booking.last_name"] | default(value="Last name") }}</label>
+                                <input type="text" id="last_name" name="last_name" required>
+                            </div>
+                        </div>
+                        <div class="booking-form-row">
+                            <div class="booking-field">
+                                <label for="email">{{ labels["booking.email"] | default(value="Email") }}</label>
+                                <input type="email" id="email" name="email" required>
+                            </div>
+                            <div class="booking-field">
+                                <label for="phone">{{ labels["booking.phone"] | default(value="Phone") }}</label>
+                                <input type="tel" id="phone" name="phone">
+                            </div>
+                        </div>
+                        <div class="booking-field">
+                            <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
+                            <textarea id="note" name="note" rows="3"></textarea>
+                        </div>
+                        <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
+                    </form>
                 </div>
-                <div class="booking-form-row">
-                    <div class="booking-field">
-                        <label for="email">{{ labels["booking.email"] | default(value="Email") }}</label>
-                        <input type="email" id="email" name="email" required>
+
+                {# Sticky price summary #}
+                {% if quote %}
+                <aside class="booking-book-aside">
+                    <div class="booking-price-card">
+                        {% if quote.total_price %}
+                        <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
+                        <div class="booking-price-card-label">{{ labels["booking.total_price"] | default(value="Total price") }}</div>
+                        {% endif %}
+                        <div class="booking-price-card-row"><span>{{ q_from }} → {{ q_to }}</span><span>{{ quote.nights }} {{ labels["booking.nights"] | default(value="nights") }}</span></div>
                     </div>
-                    <div class="booking-field">
-                        <label for="phone">{{ labels["booking.phone"] | default(value="Phone") }}</label>
-                        <input type="tel" id="phone" name="phone">
-                    </div>
-                </div>
-                <div class="booking-field">
-                    <label for="note">{{ labels["booking.special_requests"] | default(value="Special requests") }}</label>
-                    <textarea id="note" name="note" rows="3"></textarea>
-                </div>
-                <button type="submit" class="booking-submit">{{ labels["booking.confirm_booking"] | default(value="Confirm booking") }}</button>
-            </form>
+                </aside>
+                {% endif %}
+            </div>
         {% endif %}
     {% endif %}
 </div>

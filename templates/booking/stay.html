@@ -43,7 +43,7 @@
     {% elif searched %}
         {% if primary_results and primary_results | length > 0 %}
             <h2 class="booking-section-title">{{ labels["booking.results_title"] | default(value="Available stays") }}</h2>
-            <div class="booking-results">
+            <div class="booking-results booking-results-primary">
                 {% for r in primary_results %}{% include "booking/_result_card.html" %}{% endfor %}
             </div>
         {% else %}
@@ -52,7 +52,7 @@
 
         {% if secondary_results and secondary_results | length > 0 %}
             <h2 class="booking-section-title booking-section-secondary">{{ labels["booking.sister_house"] | default(value="Also available at our sister house") }}</h2>
-            <div class="booking-results">
+            <div class="booking-results booking-results-secondary">
                 {% for r in secondary_results %}{% include "booking/_result_card.html" %}{% endfor %}
             </div>
         {% endif %}

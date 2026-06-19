@@ -108,6 +108,12 @@ pub struct AvailabilityResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuoteResponse {
     pub listing_id: i64,
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(default)]
+    pub person_capacity: Option<i64>,
+    #[serde(default)]
+    pub images: Vec<String>,
     pub check_in: String,
     pub check_out: String,
     pub nights: i64,
