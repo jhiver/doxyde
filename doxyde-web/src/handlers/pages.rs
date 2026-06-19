@@ -26,7 +26,13 @@ use doxyde_db::repositories::{
 };
 use tera::Context;
 
-use crate::{auth::OptionalUser, template_context::add_base_context, AppState};
+use crate::{
+    auth::OptionalUser,
+    content_translate::{translate_page_content, TranslationPolicy},
+    locale_middleware::RequestLocale,
+    template_context::{add_base_context, add_locale_context},
+    AppState,
+};
 
 /// Display a page by slug (old route handler - kept for compatibility)
 pub async fn show_page(Path(_slug): Path<String>) -> Result<&'static str, StatusCode> {
@@ -38,13 +44,46 @@ pub async fn list_pages() -> Result<&'static str, StatusCode> {
     Ok("Pages list placeholder")
 }
 
-/// Display a page with its components
+/// Registry-signature wrapper: renders the page in the source language with the
+/// deferred translation policy. The real per-request locale is applied by
+/// `content_handler`, which calls `render_page` directly; this wrapper is a
+/// safety net for any registry-routed display.
 pub async fn show_page_handler(
     state: AppState,
     db: sqlx::SqlitePool,
     site: Site,
     page: Page,
     user: OptionalUser,
+) -> Result<impl IntoResponse, StatusCode> {
+    let locale = RequestLocale::source_default("en");
+    render_page(
+        state,
+        db,
+        site,
+        page,
+        user,
+        locale,
+        TranslationPolicy::Deferred,
+        None,
+    )
+    .await
+}
+
+/// Display a page with its components, in the given locale.
+///
+/// `policy` selects deferred vs bounded-synchronous editorial translation;
+/// `lang_canonical`, when set (by the `/.fr` `/.en` handlers), emits a
+/// per-language `<link rel="canonical">`.
+#[allow(clippy::too_many_arguments)]
+pub async fn render_page(
+    state: AppState,
+    db: sqlx::SqlitePool,
+    site: Site,
+    mut page: Page,
+    user: OptionalUser,
+    locale: RequestLocale,
+    policy: TranslationPolicy,
+    lang_canonical: Option<String>,
 ) -> Result<impl IntoResponse, StatusCode> {
     let page_repo = PageRepository::new(db.clone());
     let version_repo = PageVersionRepository::new(db.clone());
@@ -356,6 +395,21 @@ pub async fn show_page_handler(
         })
         .collect();
 
+    // Translate editorial content (page title/description + component text) into
+    // the active language, in place, before it reaches the template. No-op in the
+    // source language. NOTE: navigation/breadcrumb titles (from other pages) stay
+    // in the source language for lot 0.
+    translate_page_content(
+        &state,
+        &db,
+        &locale,
+        policy,
+        &site.domain,
+        &mut page,
+        &mut components,
+    )
+    .await;
+
     // Prepare template context
     let mut context = Context::new();
 
@@ -366,6 +420,13 @@ pub async fn show_page_handler(
             tracing::error!(error = %e, "Failed to add base context");
             StatusCode::INTERNAL_SERVER_ERROR
         })?;
+
+    // Add locale context (lang/dir, UI labels, switcher, hreflang alternates).
+    add_locale_context(&mut context, &state, &db, &site, &locale, &current_path).await;
+    if let Some(canonical) = &lang_canonical {
+        context.insert("lang_canonical", canonical);
+    }
+
     context.insert("page", &page);
     context.insert("components", &components);
     context.insert("breadcrumbs", &breadcrumb_data);

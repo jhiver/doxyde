@@ -133,6 +133,9 @@ mod tests {
             oauth_token_expiry: 3600,
             sites_directory: sites_directory.unwrap_or_else(|| "".to_string()),
             multi_site_mode: has_sites_dir,
+            i18n_service_addr: "127.0.0.1:4003".to_string(),
+            translation_workers: 4,
+            i18n_sync_timeout_ms: 3000,
         }
     }
 

@@ -40,6 +40,12 @@ pub struct Config {
     pub oauth_token_expiry: u64,
     pub sites_directory: String,
     pub multi_site_mode: bool,
+    /// Address of the external i18n translation service (TCP).
+    pub i18n_service_addr: String,
+    /// Number of concurrent translation worker permits.
+    pub translation_workers: usize,
+    /// Timeout (ms) for the bounded-synchronous translation path (/.fr, /.en).
+    pub i18n_sync_timeout_ms: u64,
 }
 
 impl Config {
@@ -72,6 +78,17 @@ impl Config {
             oauth_token_expiry: config.mcp.oauth_token_expiry,
             sites_directory: config.path.sites,
             multi_site_mode: config.multi_site_mode,
+            i18n_service_addr: std::env::var("DOXYDE_I18N_SERVICE_ADDR")
+                .unwrap_or_else(|_| "127.0.0.1:4003".to_string()),
+            translation_workers: std::env::var("DOXYDE_TRANSLATION_WORKERS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .filter(|&n| n > 0)
+                .unwrap_or(4),
+            i18n_sync_timeout_ms: std::env::var("DOXYDE_I18N_SYNC_TIMEOUT_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(3000),
         })
     }
 

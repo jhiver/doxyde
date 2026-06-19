@@ -14,10 +14,25 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+use std::sync::Arc;
+
+use dashmap::DashSet;
+use tokio::sync::{mpsc, Semaphore};
+
 use crate::autoreload_templates::TemplateEngine;
 use crate::config::Config;
 use crate::db_router::DatabaseRouter;
 use crate::rate_limit::SharedRateLimiter;
+use crate::services::deferred_translation::TranslationJob;
+use crate::services::i18n::I18nClient;
+
+/// Shared handle to the background translation worker (deferred path).
+#[derive(Clone)]
+pub struct TranslationHandle {
+    pub tx: mpsc::Sender<TranslationJob>,
+    pub in_flight: Arc<DashSet<String>>,
+    pub semaphore: Arc<Semaphore>,
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -26,15 +41,20 @@ pub struct AppState {
     pub config: Config,
     pub login_rate_limiter: SharedRateLimiter,
     pub api_rate_limiter: SharedRateLimiter,
+    pub i18n: I18nClient,
+    pub translation: TranslationHandle,
 }
 
 impl AppState {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         db_router: DatabaseRouter,
         templates: TemplateEngine,
         config: Config,
         login_rate_limiter: SharedRateLimiter,
         api_rate_limiter: SharedRateLimiter,
+        i18n: I18nClient,
+        translation: TranslationHandle,
     ) -> Self {
         Self {
             db_router,
@@ -42,6 +62,8 @@ impl AppState {
             config,
             login_rate_limiter,
             api_rate_limiter,
+            i18n,
+            translation,
         }
     }
 

@@ -22,6 +22,7 @@ pub mod component_render;
 pub mod config;
 pub mod configuration;
 pub mod content;
+pub mod content_translate;
 pub mod csrf;
 pub mod db;
 pub mod db_middleware;
@@ -32,6 +33,8 @@ pub mod draft;
 pub mod error;
 pub mod error_middleware;
 pub mod handlers;
+pub mod languages;
+pub mod locale_middleware;
 pub mod logo;
 pub mod markdown;
 pub mod path_security;
@@ -50,6 +53,8 @@ pub mod state;
 pub mod template_context;
 pub mod template_utils;
 pub mod templates;
+pub mod ui_catalog;
+pub mod ui_labels;
 pub mod uploads;
 
 #[cfg(test)]

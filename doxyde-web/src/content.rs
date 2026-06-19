@@ -19,6 +19,7 @@ use axum::{
     http::{StatusCode, Uri},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use axum_extra::extract::Host;
 use doxyde_core::models::{page::Page, site::Site};
 use doxyde_db::repositories::PageRepository;
@@ -27,9 +28,13 @@ use once_cell::sync::Lazy;
 use crate::{
     action_registry::ActionRegistry,
     auth::{CurrentUser, OptionalUser},
+    content_translate::TranslationPolicy,
     db_middleware::SiteDatabase,
     error::AppError,
+    handlers::pages::render_page,
     handlers::serve_image_handler,
+    languages::get_direction,
+    locale_middleware::RequestLocale,
     site_resolver::SiteContext,
     AppState,
 };
@@ -257,6 +262,7 @@ pub async fn content_handler(
     uri: Uri,
     State(state): State<AppState>,
     user: OptionalUser,
+    locale: RequestLocale,
     SiteDatabase(db): SiteDatabase,
 ) -> Result<Response, AppError> {
     // Parse the path to extract content path and action
@@ -318,6 +324,39 @@ pub async fn content_handler(
     // Get the action name (empty string for display)
     let action_name = content_path.action.as_deref().unwrap_or("");
 
+    // Page display ("" action): render directly with the resolved locale and the
+    // deferred translation policy (bypasses the registry so the locale reaches
+    // the handler, whose fixed signature can't carry it).
+    if action_name.is_empty() {
+        return render_page(
+            state.clone(),
+            db,
+            site,
+            page,
+            user,
+            locale,
+            TranslationPolicy::Deferred,
+            None,
+        )
+        .await
+        .map(|r| r.into_response())
+        .map_err(|status| {
+            AppError::new(status, "Failed to render page").with_templates(state.templates.clone())
+        });
+    }
+
+    // Language switch action (/.fr, /.en, ...): serve the page in the target
+    // language with 200 + Set-Cookie (never a redirect), bounded-synchronously so
+    // crawlers get translated content on the first hit.
+    if let Some(code) = action_name.strip_prefix('.') {
+        if locale.enabled.iter().any(|l| l.code == code) {
+            return handle_lang_action(
+                state, db, site, page, user, locale, code, &content_path.path,
+            )
+            .await;
+        }
+    }
+
     // Look up handler in registry
     if let Some(handler) = ACTION_REGISTRY.get(action_name) {
         handler(state, db, site, page, user).await
@@ -332,6 +371,69 @@ pub async fn content_handler(
                 .with_templates(state.templates.clone()),
         )
     }
+}
+
+/// Handle a `/<page>/.<lang>` request: render the page in `lang` and set the
+/// `lang` preference cookie. Responds 200 (never a redirect) so the URL stays a
+/// deterministic, indexable per-language canonical.
+#[allow(clippy::too_many_arguments)]
+async fn handle_lang_action(
+    state: AppState,
+    db: SqlitePool,
+    site: Site,
+    page: Page,
+    user: OptionalUser,
+    base_locale: RequestLocale,
+    lang: &str,
+    page_path: &str,
+) -> Result<Response, AppError> {
+    // Force the serving language to the requested one.
+    let locale = RequestLocale {
+        lang: lang.to_string(),
+        dir: get_direction(lang),
+        source_lang: base_locale.source_lang.clone(),
+        default_lang: base_locale.default_lang.clone(),
+        enabled: base_locale.enabled.clone(),
+    };
+
+    // Per-language canonical URL: /<path>/.<lang> (or /.<lang> for root).
+    let base = page_path.trim_end_matches('/');
+    let canonical = if base.is_empty() {
+        format!("/.{lang}")
+    } else {
+        format!("{base}/.{lang}")
+    };
+
+    let mut response = render_page(
+        state.clone(),
+        db,
+        site,
+        page,
+        user,
+        locale,
+        TranslationPolicy::BoundedSync,
+        Some(canonical),
+    )
+    .await
+    .map(|r| r.into_response())
+    .map_err(|status| {
+        AppError::new(status, "Failed to render page").with_templates(state.templates.clone())
+    })?;
+
+    // Persist the language preference so subsequent bare-URL links serve it.
+    let cookie = Cookie::build((crate::locale_middleware::LANG_COOKIE, lang.to_string()))
+        .path("/")
+        .same_site(SameSite::Lax)
+        .secure(state.config.secure_cookies)
+        .http_only(false)
+        .build();
+    if let Ok(value) = cookie.to_string().parse() {
+        response
+            .headers_mut()
+            .append(axum::http::header::SET_COOKIE, value);
+    }
+
+    Ok(response)
 }
 
 /// Check if a path ends with an image filename pattern.

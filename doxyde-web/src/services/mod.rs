@@ -1,2 +1,4 @@
-// Services module - currently empty
-// Future services can be added here
+// Services module
+pub mod deferred_translation;
+pub mod i18n;
+pub mod translation;

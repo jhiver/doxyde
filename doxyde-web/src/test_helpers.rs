@@ -49,6 +49,9 @@ pub fn create_test_config() -> crate::config::Config {
         oauth_token_expiry: 3600,                     // 1 hour for tests
         sites_directory: "./test-sites".to_string(),  // Test sites directory
         multi_site_mode: false,                       // Single database for tests
+        i18n_service_addr: "127.0.0.1:4003".to_string(),
+        translation_workers: 4,
+        i18n_sync_timeout_ms: 3000,
     }
 }
 
@@ -219,6 +222,16 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     // Create a test database router with the pool already registered
     let db_router = crate::db_router::DatabaseRouter::new_for_test(config.clone(), pool);
 
+    // i18n test wiring: a client pointed at an unused local port (so any real
+    // translate call fails fast and falls back to source) plus a worker handle.
+    let i18n = crate::services::i18n::I18nClient::new(&config.i18n_service_addr);
+    let (translation_tx, _translation_rx) = tokio::sync::mpsc::channel(256);
+    let translation = crate::state::TranslationHandle {
+        tx: translation_tx,
+        in_flight: std::sync::Arc::new(dashmap::DashSet::new()),
+        semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(4)),
+    };
+
     Ok(AppState {
         db_router,
         templates: TemplateEngine::Static {
@@ -228,6 +241,8 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
         config,
         login_rate_limiter,
         api_rate_limiter,
+        i18n,
+        translation,
     })
 }
 

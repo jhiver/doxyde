@@ -1,0 +1,15 @@
+[Unit]
+Description=Doxyde i18n Translation Service (shared, OpenRouter-backed)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/doxyde-i18n
+EnvironmentFile=/opt/doxyde-i18n/.env
+ExecStart=/opt/doxyde-i18n/target/release/i18n-service
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

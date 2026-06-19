@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang | default(value='en') }}" dir="{{ dir | default(value='ltr') }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,7 +10,12 @@
     <meta name="description" content="{% if page.description %}{{ page.description }}{% else %}{{ page.title }} - {{ site_title }}{% endif %}">
     {% if page.keywords %}<meta name="keywords" content="{{ page.keywords }}">{% endif %}
     <meta name="robots" content="{{ page.meta_robots | default(value='index,follow') }}">
-    {% if page.canonical_url %}<link rel="canonical" href="{{ page.canonical_url }}">{% endif %}
+    {% if page.canonical_url %}<link rel="canonical" href="{{ page.canonical_url }}">
+    {% elif lang_canonical is defined %}<link rel="canonical" href="{{ lang_canonical }}">{% endif %}
+
+    <!-- hreflang alternates (per-language canonical URLs + x-default) -->
+    {% if hreflang_alternates is defined %}{% for alt in hreflang_alternates %}<link rel="alternate" hreflang="{{ alt.hreflang }}" href="{{ alt.href }}">
+    {% endfor %}{% endif %}
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">

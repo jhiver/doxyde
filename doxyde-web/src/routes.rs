@@ -22,6 +22,7 @@ use crate::{
     debug_middleware::debug_form_middleware,
     error_middleware::error_enhancer_middleware,
     handlers,
+    locale_middleware::locale_resolver_middleware,
     rate_limit::login_rate_limit_middleware,
     request_logging::request_logging_middleware,
     rmcp,
@@ -124,6 +125,10 @@ pub fn create_router(state: AppState) -> Router {
             update_session_activity,
         ))
         .layer(middleware::from_fn(headers_middleware))
+        // Locale resolution — placed above database_injection in source so it
+        // runs AFTER it at request time (axum layers apply bottom-up), giving it
+        // access to the per-site DB pool to read the enabled language set.
+        .layer(middleware::from_fn(locale_resolver_middleware))
         // Add site resolution and database injection middleware
         .layer(middleware::from_fn_with_state(
             state.db_router.clone(),

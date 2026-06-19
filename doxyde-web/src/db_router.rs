@@ -249,6 +249,9 @@ mod tests {
             oauth_token_expiry: 3600,
             sites_directory: sites_dir,
             multi_site_mode: true,
+            i18n_service_addr: "127.0.0.1:4003".to_string(),
+            translation_workers: 4,
+            i18n_sync_timeout_ms: 3000,
         }
     }
 
@@ -426,6 +429,9 @@ mod tests {
             oauth_token_expiry: 3600,
             sites_directory: "".to_string(), // Empty sites directory
             multi_site_mode: false,
+            i18n_service_addr: "127.0.0.1:4003".to_string(),
+            translation_workers: 4,
+            i18n_sync_timeout_ms: 3000,
         };
 
         let router = DatabaseRouter::new(config).await.unwrap();
