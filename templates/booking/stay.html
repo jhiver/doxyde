@@ -60,6 +60,10 @@
 </div>
 
 <script>
+function bkGallery(btn, dir) {
+    var track = btn.parentElement.querySelector('.booking-gallery-track');
+    if (track) track.scrollBy({ left: dir * track.clientWidth, behavior: 'smooth' });
+}
 (function () {
     var from = document.getElementById('from'), to = document.getElementById('to');
     if (!from || !to) return;

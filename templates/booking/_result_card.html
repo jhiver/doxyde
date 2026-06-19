@@ -1,5 +1,16 @@
 {# Renders one availability result `r`. Expects q_adults/q_children/q_infants in context. #}
 <div class="booking-card{% if r.is_multi_stay %} booking-card-multi{% endif %}">
+    {% if r.images and r.images | length > 0 %}
+    <div class="booking-gallery">
+        <div class="booking-gallery-track">
+            {% for img in r.images %}<img src="{{ img }}" alt="{{ r.name }}" loading="lazy">{% endfor %}
+        </div>
+        {% if r.images | length > 1 %}
+        <button type="button" class="booking-gallery-nav prev" aria-label="Previous photo" onclick="bkGallery(this,-1)">&#8249;</button>
+        <button type="button" class="booking-gallery-nav next" aria-label="Next photo" onclick="bkGallery(this,1)">&#8250;</button>
+        {% endif %}
+    </div>
+    {% endif %}
     <div class="booking-card-head">
         <h3 class="booking-card-name">
             {% if r.page_url %}<a href="{{ r.page_url }}?from={{ r.check_in }}&to={{ r.check_out }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">{{ r.name }}</a>{% else %}{{ r.name }}{% endif %}

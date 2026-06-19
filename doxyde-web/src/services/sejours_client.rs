@@ -69,6 +69,8 @@ pub struct StayLeg {
     pub price: Option<f64>,
     #[serde(default)]
     pub currency_code: Option<String>,
+    #[serde(default)]
+    pub images: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +89,8 @@ pub struct AvailabilityResult {
     pub total_price: Option<f64>,
     #[serde(default)]
     pub price_is_estimate: bool,
+    #[serde(default)]
+    pub images: Vec<String>,
     pub legs: Vec<StayLeg>,
 }
 
