@@ -2,7 +2,7 @@
 {% if not r.is_multi_stay and r.legs and r.legs | length > 0 %}
 {# Single-stay: the whole card is clickable through to its booking page. #}
 {% set leg = r.legs[0] %}
-{% set book_url = "/.book?listing=" ~ leg.listing_id ~ "&from=" ~ leg.check_in ~ "&to=" ~ leg.check_out ~ "&adults=" ~ q_adults ~ "&children=" ~ q_children ~ "&infants=" ~ q_infants %}
+{% set book_url = "/.book?listing=" ~ leg.listing_id ~ "&from=" ~ leg.check_in ~ "&to=" ~ leg.check_out ~ "&adults=" ~ q_adults ~ "&children=" ~ q_children ~ "&infants=" ~ q_infants ~ utm_qs %}
 <div class="booking-card booking-card-clickable" onclick="bkCard(event, '{{ book_url | safe }}')">
     {% if r.images and r.images | length > 0 %}
     <div class="booking-gallery">
@@ -66,7 +66,7 @@
                 <span class="booking-leg-name">{{ leg.name }}</span>
                 <span class="booking-leg-dates">{{ leg.check_in }} → {{ leg.check_out }} · {{ leg.nights }} {{ labels["booking.nights"] | default(value="nights") }}</span>
             </div>
-            <a class="booking-book-btn" href="/.book?listing={{ leg.listing_id }}&from={{ leg.check_in }}&to={{ leg.check_out }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}">
+            <a class="booking-book-btn" href="/.book?listing={{ leg.listing_id }}&from={{ leg.check_in }}&to={{ leg.check_out }}&adults={{ q_adults }}&children={{ q_children }}&infants={{ q_infants }}{{ utm_qs | default(value='') | safe }}">
                 {{ labels["booking.book_now"] | default(value="Book now") }} · {{ leg.name }}
             </a>
         </div>

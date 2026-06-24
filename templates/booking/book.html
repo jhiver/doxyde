@@ -49,6 +49,9 @@
                     <input type="hidden" name="adults" value="{{ q_adults }}">
                     <input type="hidden" name="children" value="{{ q_children }}">
                     <input type="hidden" name="infants" value="{{ q_infants }}">
+                    {% if q_utm_source %}<input type="hidden" name="utm_source" value="{{ q_utm_source }}">{% endif %}
+                    {% if q_utm_medium %}<input type="hidden" name="utm_medium" value="{{ q_utm_medium }}">{% endif %}
+                    {% if q_utm_campaign %}<input type="hidden" name="utm_campaign" value="{{ q_utm_campaign }}">{% endif %}
 
                     <h2>{{ labels["booking.your_details"] | default(value="Your details") }}</h2>
                     <div class="booking-form-row">
@@ -130,7 +133,8 @@
         var c = document.getElementById('bk-children').value;
         if (!ci || !co || co <= ci) return;
         window.location.href = '/.book?listing=' + encodeURIComponent(listingId) +
-            '&from=' + ci + '&to=' + co + '&adults=' + a + '&children=' + c + '&infants={{ q_infants }}';
+            '&from=' + ci + '&to=' + co + '&adults=' + a + '&children=' + c + '&infants={{ q_infants }}' +
+            '{{ utm_qs | default(value="") | safe }}';
     }
     function init() {
         if (typeof flatpickr === 'undefined') { setTimeout(init, 100); return; }

@@ -116,6 +116,41 @@ fn enrich_with_pages(
         .collect()
 }
 
+/// Build a compact `src=…|med=…|camp=…` attribution string from utm params, or
+/// `None` when none are present. Used to log ad landings and to stamp the Hostaway
+/// reservation note so a booking can be traced back to the campaign that drove it.
+fn utm_tag(source: Option<&str>, medium: Option<&str>, campaign: Option<&str>) -> Option<String> {
+    let parts: Vec<String> = [("src", source), ("med", medium), ("camp", campaign)]
+        .into_iter()
+        .filter_map(|(k, v)| {
+            v.map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| format!("{k}={s}"))
+        })
+        .collect();
+    (!parts.is_empty()).then(|| parts.join("|"))
+}
+
+/// URL-encoded query fragment (`&utm_source=…&utm_campaign=…`) used to thread
+/// attribution through booking links so a campaign survives /.stay → /.book → POST.
+/// Empty when no utm params are set. Values are percent-encoded (safe in href + JS).
+fn utm_query(source: Option<&str>, medium: Option<&str>, campaign: Option<&str>) -> String {
+    let mut out = String::new();
+    for (key, value) in [
+        ("utm_source", source),
+        ("utm_medium", medium),
+        ("utm_campaign", campaign),
+    ] {
+        if let Some(v) = value.map(str::trim).filter(|s| !s.is_empty()) {
+            out.push('&');
+            out.push_str(key);
+            out.push('=');
+            out.push_str(&urlencoding::encode(v));
+        }
+    }
+    out
+}
+
 fn render(state: &AppState, template: &str, context: &Context) -> Result<Html<String>, StatusCode> {
     state
         .templates
@@ -143,6 +178,12 @@ pub struct StayQuery {
     pub children: Option<i64>,
     #[serde(default)]
     pub infants: Option<i64>,
+    #[serde(default)]
+    pub utm_source: Option<String>,
+    #[serde(default)]
+    pub utm_medium: Option<String>,
+    #[serde(default)]
+    pub utm_campaign: Option<String>,
 }
 
 pub async fn stay_handler(
@@ -154,6 +195,28 @@ pub async fn stay_handler(
 ) -> Result<Response, StatusCode> {
     let site = load_site(&db, &host).await?;
     let mut context = booking_context(&state, &db, &site, &locale).await?;
+
+    // Marketing attribution: log ad landings, and carry the utm params through the
+    // search form / result links so they survive to /.book (see templates).
+    let utm = utm_tag(
+        q.utm_source.as_deref(),
+        q.utm_medium.as_deref(),
+        q.utm_campaign.as_deref(),
+    );
+    if let Some(ref utm) = utm {
+        tracing::info!(target: "attribution", host = %host, path = "/.stay", utm = %utm);
+    }
+    context.insert("q_utm_source", &q.utm_source);
+    context.insert("q_utm_medium", &q.utm_medium);
+    context.insert("q_utm_campaign", &q.utm_campaign);
+    context.insert(
+        "utm_qs",
+        &utm_query(
+            q.utm_source.as_deref(),
+            q.utm_medium.as_deref(),
+            q.utm_campaign.as_deref(),
+        ),
+    );
 
     let adults = q.adults.unwrap_or(2).max(1);
     let children = q.children.unwrap_or(0).max(0);
@@ -249,6 +312,12 @@ pub struct BookQuery {
     pub children: Option<i64>,
     #[serde(default)]
     pub infants: Option<i64>,
+    #[serde(default)]
+    pub utm_source: Option<String>,
+    #[serde(default)]
+    pub utm_medium: Option<String>,
+    #[serde(default)]
+    pub utm_campaign: Option<String>,
 }
 
 pub async fn book_quote_handler(
@@ -300,6 +369,18 @@ pub async fn book_quote_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
+    // Carry attribution into the booking form so it reaches the POST (and the note).
+    context.insert("q_utm_source", &q.utm_source);
+    context.insert("q_utm_medium", &q.utm_medium);
+    context.insert("q_utm_campaign", &q.utm_campaign);
+    context.insert(
+        "utm_qs",
+        &utm_query(
+            q.utm_source.as_deref(),
+            q.utm_medium.as_deref(),
+            q.utm_campaign.as_deref(),
+        ),
+    );
 
     Ok(render(&state, "booking/book.html", &context)?.into_response())
 }
@@ -322,6 +403,12 @@ pub struct BookForm {
     pub phone: Option<String>,
     #[serde(default)]
     pub note: Option<String>,
+    #[serde(default)]
+    pub utm_source: Option<String>,
+    #[serde(default)]
+    pub utm_medium: Option<String>,
+    #[serde(default)]
+    pub utm_campaign: Option<String>,
 }
 
 pub async fn book_create_handler(
@@ -362,12 +449,28 @@ pub async fn book_create_handler(
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
-    let note = form
+    let base_note = form
         .note
         .as_deref()
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .map(str::to_string);
+    // Stamp the campaign onto the reservation note so a booking is traceable back to
+    // the ad that drove it (persisted on Hostaway — doxyde keeps no analytics table).
+    let utm = utm_tag(
+        form.utm_source.as_deref(),
+        form.utm_medium.as_deref(),
+        form.utm_campaign.as_deref(),
+    );
+    if let Some(ref utm) = utm {
+        tracing::info!(target: "attribution", host = %host, path = "/.book", utm = %utm, "booking");
+    }
+    let note = match (base_note, utm) {
+        (Some(n), Some(utm)) => Some(format!("{n}\n[utm: {utm}]")),
+        (Some(n), None) => Some(n),
+        (None, Some(utm)) => Some(format!("[utm: {utm}]")),
+        (None, None) => None,
+    };
     let contact = Contact {
         first_name: form.first_name.trim().to_string(),
         last_name: form.last_name.trim().to_string(),
