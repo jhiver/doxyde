@@ -49,6 +49,25 @@ use crate::{
 // helpers
 // ---------------------------------------------------------------------------
 
+/// True when an ISO `YYYY-MM-DD` date is strictly before today in Mauritius time.
+/// Lenient by design: a same-day link stays valid (low season check-in tonight is
+/// real). Unparseable input returns false so the normal flow handles it.
+fn is_past_date(date: &str) -> bool {
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Indian::Mauritius)
+        .date_naive();
+    match chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+        Ok(d) => d < today,
+        Err(_) => false,
+    }
+}
+
+/// 302 to the site home. Used when a deep-link targets a past date (e.g. an expired
+/// last-minute ad link) so visitors land on the homepage, not an empty/broken form.
+fn redirect_home() -> Response {
+    (StatusCode::FOUND, [(axum::http::header::LOCATION, "/")]).into_response()
+}
+
 async fn load_site(db: &sqlx::SqlitePool, host: &str) -> Result<Site, StatusCode> {
     get_site_config(db, host)
         .await
@@ -248,6 +267,10 @@ pub async fn stay_handler(
         context.insert("invalid_dates", &true);
         return Ok(render(&state, "booking/stay.html", &context)?.into_response());
     }
+    // Expired deep-link (past check-in, e.g. an old last-minute ad) -> home.
+    if is_past_date(from) {
+        return Ok(redirect_home());
+    }
     context.insert("searched", &true);
 
     let all = repo.list_listings().await.unwrap_or_default();
@@ -342,6 +365,10 @@ pub async fn book_quote_handler(
     if !config.is_configured() {
         context.insert("not_configured", &true);
         return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+    // Expired deep-link (past check-in) -> home, never an empty quote page.
+    if is_past_date(&q.from) {
+        return Ok(redirect_home());
     }
 
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
@@ -650,4 +677,26 @@ pub async fn booking_config_post(
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
     Ok(Redirect::to("/.booking-config").into_response())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_past_date;
+
+    #[test]
+    fn past_date_is_past() {
+        assert!(is_past_date("2020-01-01"));
+    }
+
+    #[test]
+    fn future_date_is_not_past() {
+        assert!(!is_past_date("2099-12-31"));
+    }
+
+    #[test]
+    fn unparseable_date_is_not_past() {
+        // Garbage falls through to the normal flow rather than redirecting.
+        assert!(!is_past_date(""));
+        assert!(!is_past_date("not-a-date"));
+    }
 }
