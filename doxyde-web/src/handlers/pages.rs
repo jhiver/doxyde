@@ -438,8 +438,12 @@ pub async fn render_page(
     // for the cookie-served bare URL we default to the served language's
     // dot-action URL, so the same content isn't indexed at both `/about/` and
     // `/about/.<lang>` (the dot URL is the deterministic indexable canonical).
-    let canonical = lang_canonical
-        .unwrap_or_else(|| crate::template_context::lang_action_url(&current_path, &locale.lang));
+    let canonical = lang_canonical.unwrap_or_else(|| {
+        crate::template_context::absolute_url(
+            &site.domain,
+            &crate::template_context::lang_action_url(&current_path, &locale.lang),
+        )
+    });
     context.insert("lang_canonical", &canonical);
 
     context.insert("page", &page);

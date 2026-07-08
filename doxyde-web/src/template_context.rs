@@ -36,6 +36,14 @@ pub(crate) fn lang_action_url(current_path: &str, code: &str) -> String {
     }
 }
 
+/// Turn a site-root-relative path into an absolute URL on `domain`. Search
+/// engines require `rel=canonical` and `hreflang` links to be absolute
+/// (a relative href fails Lighthouse's SEO audit), unlike in-page navigation
+/// links, which should stay relative.
+pub(crate) fn absolute_url(domain: &str, path: &str) -> String {
+    format!("https://{domain}{path}")
+}
+
 /// Inject locale-related context: `lang`, `dir`, `source_lang`, the resolved UI
 /// `labels` map, `available_locales` (for the switcher) and `hreflang_alternates`
 /// (per-language canonical URLs + x-default). Called by the page display and the
@@ -82,23 +90,27 @@ pub async fn add_locale_context(
     context.insert("available_locales", &available_locales);
 
     // hreflang alternates: one per enabled language pointing at its canonical
-    // dot-action URL, plus x-default pointing at the negotiated bare URL.
+    // dot-action URL, plus x-default pointing at the negotiated bare URL. Must
+    // be absolute URLs (relative hrefs fail the SEO hreflang audit).
     let mut hreflang: Vec<serde_json::Value> = locale
         .enabled
         .iter()
         .map(|l| {
             serde_json::json!({
                 "hreflang": l.code,
-                "href": lang_action_url(current_path, &l.code),
+                "href": absolute_url(&site.domain, &lang_action_url(current_path, &l.code)),
             })
         })
         .collect();
-    let x_default = if current_path.is_empty() {
+    let x_default_path = if current_path.is_empty() {
         "/".to_string()
     } else {
         current_path.to_string()
     };
-    hreflang.push(serde_json::json!({ "hreflang": "x-default", "href": x_default }));
+    hreflang.push(serde_json::json!({
+        "hreflang": "x-default",
+        "href": absolute_url(&site.domain, &x_default_path),
+    }));
     context.insert("hreflang_alternates", &hreflang);
 }
 

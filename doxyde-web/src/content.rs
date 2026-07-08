@@ -404,12 +404,11 @@ async fn handle_lang_action(
     };
 
     // Per-language canonical URL: /<path>/.<lang> (or /.<lang> for root).
-    let base = page_path.trim_end_matches('/');
-    let canonical = if base.is_empty() {
-        format!("/.{lang}")
-    } else {
-        format!("{base}/.{lang}")
-    };
+    // Must be absolute (relative hrefs fail the SEO canonical-URL audit).
+    let canonical = crate::template_context::absolute_url(
+        &site.domain,
+        &crate::template_context::lang_action_url(page_path, lang),
+    );
 
     let mut response = render_page(
         state.clone(),
