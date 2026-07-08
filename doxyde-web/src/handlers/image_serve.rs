@@ -40,7 +40,7 @@ pub struct ImagePreviewQuery {
     pub component_id: i64,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct ImageServeQuery {
     pub full: Option<u8>,
     pub w: Option<u32>,
@@ -149,9 +149,23 @@ pub async fn serve_image_handler(
 
         if has_transform {
             let original = resolve_image_path(file_path, &site_ctx.site_directory);
-            if let Some(response) =
-                maybe_serve_variant(&original, &format, effective_query, max_age)?
-            {
+            // Image decode + Lanczos3 resize + re-encode is CPU-bound and can take
+            // seconds on a full-resolution source. Run it on the blocking pool so it
+            // never occupies an async worker thread — otherwise a handful of
+            // concurrent srcset requests (hero_booking emits 5 widths) can seize
+            // every runtime worker and stall the entire server, including trivial
+            // endpoints like /.health.
+            let fmt = format.clone();
+            let vq = effective_query.clone();
+            let variant = tokio::task::spawn_blocking(move || {
+                maybe_serve_variant(&original, &fmt, &vq, max_age)
+            })
+            .await
+            .map_err(|e| {
+                tracing::error!("variant generation task failed to join: {}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            })??;
+            if let Some(response) = variant {
                 return Ok(response);
             }
         }
@@ -315,8 +329,9 @@ async fn serve_image_file(
         return Err(StatusCode::NOT_FOUND);
     }
 
-    // Read the file
-    let data = fs::read(resolved_path).map_err(|e| {
+    // Read the file without blocking the async worker thread (originals can be
+    // multi-megabyte).
+    let data = tokio::fs::read(resolved_path).await.map_err(|e| {
         tracing::error!("Failed to read image file: {}", e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
