@@ -21,6 +21,7 @@ pub mod delete_page;
 pub mod edit;
 pub mod image_serve;
 pub mod image_upload;
+pub mod llms_txt;
 pub mod move_page;
 pub mod pages;
 pub mod properties;

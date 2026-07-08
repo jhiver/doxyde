@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="booking-page booking-stay">
-    <form class="booking-search-bar" action="/.stay" method="GET">
+    <form class="booking-search-bar" action="/.stay" method="GET" toolname="search_stays" tooldescription="Search available stays for given check-in and check-out dates and number of guests (adults, children). Returns a list of available listings with prices.">
         <div class="booking-field">
             <label for="from">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
             <input type="date" id="from" name="from" value="{{ q_from | default(value='') }}" required>

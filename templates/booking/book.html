@@ -42,7 +42,7 @@
                 {% if quote and not quote.available %}
                     <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }} {{ labels["booking.invalid_dates"] | default(value="Pick other dates on the right.") }}</p>
                 {% else %}
-                <form class="booking-contact-form" action="/.book" method="POST">
+                <form class="booking-contact-form" action="/.book" method="POST" toolname="book_stay" tooldescription="Book a confirmed stay for specific check-in/check-out dates and number of guests. Requires first name, last name and email. No payment card required at booking time — payment instructions are emailed after confirmation.">
                     <input type="hidden" name="listing_id" value="{{ listing_id }}">
                     <input type="hidden" name="from" value="{{ q_from }}">
                     <input type="hidden" name="to" value="{{ q_to }}">

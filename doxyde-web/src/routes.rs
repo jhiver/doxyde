@@ -123,6 +123,7 @@ pub fn create_router(state: AppState) -> Router {
             "/.site-assets/{*path}",
             get(handlers::site_assets::site_asset_handler),
         )
+        .route("/llms.txt", get(handlers::llms_txt::llms_txt_handler))
         // Dynamic content routes (last, to catch all)
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
