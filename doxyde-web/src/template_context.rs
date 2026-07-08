@@ -90,8 +90,13 @@ pub async fn add_locale_context(
     context.insert("available_locales", &available_locales);
 
     // hreflang alternates: one per enabled language pointing at its canonical
-    // dot-action URL, plus x-default pointing at the negotiated bare URL. Must
-    // be absolute URLs (relative hrefs fail the SEO hreflang audit).
+    // dot-action URL, plus x-default pointing at the same dot-action URL as
+    // the default language. x-default must match the page's own canonical
+    // when the default language is served (the negotiated bare URL is never
+    // canonical, see `render_page`'s `lang_canonical` — pointing x-default at
+    // it instead trips Lighthouse's "canonical points to another hreflang
+    // location" SEO audit). Must be absolute (relative hrefs fail the
+    // hreflang audit).
     let mut hreflang: Vec<serde_json::Value> = locale
         .enabled
         .iter()
@@ -102,14 +107,12 @@ pub async fn add_locale_context(
             })
         })
         .collect();
-    let x_default_path = if current_path.is_empty() {
-        "/".to_string()
-    } else {
-        current_path.to_string()
-    };
     hreflang.push(serde_json::json!({
         "hreflang": "x-default",
-        "href": absolute_url(&site.domain, &x_default_path),
+        "href": absolute_url(
+            &site.domain,
+            &lang_action_url(current_path, &locale.default_lang),
+        ),
     }));
     context.insert("hreflang_alternates", &hreflang);
 }
