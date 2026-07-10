@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use doxyde_core::models::{page::Page, site::Site};
-use doxyde_db::repositories::PageRepository;
+use doxyde_db::repositories::{BookingRepository, PageRepository};
 use tera::Context;
 
 use crate::{
@@ -127,6 +127,13 @@ pub async fn add_base_context(
 ) -> Result<()> {
     // Add site title
     context.insert("site_title", &site.title);
+
+    // Set whether booking is enabled on the site (fail-quiet)
+    let booking_enabled = match BookingRepository::new(db.clone()).get_config().await {
+        Ok(config) => config.is_configured(),
+        Err(_) => false,
+    };
+    context.insert("booking_enabled", &booking_enabled);
 
     // Get root page and its children for navigation
     let page_repo = PageRepository::new(db.clone());

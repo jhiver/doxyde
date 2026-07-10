@@ -302,11 +302,13 @@ impl SejoursClient {
 
     async fn json<T: for<'de> Deserialize<'de>>(resp: reqwest::Response) -> Result<T> {
         let status = resp.status();
-        let text = resp.text().await.context("read sejours-api response body")?;
+        let text = resp
+            .text()
+            .await
+            .context("read sejours-api response body")?;
         if !status.is_success() {
             return Err(anyhow!("sejours-api returned {}: {}", status, text));
         }
-        serde_json::from_str(&text)
-            .with_context(|| format!("decode sejours-api response: {text}"))
+        serde_json::from_str(&text).with_context(|| format!("decode sejours-api response: {text}"))
     }
 }

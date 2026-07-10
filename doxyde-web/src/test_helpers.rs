@@ -14,19 +14,15 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#[cfg(test)]
+#![cfg(any(test, feature = "test-utils"))]
+
 use crate::{autoreload_templates::TemplateEngine, AppState};
-#[cfg(test)]
 use doxyde_core::models::{session::Session, site::Site, user::User};
-#[cfg(test)]
 use doxyde_db::repositories::{SessionRepository, UserRepository};
-#[cfg(test)]
 use sqlx::SqlitePool;
-#[cfg(test)]
 use std::sync::Arc;
 
 /// Create a test configuration with sensible defaults
-#[cfg(test)]
 pub fn create_test_config() -> crate::config::Config {
     crate::config::Config {
         database_url: "sqlite::memory:".to_string(),
@@ -56,7 +52,6 @@ pub fn create_test_config() -> crate::config::Config {
     }
 }
 
-#[cfg(test)]
 pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
     // Create in-memory SQLite database
     let pool = SqlitePool::connect(":memory:").await?;
@@ -248,7 +243,6 @@ pub async fn create_test_app_state() -> Result<AppState, anyhow::Error> {
 }
 
 /// Initialize the test schema on an existing pool (for use with #[sqlx::test])
-#[cfg(test)]
 pub async fn setup_test_schema(pool: &SqlitePool) -> Result<(), anyhow::Error> {
     sqlx::query(
         r#"
@@ -341,7 +335,6 @@ pub async fn setup_test_schema(pool: &SqlitePool) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[cfg(test)]
 pub async fn create_test_user(
     pool: &SqlitePool,
     username: &str,
@@ -361,7 +354,6 @@ pub async fn create_test_user(
     Ok(user)
 }
 
-#[cfg(test)]
 pub async fn create_test_site(
     pool: &SqlitePool,
     domain: &str,
@@ -401,7 +393,6 @@ pub async fn create_test_site(
     })
 }
 
-#[cfg(test)]
 pub async fn create_test_session(
     pool: &SqlitePool,
     user_id: i64,

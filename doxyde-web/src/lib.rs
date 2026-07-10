@@ -59,7 +59,8 @@ pub mod uploads;
 
 #[cfg(test)]
 mod template_tests;
-#[cfg(test)]
+
+#[cfg(any(test, feature = "test-utils"))]
 pub mod test_helpers;
 
 pub use config::Config;

@@ -49,6 +49,24 @@ use crate::{
 // helpers
 // ---------------------------------------------------------------------------
 
+/// Determine if the client explicitly requested a JSON response.
+fn wants_json(headers: &axum::http::HeaderMap, format: Option<&str>) -> bool {
+    let accept_json = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.contains("application/json"))
+        .unwrap_or(false);
+    accept_json || format == Some("json")
+}
+
+fn json_error(code: &str) -> Response {
+    axum::Json(serde_json::json!({
+        "status": "error",
+        "code": code
+    }))
+    .into_response()
+}
+
 /// True when an ISO `YYYY-MM-DD` date is strictly before today in Mauritius time.
 /// Lenient by design: a same-day link stays valid (low season check-in tonight is
 /// real). Unparseable input returns false so the normal flow handles it.
@@ -203,6 +221,8 @@ pub struct StayQuery {
     pub utm_medium: Option<String>,
     #[serde(default)]
     pub utm_campaign: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 pub async fn stay_handler(
@@ -210,13 +230,13 @@ pub async fn stay_handler(
     State(state): State<AppState>,
     SiteDatabase(db): SiteDatabase,
     locale: RequestLocale,
+    headers: axum::http::HeaderMap,
     Query(q): Query<StayQuery>,
 ) -> Result<Response, StatusCode> {
+    let json = wants_json(&headers, q.format.as_deref());
     let site = load_site(&db, &host).await?;
     let mut context = booking_context(&state, &db, &site, &locale).await?;
 
-    // Marketing attribution: log ad landings, and carry the utm params through the
-    // search form / result links so they survive to /.book (see templates).
     let utm = utm_tag(
         q.utm_source.as_deref(),
         q.utm_medium.as_deref(),
@@ -252,23 +272,39 @@ pub async fn stay_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if !config.is_configured() {
+        if json {
+            return Ok(json_error("not_configured"));
+        }
         context.insert("not_configured", &true);
         return Ok(render(&state, "booking/stay.html", &context)?.into_response());
     }
 
-    // No dates yet -> just show the search form.
     let (from, to) = match (q.from.as_deref(), q.to.as_deref()) {
         (Some(f), Some(t)) if !f.is_empty() && !t.is_empty() => (f, t),
-        _ => return Ok(render(&state, "booking/stay.html", &context)?.into_response()),
+        _ => {
+            if json {
+                return Ok(axum::Json(serde_json::json!({
+                    "status": "ok",
+                    "results": Vec::<serde_json::Value>::new(),
+                    "secondary_results": Vec::<serde_json::Value>::new(),
+                    "hint": "provide from/to dates"
+                }))
+                .into_response());
+            }
+            return Ok(render(&state, "booking/stay.html", &context)?.into_response());
+        }
     };
-    // ISO dates compare lexicographically; reject an empty/reversed range with a
-    // clear message instead of letting the service error look like an outage.
     if to <= from {
+        if json {
+            return Ok(json_error("invalid_dates"));
+        }
         context.insert("invalid_dates", &true);
         return Ok(render(&state, "booking/stay.html", &context)?.into_response());
     }
-    // Expired deep-link (past check-in, e.g. an old last-minute ad) -> home.
     if is_past_date(from) {
+        if json {
+            return Ok(json_error("past_date"));
+        }
         return Ok(redirect_home());
     }
     context.insert("searched", &true);
@@ -290,31 +326,55 @@ pub async fn stay_handler(
         .collect();
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
 
-    match client
+    let resp = match client
         .availability(from, to, adults, children, infants, &primary_ids)
         .await
     {
-        Ok(resp) => {
-            context.insert("nights", &resp.nights);
-            context.insert("primary_results", &enrich_with_pages(&resp.results, &page_map));
-        }
+        Ok(r) => r,
         Err(e) => {
             tracing::error!("availability (primary) failed: {:?}", e);
+            if json {
+                return Ok(json_error("service_error"));
+            }
             context.insert("service_error", &true);
             return Ok(render(&state, "booking/stay.html", &context)?.into_response());
         }
-    }
+    };
 
+    let primary_results = enrich_with_pages(&resp.results, &page_map);
+    context.insert("nights", &resp.nights);
+    context.insert("primary_results", &primary_results);
+
+    let mut secondary_results = Vec::new();
     if !secondary_ids.is_empty() {
         match client
             .availability(from, to, adults, children, infants, &secondary_ids)
             .await
         {
-            Ok(resp) => {
-                context.insert("secondary_results", &enrich_with_pages(&resp.results, &page_map))
+            Ok(sec_resp) => {
+                secondary_results = enrich_with_pages(&sec_resp.results, &page_map);
+                context.insert("secondary_results", &secondary_results);
             }
-            Err(e) => tracing::warn!("availability (secondary) failed: {:?}", e),
+            Err(e) => {
+                tracing::warn!("availability (secondary) failed: {:?}", e);
+            }
         }
+    }
+
+    if json {
+        let currency_code = primary_results
+            .first()
+            .or_else(|| secondary_results.first())
+            .and_then(|v| v.get("currency_code").and_then(|c| c.as_str()))
+            .map(|s| s.to_string());
+        return Ok(axum::Json(serde_json::json!({
+            "status": "ok",
+            "nights": resp.nights,
+            "currency_code": currency_code,
+            "results": primary_results,
+            "secondary_results": secondary_results
+        }))
+        .into_response());
     }
 
     Ok(render(&state, "booking/stay.html", &context)?.into_response())
@@ -341,6 +401,8 @@ pub struct BookQuery {
     pub utm_medium: Option<String>,
     #[serde(default)]
     pub utm_campaign: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 pub async fn book_quote_handler(
@@ -348,8 +410,10 @@ pub async fn book_quote_handler(
     State(state): State<AppState>,
     SiteDatabase(db): SiteDatabase,
     locale: RequestLocale,
+    headers: axum::http::HeaderMap,
     Query(q): Query<BookQuery>,
 ) -> Result<Response, StatusCode> {
+    let json = wants_json(&headers, q.format.as_deref());
     let site = load_site(&db, &host).await?;
     let mut context = booking_context(&state, &db, &site, &locale).await?;
 
@@ -363,40 +427,67 @@ pub async fn book_quote_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if !config.is_configured() {
+        if json {
+            return Ok(json_error("not_configured"));
+        }
         context.insert("not_configured", &true);
         return Ok(render(&state, "booking/book.html", &context)?.into_response());
     }
-    // Expired deep-link (past check-in) -> home, never an empty quote page.
+    if q.to <= q.from && json {
+        return Ok(json_error("invalid_dates"));
+    }
     if is_past_date(&q.from) {
+        if json {
+            return Ok(json_error("past_date"));
+        }
         return Ok(redirect_home());
     }
 
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
-    match client
+    let quote = match client
         .quote(q.listing, &q.from, &q.to, adults, children, infants)
         .await
     {
-        Ok(quote) => context.insert("quote", &quote),
+        Ok(quote) => quote,
         Err(e) => {
             tracing::error!("quote failed: {:?}", e);
+            if json {
+                return Ok(json_error("service_error"));
+            }
             context.insert("service_error", &true);
+            return Ok(render(&state, "booking/book.html", &context)?.into_response());
         }
+    };
+
+    let blocked_dates = match client.calendar(q.listing).await {
+        Ok(cal) => {
+            context.insert("blocked_dates", &cal.blocked);
+            context.insert("cal_min", &cal.min_date);
+            context.insert("cal_max", &cal.max_date);
+            cal.blocked
+        }
+        Err(e) => {
+            tracing::warn!("calendar failed: {:?}", e);
+            Vec::new()
+        }
+    };
+
+    if json {
+        return Ok(axum::Json(serde_json::json!({
+            "status": "ok",
+            "quote": quote,
+            "blocked_dates": blocked_dates
+        }))
+        .into_response());
     }
 
-    // Availability calendar for the date picker (blocked dates, like Airbnb).
-    if let Ok(cal) = client.calendar(q.listing).await {
-        context.insert("blocked_dates", &cal.blocked);
-        context.insert("cal_min", &cal.min_date);
-        context.insert("cal_max", &cal.max_date);
-    }
-
+    context.insert("quote", &quote);
     context.insert("listing_id", &q.listing);
     context.insert("q_from", &q.from);
     context.insert("q_to", &q.to);
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
-    // Carry attribution into the booking form so it reaches the POST (and the note).
     context.insert("q_utm_source", &q.utm_source);
     context.insert("q_utm_medium", &q.utm_medium);
     context.insert("q_utm_campaign", &q.utm_campaign);
@@ -436,6 +527,8 @@ pub struct BookForm {
     pub utm_medium: Option<String>,
     #[serde(default)]
     pub utm_campaign: Option<String>,
+    #[serde(default)]
+    pub format: Option<String>,
 }
 
 pub async fn book_create_handler(
@@ -443,8 +536,10 @@ pub async fn book_create_handler(
     State(state): State<AppState>,
     SiteDatabase(db): SiteDatabase,
     locale: RequestLocale,
+    headers: axum::http::HeaderMap,
     Form(form): Form<BookForm>,
 ) -> Result<Response, StatusCode> {
+    let json = wants_json(&headers, form.format.as_deref());
     let site = load_site(&db, &host).await?;
     let mut context = booking_context(&state, &db, &site, &locale).await?;
 
@@ -466,8 +561,19 @@ pub async fn book_create_handler(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if !config.is_configured() {
+        if json {
+            return Ok(json_error("not_configured"));
+        }
         context.insert("not_configured", &true);
         return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+
+    if form.to <= form.from && json {
+        return Ok(json_error("invalid_dates"));
+    }
+
+    if is_past_date(&form.from) && json {
+        return Ok(json_error("past_date"));
     }
 
     let phone = form
@@ -506,7 +612,7 @@ pub async fn book_create_handler(
     };
 
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
-    match client
+    let reservation = match client
         .create_reservation(
             form.listing_id,
             &form.from,
@@ -519,15 +625,27 @@ pub async fn book_create_handler(
         )
         .await
     {
-        Ok(reservation) => {
-            context.insert("confirmed", &true);
-            context.insert("reservation", &reservation);
-        }
+        Ok(res) => res,
         Err(e) => {
             tracing::error!("reservation failed: {:?}", e);
+            if json {
+                return Ok(json_error("booking_error"));
+            }
             context.insert("booking_error", &true);
+            return Ok(render(&state, "booking/book.html", &context)?.into_response());
         }
+    };
+
+    if json {
+        return Ok(axum::Json(serde_json::json!({
+            "status": "confirmed",
+            "reservation": reservation
+        }))
+        .into_response());
     }
+
+    context.insert("confirmed", &true);
+    context.insert("reservation", &reservation);
 
     Ok(render(&state, "booking/book.html", &context)?.into_response())
 }

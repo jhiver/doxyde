@@ -456,10 +456,9 @@ pub async fn render_page(
 
     // Booking: if this page is mapped to a Hostaway unit, expose its listing id so
     // the page's booking widget can quote/book that specific unit directly.
-    if let Ok(Some(listing_id)) =
-        doxyde_db::repositories::BookingRepository::new(db.clone())
-            .find_listing_for_page(&current_path)
-            .await
+    if let Ok(Some(listing_id)) = doxyde_db::repositories::BookingRepository::new(db.clone())
+        .find_listing_for_page(&current_path)
+        .await
     {
         context.insert("booking_listing_id", &listing_id);
     }

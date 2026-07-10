@@ -229,7 +229,7 @@ impl DatabaseRouter {
     }
 
     /// Create a test database router with a pre-configured pool
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-utils"))]
     pub fn new_for_test(config: Config, pool: SqlitePool) -> Self {
         let mut pools = HashMap::new();
         pools.insert("test.local".to_string(), pool);

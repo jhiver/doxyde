@@ -23,11 +23,7 @@ use axum_extra::extract::Host;
 use doxyde_core::models::site::Site;
 use doxyde_db::repositories::PageRepository;
 
-use crate::{
-    db_middleware::SiteDatabase,
-    site_config::get_site_config,
-    AppState,
-};
+use crate::{db_middleware::SiteDatabase, site_config::get_site_config, AppState};
 
 async fn load_site(db: &sqlx::SqlitePool, host: &str) -> Result<Site, StatusCode> {
     get_site_config(db, host)
