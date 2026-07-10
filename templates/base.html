@@ -187,6 +187,9 @@
     })();
     </script>
 
+    {# WebMCP registration lives here rather than in site_scripts.html: sites can
+       override site_scripts.html with a DB-stored template, which would drop it. #}
+    {% if booking_enabled %}<script defer src="/.static/js/webmcp.js"></script>{% endif %}
     {% include "site_scripts.html" %}
 </body>
 </html>
