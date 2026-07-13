@@ -321,6 +321,39 @@ impl ComponentHandler for BlogSummaryComponentHandler {
     }
 }
 
+/// Handler for contact form components
+pub struct ContactFormComponentHandler;
+
+impl ComponentHandler for ContactFormComponentHandler {
+    fn component_type(&self) -> &'static str {
+        "contact_form"
+    }
+
+    fn parse_content(&self, raw_content: &str) -> Result<Value, String> {
+        serde_json::from_str::<Value>(raw_content)
+            .map_err(|e| format!("Failed to parse contact_form content as JSON: {}", e))
+    }
+
+    fn default_content(&self) -> Value {
+        json!({
+            "recipient_email": "contact@example.com",
+            "sender_email": "ne-pas-repondre@example.com",
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 587,
+            "smtp_username": "",
+            "smtp_password": "",
+            "smtp_encryption": "starttls",
+            "submit_button_text": "Envoyer",
+            "success_message": "Votre message a bien été envoyé !",
+            "fields": [
+                { "name": "name", "label": "Nom", "type": "text", "required": true, "placeholder": "Votre nom..." },
+                { "name": "email", "label": "Email", "type": "email", "required": true, "placeholder": "Votre adresse email..." },
+                { "name": "message", "label": "Message", "type": "textarea", "required": true, "placeholder": "Votre message..." }
+            ]
+        })
+    }
+}
+
 /// Create a registry with all built-in component handlers
 pub fn create_default_registry() -> ComponentRegistry {
     let mut registry = ComponentRegistry::new();
@@ -332,6 +365,7 @@ pub fn create_default_registry() -> ComponentRegistry {
     registry.register(CodeComponentHandler);
     registry.register(ImageComponentHandler);
     registry.register(BlogSummaryComponentHandler);
+    registry.register(ContactFormComponentHandler);
 
     registry
 }

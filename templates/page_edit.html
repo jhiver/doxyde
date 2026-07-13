@@ -1087,6 +1087,49 @@ function updateBlogSummaryContent(componentId) {
     contentInput.value = JSON.stringify(content);
 }
 
+function updateContactFormContent(componentId) {
+    const contentInput = document.getElementById(`content_${componentId}`);
+    if (!contentInput) return;
+
+    // Get all form values
+    const recipientInput = document.getElementById(`contact_recipient_${componentId}`);
+    const senderInput = document.getElementById(`contact_sender_${componentId}`);
+    const hostInput = document.getElementById(`contact_host_${componentId}`);
+    const portInput = document.getElementById(`contact_port_${componentId}`);
+    const usernameInput = document.getElementById(`contact_username_${componentId}`);
+    const passwordInput = document.getElementById(`contact_password_${componentId}`);
+    const encryptionSelect = document.getElementById(`contact_encryption_${componentId}`);
+    const submitBtnInput = document.getElementById(`contact_submit_btn_${componentId}`);
+    const successMsgInput = document.getElementById(`contact_success_msg_${componentId}`);
+    const fieldsTextarea = document.getElementById(`contact_fields_${componentId}`);
+
+    let fields = null;
+    try {
+        if (fieldsTextarea.value.trim()) {
+            fields = JSON.parse(fieldsTextarea.value);
+        }
+    } catch(e) {
+        console.error("Invalid fields JSON", e);
+    }
+
+    // Build the content object
+    const content = {
+        recipient_email: recipientInput.value.trim(),
+        sender_email: senderInput.value.trim() || null,
+        smtp_host: hostInput.value.trim() || null,
+        smtp_port: parseInt(portInput.value) || null,
+        smtp_username: usernameInput.value.trim() || null,
+        smtp_password: passwordInput.value || null,
+        smtp_encryption: encryptionSelect.value || null,
+        submit_button_text: submitBtnInput.value.trim() || null,
+        success_message: successMsgInput.value.trim() || null,
+        fields: fields
+    };
+
+    // Update the hidden input
+    contentInput.value = JSON.stringify(content);
+}
+
 // Smooth scroll to component if there's a hash in the URL
 document.addEventListener('DOMContentLoaded', function() {
     if (window.location.hash) {
@@ -1503,7 +1546,110 @@ function preventDefaults(e) {
                                         </option>
                                     </select>
                                 </div>
-                                
+                                </div>
+                        {% elif component.component_type == "contact_form" %}
+                            <div class="contact-form-editor" style="display: flex; flex-direction: column; gap: 1rem;">
+                                <input type="hidden" 
+                                       id="content_{{ component.id }}" 
+                                       name="component_contents" 
+                                       value="{{ component.content|json_encode }}">
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_recipient_{{ component.id }}">Recipient Email (To)</label>
+                                        <input type="email" 
+                                               id="contact_recipient_{{ component.id }}" 
+                                               value="{{ component.content.recipient_email|default(value='') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               required
+                                               placeholder="e.g. contact@example.com">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_sender_{{ component.id }}">Sender Email (From)</label>
+                                        <input type="email" 
+                                               id="contact_sender_{{ component.id }}" 
+                                               value="{{ component.content.sender_email|default(value='') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="e.g. no-reply@example.com">
+                                    </div>
+                                </div>
+
+                                <h4 style="margin: 0.5rem 0 0 0; font-size: 0.95rem; border-bottom: 1px solid #eee; padding-bottom: 0.25rem;">SMTP Configuration</h4>
+                                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_host_{{ component.id }}">SMTP Host</label>
+                                        <input type="text" 
+                                               id="contact_host_{{ component.id }}" 
+                                               value="{{ component.content.smtp_host|default(value='') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="e.g. smtp.example.com">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_port_{{ component.id }}">SMTP Port</label>
+                                        <input type="number" 
+                                               id="contact_port_{{ component.id }}" 
+                                               value="{{ component.content.smtp_port|default(value=587) }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="587">
+                                    </div>
+                                </div>
+
+                                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_username_{{ component.id }}">SMTP Username</label>
+                                        <input type="text" 
+                                               id="contact_username_{{ component.id }}" 
+                                               value="{{ component.content.smtp_username|default(value='') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="SMTP User">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_password_{{ component.id }}">SMTP Password</label>
+                                        <input type="password" 
+                                               id="contact_password_{{ component.id }}" 
+                                               value="{{ component.content.smtp_password|default(value='') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="SMTP Password">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_encryption_{{ component.id }}">Encryption</label>
+                                        <select id="contact_encryption_{{ component.id }}" 
+                                                onchange="updateContactFormContent({{ component.id }})">
+                                            <option value="starttls" {% if component.content.smtp_encryption == "starttls" %}selected{% endif %}>STARTTLS (Recommended)</option>
+                                            <option value="ssl_tls" {% if component.content.smtp_encryption == "ssl_tls" %}selected{% endif %}>SSL/TLS</option>
+                                            <option value="none" {% if component.content.smtp_encryption == "none" %}selected{% endif %}>None</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <h4 style="margin: 0.5rem 0 0 0; font-size: 0.95rem; border-bottom: 1px solid #eee; padding-bottom: 0.25rem;">Form Customization</h4>
+                                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 1rem;">
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_submit_btn_{{ component.id }}">Submit Button Text</label>
+                                        <input type="text" 
+                                               id="contact_submit_btn_{{ component.id }}" 
+                                               value="{{ component.content.submit_button_text|default(value='Envoyer') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="Envoyer">
+                                    </div>
+                                    <div class="form-group" style="margin: 0;">
+                                        <label for="contact_success_msg_{{ component.id }}">Success Message</label>
+                                        <input type="text" 
+                                               id="contact_success_msg_{{ component.id }}" 
+                                               value="{{ component.content.success_message|default(value='Votre message a bien été envoyé !') }}"
+                                               onchange="updateContactFormContent({{ component.id }})"
+                                               placeholder="Votre message a bien été envoyé !">
+                                    </div>
+                                </div>
+
+                                <div class="form-group" style="margin: 0;">
+                                    <label for="contact_fields_{{ component.id }}">Form Fields (JSON List)</label>
+                                    <textarea id="contact_fields_{{ component.id }}" 
+                                              onchange="updateContactFormContent({{ component.id }})"
+                                              style="font-family: monospace; font-size: 0.85rem; height: 120px;"
+                                              placeholder='[{"name": "nom", "label": "Nom", "type": "text", "required": true}]'>{{ component.content.fields | default(value=[]) | json_encode }}</textarea>
+                                    <div class="help-text">Define custom fields. Must be a valid JSON array. Each field needs: <code>name</code>, <code>label</code>, <code>type</code> (text/email/textarea) and <code>required</code> (true/false). Leave empty to use defaults.</div>
+                                </div>
                             </div>
                         {% else %}
                             <textarea id="content_{{ component.id }}" 

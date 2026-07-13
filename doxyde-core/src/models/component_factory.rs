@@ -18,7 +18,7 @@ use crate::models::component::Component;
 use crate::models::component_trait::ComponentRenderer;
 use crate::models::components::{
     BlogSummaryComponent, CodeComponent, CustomComponent, HtmlComponent, ImageComponent,
-    MarkdownComponent, TextComponent,
+    MarkdownComponent, TextComponent, ContactFormComponent,
 };
 
 /// Create a renderer for the given component based on its type
@@ -30,6 +30,7 @@ pub fn create_renderer(component: &Component) -> Box<dyn ComponentRenderer> {
         "code" => Box::new(CodeComponent::from_component(component)),
         "image" => Box::new(ImageComponent::from_component(component)),
         "blog_summary" => Box::new(BlogSummaryComponent::from_component(component)),
+        "contact_form" => Box::new(ContactFormComponent::from_component(component)),
         _ => Box::new(CustomComponent::from_component(component)),
     }
 }

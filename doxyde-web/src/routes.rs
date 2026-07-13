@@ -115,6 +115,11 @@ pub fn create_router(state: AppState) -> Router {
             "/.booking-config",
             get(handlers::booking::booking_config_get).post(handlers::booking::booking_config_post),
         )
+        // Contact form submission route
+        .route(
+            "/.contact-submit/{id}",
+            post(handlers::contact_form::submit_handler),
+        )
         // Per-site CSS and assets
         .route("/.site-css", get(handlers::site_assets::site_css_handler))
         .route(

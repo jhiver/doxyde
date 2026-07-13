@@ -1,0 +1,77 @@
+<div class="contact-form-component-wrapper" style="margin: 2rem 0; padding: 1.5rem; background: #ffffff; border-radius: 8px; border: 1px solid #e9ecef; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    {% if component.title %}
+        <h3 class="component-title" style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.5rem; color: #212529;">{{ component.title }}</h3>
+    {% endif %}
+
+    <div id="contact-success-{{ component.id }}" class="alert alert-success" style="display: none; padding: 1rem; margin-bottom: 1.5rem; background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; border-radius: 4px;">
+        {{ component.content.success_message | default(value="Votre message a bien été envoyé !") }}
+    </div>
+
+    <form id="contact-form-{{ component.id }}" action="/.contact-submit/{{ component.id }}" method="POST" style="display: flex; flex-direction: column; gap: 1.25rem;">
+        <!-- Honeypot -->
+        <div style="display:none !important; visibility:hidden !important; height: 0; overflow: hidden;">
+            <label for="website_url_{{ component.id }}">Website URL</label>
+            <input type="text" id="website_url_{{ component.id }}" name="website_url" tabindex="-1" autocomplete="off">
+        </div>
+
+        {% if component.content.fields %}
+            {% for field in component.content.fields %}
+                <div class="form-group" style="display: flex; flex-direction: column; gap: 0.375rem;">
+                    <label for="field_{{ component.id }}_{{ field.name }}" style="font-weight: 600; font-size: 0.9rem; color: #495057;">
+                        {{ field.label }} {% if field.required %}<span style="color: #dc3545;">*</span>{% endif %}
+                    </label>
+                    {% if field.type == "textarea" %}
+                        <textarea id="field_{{ component.id }}_{{ field.name }}" 
+                                  name="{{ field.name }}" 
+                                  {% if field.required %}required{% endif %} 
+                                  placeholder="{{ field.placeholder | default(value='') }}"
+                                  style="width: 100%; min-height: 120px; padding: 0.5rem 0.75rem; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; line-height: 1.5; resize: vertical; box-sizing: border-box;"></textarea>
+                    {% else %}
+                        <input type="{{ field.type }}" 
+                               id="field_{{ component.id }}_{{ field.name }}" 
+                               name="{{ field.name }}" 
+                               {% if field.required %}required{% endif %} 
+                               placeholder="{{ field.placeholder | default(value='') }}"
+                               style="width: 100%; height: 38px; padding: 0.375rem 0.75rem; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+                    {% endif %}
+                </div>
+            {% endfor %}
+        {% else %}
+            <!-- Fallback default fields if none are defined in DB -->
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.375rem;">
+                <label for="field_{{ component.id }}_name" style="font-weight: 600; font-size: 0.9rem; color: #495057;">Nom <span style="color: #dc3545;">*</span></label>
+                <input type="text" id="field_{{ component.id }}_name" name="name" required placeholder="Votre nom..." style="width: 100%; height: 38px; padding: 0.375rem 0.75rem; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.375rem;">
+                <label for="field_{{ component.id }}_email" style="font-weight: 600; font-size: 0.9rem; color: #495057;">Email <span style="color: #dc3545;">*</span></label>
+                <input type="email" id="field_{{ component.id }}_email" name="email" required placeholder="Votre adresse email..." style="width: 100%; height: 38px; padding: 0.375rem 0.75rem; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; box-sizing: border-box;">
+            </div>
+            <div class="form-group" style="display: flex; flex-direction: column; gap: 0.375rem;">
+                <label for="field_{{ component.id }}_message" style="font-weight: 600; font-size: 0.9rem; color: #495057;">Message <span style="color: #dc3545;">*</span></label>
+                <textarea id="field_{{ component.id }}_message" name="message" required placeholder="Votre message..." style="width: 100%; min-height: 120px; padding: 0.5rem 0.75rem; border: 1px solid #ced4da; border-radius: 4px; font-family: inherit; font-size: 0.95rem; line-height: 1.5; resize: vertical; box-sizing: border-box;"></textarea>
+            </div>
+        {% endif %}
+
+        <div style="margin-top: 0.5rem;">
+            <button type="submit" class="btn btn-primary" style="background-color: #007bff; border: 1px solid #007bff; color: white; padding: 0.5rem 1.25rem; font-size: 1rem; border-radius: 4px; cursor: pointer; transition: background-color 0.15s ease-in-out;">
+                {{ component.content.submit_button_text | default(value="Envoyer") }}
+            </button>
+        </div>
+    </form>
+
+    <script>
+        (function() {
+            if (window.location.search.includes('contact_success=1')) {
+                const successEl = document.getElementById('contact-success-{{ component.id }}');
+                const formEl = document.getElementById('contact-form-{{ component.id }}');
+                if (successEl) {
+                    successEl.style.display = 'block';
+                    successEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+                if (formEl) {
+                    formEl.style.display = 'none';
+                }
+            }
+        })();
+    </script>
+</div>

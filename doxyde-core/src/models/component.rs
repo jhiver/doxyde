@@ -70,6 +70,7 @@ impl Component {
             "markdown",
             "custom",
             "blog_summary",
+            "contact_form",
         ];
         if !valid_types.contains(&self.component_type.as_str()) {
             return Err(format!(
@@ -143,6 +144,14 @@ impl Component {
                 }
                 if self.content.get("code").is_none() {
                     return Err("Code component must have a 'code' field".to_string());
+                }
+            }
+            "contact_form" => {
+                if !self.content.is_object() {
+                    return Err("Contact form component content must be an object".to_string());
+                }
+                if self.content.get("recipient_email").is_none() {
+                    return Err("Contact form must have a 'recipient_email' field".to_string());
                 }
             }
             _ => {}

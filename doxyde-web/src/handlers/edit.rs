@@ -250,6 +250,7 @@ pub async fn edit_page_content_handler(
             "code" => "Code",
             "html" => "HTML",
             "blog_summary" => "Blog Summary",
+            "contact_form" => "Contact Form",
             "custom" => "Custom",
             _ => &comp_type,
         };
@@ -265,6 +266,7 @@ pub async fn edit_page_content_handler(
         ("text", "Text"),
         ("image", "Image"),
         ("blog_summary", "Blog Summary"),
+        ("contact_form", "Contact Form"),
         ("code", "Code"),
         ("html", "HTML"),
         ("custom", "Custom"),
