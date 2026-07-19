@@ -49,7 +49,7 @@ impl ImageFormat {
             Ok(ImageFormat::Png)
         } else if data.starts_with(GIF_MAGIC) {
             Ok(ImageFormat::Gif)
-        } else if data.starts_with(WEBP_MAGIC) && data.len() > 12 && &data[8..12] == b"WEBP" {
+        } else if data.starts_with(WEBP_MAGIC) && data.get(8..12) == Some(b"WEBP".as_slice()) {
             Ok(ImageFormat::WebP)
         } else {
             // Try to detect using image crate for other formats

@@ -5,7 +5,7 @@ use regex::Regex;
 ///
 /// This is useful to prevent double-tagging of elements like links.
 /// For example, if you're auto-linking terms but don't want to link
-/// text that's already inside an <a> tag.
+/// text that's already inside an `<a>` tag.
 #[derive(Debug)]
 pub struct PreserveTagger {
     /// Tags to preserve (e.g., ["a", "abbr"])

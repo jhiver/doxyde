@@ -113,7 +113,7 @@ pub fn build_opening_tag(tag_name: &str, attributes: &HashMap<String, String>) -
 
 /// Builds a closing HTML tag
 ///
-/// Example: build_closing_tag("a") => "</a>"
+/// Example: `build_closing_tag("a")` => `"</a>"`
 pub fn build_closing_tag(tag_name: &str) -> String {
     format!("</{}>", tag_name)
 }

@@ -27,6 +27,20 @@ use sqlx::SqlitePool;
 use std::future::Future;
 use tracing::info;
 
+/// Insert `key` into a component's JSON `content` object, failing loudly when
+/// the stored content is not an object (instead of panicking via `Value` index).
+fn set_content_field(
+    content: &mut serde_json::Value,
+    key: &str,
+    value: serde_json::Value,
+) -> Result<()> {
+    content
+        .as_object_mut()
+        .ok_or_else(|| anyhow::anyhow!("component content is not a JSON object"))?
+        .insert(key.to_string(), value);
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct DoxydeRmcpService {
     pool: SqlitePool,
@@ -3080,15 +3094,14 @@ impl DoxydeRmcpService {
         // Process the image URI
         let image_data = if req.uri.starts_with("data:") {
             // Parse data URI and extract base64 content
-            let parts: Vec<&str> = req.uri.splitn(2, ',').collect();
-            if parts.len() != 2 {
+            let Some((_prefix, b64)) = req.uri.split_once(',') else {
                 return Err(anyhow::anyhow!("Invalid data URI format"));
-            }
+            };
 
             // Decode base64
             use base64::Engine;
             base64::engine::general_purpose::STANDARD
-                .decode(parts[1])
+                .decode(b64)
                 .map_err(|e| anyhow::anyhow!("Failed to decode base64 data: {}", e))?
         } else if req.uri.starts_with("http://") || req.uri.starts_with("https://") {
             // Download from URL
@@ -3184,15 +3197,19 @@ impl DoxydeRmcpService {
 
         // Add thumbnail path if available
         if let Some(ref thumb_rel) = rel_thumb {
-            content["thumb_file_path"] = serde_json::json!(thumb_rel);
+            set_content_field(
+                &mut content,
+                "thumb_file_path",
+                serde_json::json!(thumb_rel),
+            )?;
         }
 
         // Add dimensions if available (not available for SVG)
         if let Some(width) = metadata.width {
-            content["width"] = serde_json::json!(width);
+            set_content_field(&mut content, "width", serde_json::json!(width))?;
         }
         if let Some(height) = metadata.height {
-            content["height"] = serde_json::json!(height);
+            set_content_field(&mut content, "height", serde_json::json!(height))?;
         }
 
         // Create the component
@@ -3262,19 +3279,27 @@ impl DoxydeRmcpService {
         let mut content = component.content.clone();
 
         if let Some(slug) = req.slug {
-            content["slug"] = serde_json::Value::String(slug);
+            set_content_field(&mut content, "slug", serde_json::Value::String(slug))?;
         }
 
         if let Some(title) = req.title.clone() {
-            content["title"] = serde_json::Value::String(title);
+            set_content_field(&mut content, "title", serde_json::Value::String(title))?;
         }
 
         if let Some(description) = req.description {
-            content["description"] = serde_json::Value::String(description);
+            set_content_field(
+                &mut content,
+                "description",
+                serde_json::Value::String(description),
+            )?;
         }
 
         if let Some(alt_text) = req.alt_text {
-            content["alt_text"] = serde_json::Value::String(alt_text);
+            set_content_field(
+                &mut content,
+                "alt_text",
+                serde_json::Value::String(alt_text),
+            )?;
         }
 
         component.content = content;
@@ -3411,11 +3436,15 @@ impl DoxydeRmcpService {
         let mut content = component.content.clone();
 
         if let Some(code) = req.code {
-            content["code"] = serde_json::Value::String(code);
+            set_content_field(&mut content, "code", serde_json::Value::String(code))?;
         }
 
         if let Some(language) = req.language {
-            content["language"] = serde_json::Value::String(language);
+            set_content_field(
+                &mut content,
+                "language",
+                serde_json::Value::String(language),
+            )?;
         }
 
         component.content = content;

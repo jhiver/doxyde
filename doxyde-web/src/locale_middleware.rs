@@ -70,7 +70,7 @@ impl RequestLocale {
     }
 }
 
-/// Load the per-site i18n config, falling back to {en, source en, [en]} if the
+/// Load the per-site i18n config, falling back to `{en, source en, [en]}` if the
 /// tables are missing or empty (defensive; they exist after migration 021).
 pub async fn load_site_i18n(pool: &SqlitePool) -> I18nSiteConfig {
     let fallback = || I18nSiteConfig {
