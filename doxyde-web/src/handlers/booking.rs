@@ -119,6 +119,9 @@ async fn booking_context(
     .await;
     // Suppress hreflang on transactional pages (no per-language canonical URL).
     context.insert("hreflang_alternates", &Vec::<serde_json::Value>::new());
+    // Per-site analytics tags (GA4 + Meta Pixel): booking pages are public and
+    // conversion-relevant.
+    crate::analytics::add_analytics_context(&mut context, &site.domain);
     Ok(context)
 }
 

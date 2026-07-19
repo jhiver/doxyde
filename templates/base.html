@@ -66,7 +66,10 @@
     </style>
     <!-- Per-site custom CSS -->
     <link rel="stylesheet" href="/.site-css">
-    {% block head %}{% endblock %}
+    {# Per-site analytics tags (GA4 + Meta Pixel), host-mapped in Rust
+       (doxyde-web/src/analytics.rs). Only set on public page renders. #}
+    {% if analytics_head is defined %}{{ analytics_head | safe }}
+    {% endif %}{% block head %}{% endblock %}
 </head>
 <body>
     <a href="#main-content" class="skip-link">Skip to content</a>

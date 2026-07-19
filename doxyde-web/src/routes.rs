@@ -273,7 +273,9 @@ mod tests {
         response.assert_status(StatusCode::OK);
 
         // Check all security headers
-        response.assert_header(header::CONTENT_SECURITY_POLICY, "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';");
+        let expected_csp = crate::configuration::defaults::default_csp_content()
+            .expect("default CSP content must be defined");
+        response.assert_header(header::CONTENT_SECURITY_POLICY, expected_csp.as_str());
         response.assert_header(
             header::STRICT_TRANSPORT_SECURITY,
             "max-age=31536000; includeSubDomains",

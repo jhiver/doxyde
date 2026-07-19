@@ -107,7 +107,11 @@ pub fn default_enable_content_type_options() -> bool {
 
 // Security header content defaults
 pub fn default_csp_content() -> Option<String> {
-    Some("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self';".to_string())
+    // script-src/connect-src include the GA4 (googletagmanager/google-analytics)
+    // and Meta Pixel (connect.facebook.net/facebook.com) origins used by the
+    // per-site analytics tags (see doxyde-web/src/analytics.rs). img-src already
+    // allows https: for the tracking pixels.
+    Some("default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://connect.facebook.net; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self' https://*.google-analytics.com https://*.analytics.google.com https://www.googletagmanager.com https://stats.g.doubleclick.net https://www.facebook.com https://connect.facebook.net; frame-ancestors 'none'; base-uri 'self'; form-action 'self';".to_string())
 }
 
 pub fn default_hsts_content() -> Option<String> {
@@ -212,6 +216,17 @@ mod tests {
         assert!(default_enable_csp());
         assert!(default_enable_frame_options());
         assert!(default_enable_content_type_options());
+    }
+
+    #[test]
+    fn test_default_csp_allows_analytics_origins() {
+        let csp = default_csp_content().unwrap();
+        // GA4: script loaded from googletagmanager, beacons to google-analytics.
+        assert!(csp.contains("script-src 'self' 'unsafe-inline' https://www.googletagmanager.com"));
+        assert!(csp.contains("https://*.google-analytics.com"));
+        // Meta Pixel: fbevents.js from connect.facebook.net, events to facebook.com.
+        assert!(csp.contains("https://connect.facebook.net"));
+        assert!(csp.contains("https://www.facebook.com"));
     }
 
     #[test]

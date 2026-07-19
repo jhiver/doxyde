@@ -434,6 +434,9 @@ pub async fn render_page(
     )
     .await;
 
+    // Per-site analytics tags (GA4 + Meta Pixel) for public pages.
+    crate::analytics::add_analytics_context(&mut context, &site.domain);
+
     // Per-language canonical. The `/.fr` `/.en` handlers pass an explicit one;
     // for the cookie-served bare URL we default to the served language's
     // dot-action URL, so the same content isn't indexed at both `/about/` and
