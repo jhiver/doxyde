@@ -17,8 +17,8 @@
 use crate::models::component::Component;
 use crate::models::component_trait::ComponentRenderer;
 use crate::models::components::{
-    BlogSummaryComponent, CodeComponent, CustomComponent, HtmlComponent, ImageComponent,
-    MarkdownComponent, TextComponent, ContactFormComponent,
+    BlogSummaryComponent, CodeComponent, ContactFormComponent, CustomComponent, HtmlComponent,
+    ImageComponent, MarkdownComponent, TextComponent,
 };
 
 /// Create a renderer for the given component based on its type

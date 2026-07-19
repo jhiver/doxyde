@@ -16,18 +16,18 @@
 
 pub mod blog_summary_component;
 pub mod code_component;
+pub mod contact_form_component;
 pub mod custom_component;
 pub mod html_component;
 pub mod image_component;
 pub mod markdown_component;
 pub mod text_component;
-pub mod contact_form_component;
 
 pub use blog_summary_component::BlogSummaryComponent;
 pub use code_component::CodeComponent;
+pub use contact_form_component::ContactFormComponent;
 pub use custom_component::CustomComponent;
 pub use html_component::HtmlComponent;
 pub use image_component::ImageComponent;
 pub use markdown_component::MarkdownComponent;
 pub use text_component::TextComponent;
-pub use contact_form_component::ContactFormComponent;

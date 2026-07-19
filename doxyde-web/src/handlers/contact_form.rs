@@ -14,19 +14,16 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-use axum::{
-    extract::{Path, Form},
-    http::{StatusCode, HeaderMap},
-    response::{IntoResponse, Response, Redirect, Json},
-};
-use axum::response::Html;
-use std::collections::HashMap;
-use doxyde_db::repositories::ComponentRepository;
 use crate::db_middleware::SiteDatabase;
-use lettre::{
-    transport::smtp::authentication::Credentials,
-    Message, SmtpTransport, Transport,
+use axum::response::Html;
+use axum::{
+    extract::{Form, Path},
+    http::{HeaderMap, StatusCode},
+    response::{IntoResponse, Json, Redirect, Response},
 };
+use doxyde_db::repositories::ComponentRepository;
+use lettre::{transport::smtp::authentication::Credentials, Message, SmtpTransport, Transport};
+use std::collections::HashMap;
 
 pub async fn submit_handler(
     SiteDatabase(db): SiteDatabase,
@@ -46,18 +43,24 @@ pub async fn submit_handler(
     let email_body = build_and_validate_body(&config, &form_data)?;
     send_email(&config, &email_body, component_id).await?;
 
-    let success_msg = config.success_message.as_deref()
+    let success_msg = config
+        .success_message
+        .as_deref()
         .unwrap_or("Votre message a bien été envoyé !");
     Ok(success_response(&headers, success_msg))
 }
 
 fn is_honeypot_triggered(form_data: &HashMap<String, String>) -> bool {
-    form_data.get("website_url")
+    form_data
+        .get("website_url")
         .map(|val| !val.trim().is_empty())
         .unwrap_or(false)
 }
 
-async fn get_component(repo: &ComponentRepository, id: i64) -> Result<doxyde_core::models::component::Component, StatusCode> {
+async fn get_component(
+    repo: &ComponentRepository,
+    id: i64,
+) -> Result<doxyde_core::models::component::Component, StatusCode> {
     let comp = repo.find_by_id(id).await.map_err(|e| {
         tracing::error!(error = ?e, component_id = id, "Failed to find component");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -69,7 +72,10 @@ async fn get_component(repo: &ComponentRepository, id: i64) -> Result<doxyde_cor
     Ok(component)
 }
 
-fn parse_config(component: &doxyde_core::models::component::Component) -> Result<doxyde_core::models::components::contact_form_component::ContactFormConfig, StatusCode> {
+fn parse_config(
+    component: &doxyde_core::models::component::Component,
+) -> Result<doxyde_core::models::components::contact_form_component::ContactFormConfig, StatusCode>
+{
     serde_json::from_value(component.content.clone()).map_err(|e| {
         tracing::error!(error = ?e, "Failed to parse contact_form config");
         StatusCode::INTERNAL_SERVER_ERROR
@@ -95,7 +101,8 @@ fn build_and_validate_body(
     Ok(email_body)
 }
 
-fn get_default_fields() -> Vec<doxyde_core::models::components::contact_form_component::ContactFormField> {
+fn get_default_fields(
+) -> Vec<doxyde_core::models::components::contact_form_component::ContactFormField> {
     use doxyde_core::models::components::contact_form_component::ContactFormField;
     vec![
         ContactFormField {
@@ -141,7 +148,10 @@ async fn send_email(
             }
         }
     } else {
-        tracing::warn!("SMTP host/creds not configured for form {}. E-mail not sent.", component_id);
+        tracing::warn!(
+            "SMTP host/creds not configured for form {}. E-mail not sent.",
+            component_id
+        );
     }
     Ok(())
 }
@@ -150,10 +160,16 @@ fn build_message(
     config: &doxyde_core::models::components::contact_form_component::ContactFormConfig,
     body: &str,
 ) -> Result<Message, StatusCode> {
-    let sender = config.sender_email.clone().unwrap_or_else(|| "no-reply@example.com".to_string());
+    let sender = config
+        .sender_email
+        .clone()
+        .unwrap_or_else(|| "no-reply@example.com".to_string());
     Message::builder()
         .from(sender.parse().map_err(|_| StatusCode::BAD_REQUEST)?)
-        .to(config.recipient_email.parse().map_err(|_| StatusCode::BAD_REQUEST)?)
+        .to(config
+            .recipient_email
+            .parse()
+            .map_err(|_| StatusCode::BAD_REQUEST)?)
         .subject("Nouveau message de contact")
         .body(body.to_string())
         .map_err(|e| {
@@ -183,9 +199,9 @@ fn build_mailer(
             );
             Ok(mailer_builder.tls(tls).build())
         }
-        "none" => {
-            Ok(mailer_builder.tls(lettre::transport::smtp::client::Tls::None).build())
-        }
+        "none" => Ok(mailer_builder
+            .tls(lettre::transport::smtp::client::Tls::None)
+            .build()),
         _ => {
             let tls = lettre::transport::smtp::client::Tls::Required(
                 lettre::transport::smtp::client::TlsParameters::new(smtp_host.to_string())
@@ -218,7 +234,9 @@ fn success_response(headers: &HeaderMap, message: &str) -> Response {
 }
 
 fn get_referer_redirect(headers: &HeaderMap) -> Option<Redirect> {
-    let referer = headers.get(axum::http::header::REFERER).and_then(|v| v.to_str().ok())?;
+    let referer = headers
+        .get(axum::http::header::REFERER)
+        .and_then(|v| v.to_str().ok())?;
     let clean_referer = if referer.contains("contact_success=") {
         referer.split('?').next().unwrap_or(referer).to_string()
     } else {

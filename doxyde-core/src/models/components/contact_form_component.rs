@@ -82,8 +82,15 @@ impl ComponentRenderer for ContactFormComponent {
 
 impl ContactFormComponent {
     fn render_default(&self) -> String {
-        let id_str = self.id.map(|id| id.to_string()).unwrap_or_else(|| "new".to_string());
-        let button_text = self.config.submit_button_text.as_deref().unwrap_or("Envoyer");
+        let id_str = self
+            .id
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "new".to_string());
+        let button_text = self
+            .config
+            .submit_button_text
+            .as_deref()
+            .unwrap_or("Envoyer");
         let fields_html = self.render_fields(&id_str);
 
         format!(
@@ -111,15 +118,28 @@ impl ContactFormComponent {
 
         for field in fields {
             let req_attr = if field.required { "required" } else { "" };
-            let placeholder_attr = field.placeholder.as_deref()
+            let placeholder_attr = field
+                .placeholder
+                .as_deref()
                 .map(|p| format!("placeholder=\"{}\"", escape_html(p)))
                 .unwrap_or_default();
-            fields_html.push_str(&self.render_single_field(id_str, field, req_attr, &placeholder_attr));
+            fields_html.push_str(&self.render_single_field(
+                id_str,
+                field,
+                req_attr,
+                &placeholder_attr,
+            ));
         }
         fields_html
     }
 
-    fn render_single_field(&self, id_str: &str, field: &ContactFormField, req_attr: &str, placeholder_attr: &str) -> String {
+    fn render_single_field(
+        &self,
+        id_str: &str,
+        field: &ContactFormField,
+        req_attr: &str,
+        placeholder_attr: &str,
+    ) -> String {
         let name = escape_html(&field.name);
         let label = escape_html(&field.label);
         match field.r#type.as_str() {
@@ -175,10 +195,15 @@ mod tests {
 
     #[test]
     fn test_contact_form_from_component() {
-        let component = Component::new(1, "contact_form".to_string(), 0, json!({
-            "recipient_email": "hello@example.com",
-            "submit_button_text": "Submit"
-        }));
+        let component = Component::new(
+            1,
+            "contact_form".to_string(),
+            0,
+            json!({
+                "recipient_email": "hello@example.com",
+                "submit_button_text": "Submit"
+            }),
+        );
         let comp = ContactFormComponent::from_component(&component);
 
         assert_eq!(comp.config.recipient_email, "hello@example.com");
