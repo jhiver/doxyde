@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 pub mod action_registry;
+pub mod attribution;
 pub mod auth;
 pub mod autoreload_templates;
 pub mod component_registry;

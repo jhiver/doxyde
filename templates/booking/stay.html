@@ -34,6 +34,9 @@
         {% if q_utm_source %}<input type="hidden" name="utm_source" value="{{ q_utm_source }}">{% endif %}
         {% if q_utm_medium %}<input type="hidden" name="utm_medium" value="{{ q_utm_medium }}">{% endif %}
         {% if q_utm_campaign %}<input type="hidden" name="utm_campaign" value="{{ q_utm_campaign }}">{% endif %}
+        {% if q_gclid %}<input type="hidden" name="gclid" value="{{ q_gclid }}">{% endif %}
+        {% if q_fbclid %}<input type="hidden" name="fbclid" value="{{ q_fbclid }}">{% endif %}
+        {% if q_ttclid %}<input type="hidden" name="ttclid" value="{{ q_ttclid }}">{% endif %}
         <button type="submit" class="booking-submit">{{ labels["booking.search"] | default(value="Search") }}</button>
     </form>
     <p class="booking-reassure booking-reassure-banner">&#10003; {{ labels["booking.no_card_required"] | default(value="No credit card required") }}</p>

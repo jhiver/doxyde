@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use crate::{
+    attribution::attribution_capture_middleware,
     auth::CurrentUser,
     configuration::Configuration,
     content,
@@ -131,6 +132,9 @@ pub fn create_router(state: AppState) -> Router {
         .fallback(get(content::content_handler).post(content::content_post_handler))
         // Add middleware
         .layer(middleware::from_fn(request_logging_middleware))
+        // Ad-attribution capture: gclid/fbclid/ttclid/utm_* landings set the
+        // first-party _dx_attr cookie (90 days, last touch) on any URL.
+        .layer(middleware::from_fn(attribution_capture_middleware))
         .layer(middleware::from_fn(debug_form_middleware))
         .layer(middleware::from_fn_with_state(
             Arc::new(state.clone()),

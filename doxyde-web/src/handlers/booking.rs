@@ -27,13 +27,14 @@ use axum::{
     http::StatusCode,
     response::{Html, IntoResponse, Redirect, Response},
 };
-use axum_extra::extract::Host;
+use axum_extra::extract::{cookie::CookieJar, Host};
 use doxyde_core::models::site::Site;
 use doxyde_db::repositories::{BookingListing, BookingRepository};
 use serde::Deserialize;
 use tera::Context;
 
 use crate::{
+    attribution::{clean_value, parse_cookie_value, Attribution, ATTR_COOKIE},
     auth::CurrentUser,
     content_translate::TranslationPolicy,
     csrf::get_or_create_csrf_token,
@@ -134,8 +135,8 @@ fn enrich_with_pages(
             if let Some(legs) = value.get_mut("legs").and_then(|l| l.as_array_mut()) {
                 for leg in legs.iter_mut() {
                     if let Some(id) = leg.get("listing_id").and_then(|v| v.as_i64()) {
-                        if let Some(path) = page_map.get(&id) {
-                            leg["page_url"] = serde_json::json!(path);
+                        if let (Some(path), Some(obj)) = (page_map.get(&id), leg.as_object_mut()) {
+                            obj.insert("page_url".to_string(), serde_json::json!(path));
                         }
                     }
                 }
@@ -143,8 +144,10 @@ fn enrich_with_pages(
             // Single-stay convenience: surface the (only) leg's page at result level.
             if !r.is_multi_stay {
                 if let Some(first) = r.legs.first() {
-                    if let Some(path) = page_map.get(&first.listing_id) {
-                        value["page_url"] = serde_json::json!(path);
+                    if let (Some(path), Some(obj)) =
+                        (page_map.get(&first.listing_id), value.as_object_mut())
+                    {
+                        obj.insert("page_url".to_string(), serde_json::json!(path));
                     }
                 }
             }
@@ -168,17 +171,20 @@ fn utm_tag(source: Option<&str>, medium: Option<&str>, campaign: Option<&str>) -
     (!parts.is_empty()).then(|| parts.join("|"))
 }
 
-/// URL-encoded query fragment (`&utm_source=…&utm_campaign=…`) used to thread
+/// URL-encoded query fragment (`&utm_source=…&gclid=…`) used to thread
 /// attribution through booking links so a campaign survives /.stay → /.book → POST.
-/// Empty when no utm params are set. Values are percent-encoded (safe in href + JS).
-fn utm_query(source: Option<&str>, medium: Option<&str>, campaign: Option<&str>) -> String {
+/// Empty when no attribution is set. Values are percent-encoded (safe in href + JS).
+fn attribution_query(attr: &Attribution) -> String {
     let mut out = String::new();
     for (key, value) in [
-        ("utm_source", source),
-        ("utm_medium", medium),
-        ("utm_campaign", campaign),
+        ("utm_source", attr.utm_source.as_deref()),
+        ("utm_medium", attr.utm_medium.as_deref()),
+        ("utm_campaign", attr.utm_campaign.as_deref()),
+        ("gclid", attr.gclid.as_deref()),
+        ("fbclid", attr.fbclid.as_deref()),
+        ("ttclid", attr.ttclid.as_deref()),
     ] {
-        if let Some(v) = value.map(str::trim).filter(|s| !s.is_empty()) {
+        if let Some(v) = value {
             out.push('&');
             out.push_str(key);
             out.push('=');
@@ -186,6 +192,18 @@ fn utm_query(source: Option<&str>, medium: Option<&str>, campaign: Option<&str>)
         }
     }
     out
+}
+
+/// Insert the `q_*` attribution echoes + the `utm_qs` link fragment into a
+/// booking page context so templates re-thread the campaign through the funnel.
+fn insert_attribution_context(context: &mut Context, attr: &Attribution) {
+    context.insert("q_utm_source", &attr.utm_source);
+    context.insert("q_utm_medium", &attr.utm_medium);
+    context.insert("q_utm_campaign", &attr.utm_campaign);
+    context.insert("q_gclid", &attr.gclid);
+    context.insert("q_fbclid", &attr.fbclid);
+    context.insert("q_ttclid", &attr.ttclid);
+    context.insert("utm_qs", &attribution_query(attr));
 }
 
 fn render(state: &AppState, template: &str, context: &Context) -> Result<Html<String>, StatusCode> {
@@ -222,7 +240,26 @@ pub struct StayQuery {
     #[serde(default)]
     pub utm_campaign: Option<String>,
     #[serde(default)]
+    pub gclid: Option<String>,
+    #[serde(default)]
+    pub fbclid: Option<String>,
+    #[serde(default)]
+    pub ttclid: Option<String>,
+    #[serde(default)]
     pub format: Option<String>,
+}
+
+impl From<&StayQuery> for Attribution {
+    fn from(q: &StayQuery) -> Self {
+        Self {
+            gclid: clean_value(q.gclid.as_deref()),
+            fbclid: clean_value(q.fbclid.as_deref()),
+            ttclid: clean_value(q.ttclid.as_deref()),
+            utm_source: clean_value(q.utm_source.as_deref()),
+            utm_medium: clean_value(q.utm_medium.as_deref()),
+            utm_campaign: clean_value(q.utm_campaign.as_deref()),
+        }
+    }
 }
 
 pub async fn stay_handler(
@@ -245,17 +282,7 @@ pub async fn stay_handler(
     if let Some(ref utm) = utm {
         tracing::info!(target: "attribution", host = %host, path = "/.stay", utm = %utm);
     }
-    context.insert("q_utm_source", &q.utm_source);
-    context.insert("q_utm_medium", &q.utm_medium);
-    context.insert("q_utm_campaign", &q.utm_campaign);
-    context.insert(
-        "utm_qs",
-        &utm_query(
-            q.utm_source.as_deref(),
-            q.utm_medium.as_deref(),
-            q.utm_campaign.as_deref(),
-        ),
-    );
+    insert_attribution_context(&mut context, &Attribution::from(&q));
 
     let adults = q.adults.unwrap_or(2).max(1);
     let children = q.children.unwrap_or(0).max(0);
@@ -402,7 +429,26 @@ pub struct BookQuery {
     #[serde(default)]
     pub utm_campaign: Option<String>,
     #[serde(default)]
+    pub gclid: Option<String>,
+    #[serde(default)]
+    pub fbclid: Option<String>,
+    #[serde(default)]
+    pub ttclid: Option<String>,
+    #[serde(default)]
     pub format: Option<String>,
+}
+
+impl From<&BookQuery> for Attribution {
+    fn from(q: &BookQuery) -> Self {
+        Self {
+            gclid: clean_value(q.gclid.as_deref()),
+            fbclid: clean_value(q.fbclid.as_deref()),
+            ttclid: clean_value(q.ttclid.as_deref()),
+            utm_source: clean_value(q.utm_source.as_deref()),
+            utm_medium: clean_value(q.utm_medium.as_deref()),
+            utm_campaign: clean_value(q.utm_campaign.as_deref()),
+        }
+    }
 }
 
 pub async fn book_quote_handler(
@@ -488,17 +534,7 @@ pub async fn book_quote_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
-    context.insert("q_utm_source", &q.utm_source);
-    context.insert("q_utm_medium", &q.utm_medium);
-    context.insert("q_utm_campaign", &q.utm_campaign);
-    context.insert(
-        "utm_qs",
-        &utm_query(
-            q.utm_source.as_deref(),
-            q.utm_medium.as_deref(),
-            q.utm_campaign.as_deref(),
-        ),
-    );
+    insert_attribution_context(&mut context, &Attribution::from(&q));
 
     Ok(render(&state, "booking/book.html", &context)?.into_response())
 }
@@ -528,7 +564,26 @@ pub struct BookForm {
     #[serde(default)]
     pub utm_campaign: Option<String>,
     #[serde(default)]
+    pub gclid: Option<String>,
+    #[serde(default)]
+    pub fbclid: Option<String>,
+    #[serde(default)]
+    pub ttclid: Option<String>,
+    #[serde(default)]
     pub format: Option<String>,
+}
+
+impl From<&BookForm> for Attribution {
+    fn from(f: &BookForm) -> Self {
+        Self {
+            gclid: clean_value(f.gclid.as_deref()),
+            fbclid: clean_value(f.fbclid.as_deref()),
+            ttclid: clean_value(f.ttclid.as_deref()),
+            utm_source: clean_value(f.utm_source.as_deref()),
+            utm_medium: clean_value(f.utm_medium.as_deref()),
+            utm_campaign: clean_value(f.utm_campaign.as_deref()),
+        }
+    }
 }
 
 pub async fn book_create_handler(
@@ -537,6 +592,7 @@ pub async fn book_create_handler(
     SiteDatabase(db): SiteDatabase,
     locale: RequestLocale,
     headers: axum::http::HeaderMap,
+    jar: CookieJar,
     Form(form): Form<BookForm>,
 ) -> Result<Response, StatusCode> {
     let json = wants_json(&headers, form.format.as_deref());
@@ -604,6 +660,17 @@ pub async fn book_create_handler(
         (None, Some(utm)) => Some(format!("[utm: {utm}]")),
         (None, None) => None,
     };
+    // Structured attribution: explicit form/URL parameters win, the _dx_attr
+    // landing cookie (J0.1) fills the gaps. Sent alongside the legacy note.
+    let cookie_pairs = jar
+        .get(ATTR_COOKIE)
+        .map(|c| parse_cookie_value(c.value()))
+        .unwrap_or_default();
+    let attribution = Attribution::from(&form).or_from_pairs(&cookie_pairs);
+    let attribution_json = attribution.to_json();
+    if let Some(ref attr) = attribution_json {
+        tracing::info!(target: "attribution", host = %host, path = "/.book", attribution = %attr, "booking attribution");
+    }
     let contact = Contact {
         first_name: form.first_name.trim().to_string(),
         last_name: form.last_name.trim().to_string(),
@@ -622,6 +689,7 @@ pub async fn book_create_handler(
             infants,
             &contact,
             note.as_deref(),
+            attribution_json.as_ref(),
         )
         .await
     {
@@ -799,7 +867,58 @@ pub async fn booking_config_post(
 
 #[cfg(test)]
 mod tests {
-    use super::is_past_date;
+    use super::*;
+
+    fn empty_form() -> BookForm {
+        BookForm {
+            listing_id: 1,
+            from: "2099-01-01".to_string(),
+            to: "2099-01-05".to_string(),
+            adults: None,
+            children: None,
+            infants: None,
+            first_name: "A".to_string(),
+            last_name: "B".to_string(),
+            email: "a@b.c".to_string(),
+            phone: None,
+            note: None,
+            utm_source: None,
+            utm_medium: None,
+            utm_campaign: None,
+            gclid: None,
+            fbclid: None,
+            ttclid: None,
+            format: None,
+        }
+    }
+
+    #[test]
+    fn book_form_params_beat_cookie_fallback() {
+        let mut form = empty_form();
+        form.gclid = Some(" form-gclid ".to_string());
+        form.utm_source = Some("google".to_string());
+        let cookie = vec![
+            ("gclid".to_string(), "cookie-gclid".to_string()),
+            ("fbclid".to_string(), "cookie-fb".to_string()),
+        ];
+        let merged = Attribution::from(&form).or_from_pairs(&cookie);
+        // Form wins on gclid (and is trimmed), cookie fills fbclid.
+        assert_eq!(merged.gclid.as_deref(), Some("form-gclid"));
+        assert_eq!(merged.fbclid.as_deref(), Some("cookie-fb"));
+        assert_eq!(merged.utm_source.as_deref(), Some("google"));
+        assert!(merged.ttclid.is_none());
+    }
+
+    #[test]
+    fn attribution_query_threads_click_ids() {
+        let attr = Attribution {
+            gclid: Some("g 1".to_string()),
+            utm_source: Some("meta".to_string()),
+            ..Default::default()
+        };
+        assert_eq!(attribution_query(&attr), "&utm_source=meta&gclid=g%201");
+        assert_eq!(attribution_query(&Attribution::default()), "");
+    }
 
     #[test]
     fn past_date_is_past() {

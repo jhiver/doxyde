@@ -267,6 +267,9 @@ impl SejoursClient {
         Self::json(resp).await
     }
 
+    /// Create a reservation. `attribution` is the optional structured marketing
+    /// attribution object (gclid/fbclid/ttclid/utm_*) forwarded verbatim under
+    /// the `attribution` key; the key is omitted entirely when `None`.
     #[allow(clippy::too_many_arguments)]
     pub async fn create_reservation(
         &self,
@@ -278,8 +281,9 @@ impl SejoursClient {
         infants: i64,
         contact: &Contact,
         note: Option<&str>,
+        attribution: Option<&serde_json::Value>,
     ) -> Result<ReservationResponse> {
-        let body = serde_json::json!({
+        let mut body = serde_json::json!({
             "listing_id": listing_id,
             "from": check_in,
             "to": check_out,
@@ -289,6 +293,9 @@ impl SejoursClient {
             "contact": contact,
             "note": note,
         });
+        if let (Some(map), Some(attr)) = (body.as_object_mut(), attribution) {
+            map.insert("attribution".to_string(), attr.clone());
+        }
         let resp = self
             .client
             .post(self.url("/v1/reservations"))
