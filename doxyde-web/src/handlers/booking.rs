@@ -81,6 +81,19 @@ fn is_past_date(date: &str) -> bool {
     }
 }
 
+/// Compute default search dates: tomorrow and day after tomorrow in Mauritius time.
+fn default_stay_dates() -> (String, String) {
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Indian::Mauritius)
+        .date_naive();
+    let tomorrow = today + chrono::Duration::days(1);
+    let day_after = today + chrono::Duration::days(2);
+    (
+        tomorrow.format("%Y-%m-%d").to_string(),
+        day_after.format("%Y-%m-%d").to_string(),
+    )
+}
+
 /// 302 to the site home. Used when a deep-link targets a past date (e.g. an expired
 /// last-minute ad link) so visitors land on the homepage, not an empty/broken form.
 fn redirect_home() -> Response {
@@ -285,13 +298,26 @@ pub async fn stay_handler(
     if let Some(ref utm) = utm {
         tracing::info!(target: "attribution", host = %host, path = "/.stay", utm = %utm);
     }
-    insert_attribution_context(&mut context, &Attribution::from(&q));
+    let attr = Attribution::from(&q);
+    insert_attribution_context(&mut context, &attr);
 
     let adults = q.adults.unwrap_or(2).max(1);
     let children = q.children.unwrap_or(0).max(0);
     let infants = q.infants.unwrap_or(0).max(0);
-    context.insert("q_from", &q.from);
-    context.insert("q_to", &q.to);
+
+    let (default_from, default_to) = default_stay_dates();
+    let visible_from = q
+        .from
+        .as_deref()
+        .filter(|s| !s.is_empty())
+        .unwrap_or(&default_from);
+    let visible_to =
+        q.to.as_deref()
+            .filter(|s| !s.is_empty())
+            .unwrap_or(&default_to);
+
+    context.insert("q_from", visible_from);
+    context.insert("q_to", visible_to);
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
@@ -309,21 +335,92 @@ pub async fn stay_handler(
         return Ok(render(&state, "booking/stay.html", &context)?.into_response());
     }
 
-    let (from, to) = match (q.from.as_deref(), q.to.as_deref()) {
-        (Some(f), Some(t)) if !f.is_empty() && !t.is_empty() => (f, t),
-        _ => {
-            if json {
-                return Ok(axum::Json(serde_json::json!({
-                    "status": "ok",
-                    "results": Vec::<serde_json::Value>::new(),
-                    "secondary_results": Vec::<serde_json::Value>::new(),
-                    "hint": "provide from/to dates"
-                }))
-                .into_response());
-            }
-            return Ok(render(&state, "booking/stay.html", &context)?.into_response());
+    let has_dates = matches!(
+        (q.from.as_deref(), q.to.as_deref()),
+        (Some(f), Some(t)) if !f.is_empty() && !t.is_empty()
+    );
+    let has_partial_dates = !has_dates
+        && [q.from.as_deref(), q.to.as_deref()]
+            .into_iter()
+            .flatten()
+            .any(|value| !value.is_empty());
+
+    let all = repo.list_listings().await.unwrap_or_default();
+    let client = SejoursClient::new(&config.service_url, &config.service_secret);
+
+    if has_partial_dates {
+        if json {
+            return Ok(axum::Json(serde_json::json!({
+                "status": "ok",
+                "results": Vec::<serde_json::Value>::new(),
+                "secondary_results": Vec::<serde_json::Value>::new(),
+                "hint": "provide from/to dates"
+            }))
+            .into_response());
         }
-    };
+        return Ok(render(&state, "booking/stay.html", &context)?.into_response());
+    }
+
+    if !has_dates {
+        let all_ids: Vec<i64> = all.iter().map(|l| l.listing_id).collect();
+        let mut suggestions_json = Vec::new();
+        let mut degraded = false;
+        let mut hero_image: Option<String> = None;
+
+        match client.suggested_stays(&all_ids, adults, children).await {
+            Ok(sug_resp) => {
+                degraded = sug_resp.degraded;
+                let utm_qs = attribution_query(&attr);
+                hero_image = sug_resp.suggestions.first().and_then(|s| s.image.clone());
+
+                suggestions_json = sug_resp
+                    .suggestions
+                    .iter()
+                    .map(|s| {
+                        let mut val = serde_json::to_value(s).unwrap_or_default();
+                        let s_url = format!(
+                            "/.stay?from={}&to={}&adults={}&children={}&infants={}{}",
+                            s.check_in, s.check_out, adults, children, infants, utm_qs
+                        );
+                        if let Some(obj) = val.as_object_mut() {
+                            obj.insert("search_url".to_string(), serde_json::json!(s_url));
+                        }
+                        val
+                    })
+                    .collect();
+            }
+            Err(error) => {
+                tracing::warn!(
+                    "sejours-api /v1/suggested-stays call failed on no-date search: {:?}",
+                    error
+                );
+            }
+        }
+
+        context.insert("suggestions", &suggestions_json);
+        context.insert("suggested_degraded", &degraded);
+        if let Some(ref img) = hero_image {
+            context.insert("hero_image", img);
+        }
+
+        if json {
+            return Ok(axum::Json(serde_json::json!({
+                "status": "ok",
+                "results": Vec::<serde_json::Value>::new(),
+                "secondary_results": Vec::<serde_json::Value>::new(),
+                "suggestions": suggestions_json,
+                "degraded": degraded,
+                "hint": "provide from/to dates"
+            }))
+            .into_response());
+        }
+
+        return Ok(render(&state, "booking/stay.html", &context)?.into_response());
+    }
+
+    let from = q.from.as_deref().unwrap_or_default();
+    let to = q.to.as_deref().unwrap_or_default();
+
     if to <= from {
         if json {
             return Ok(json_error("invalid_dates"));
@@ -339,7 +436,6 @@ pub async fn stay_handler(
     }
     context.insert("searched", &true);
 
-    let all = repo.list_listings().await.unwrap_or_default();
     let page_map: HashMap<i64, String> = all
         .iter()
         .filter_map(|l| l.page_path.clone().map(|p| (l.listing_id, p)))
@@ -354,7 +450,6 @@ pub async fn stay_handler(
         .filter(|l| l.role == "secondary")
         .map(|l| l.listing_id)
         .collect();
-    let client = SejoursClient::new(&config.service_url, &config.service_secret);
 
     let resp = match client
         .availability(from, to, adults, children, infants, &primary_ids)

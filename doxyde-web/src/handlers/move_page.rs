@@ -94,7 +94,8 @@ pub async fn move_page_handler(
         let path = if breadcrumb.len() <= 1 {
             "/".to_string()
         } else {
-            let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+            let path_parts: Vec<&str> =
+                breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
             format!("/{}", path_parts.join("/"))
         };
 
@@ -131,7 +132,7 @@ pub async fn move_page_handler(
     let current_path = if breadcrumb.len() <= 1 {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -250,7 +251,7 @@ pub async fn do_move_page_handler(
         format!("/{}", page.slug)
     } else {
         // Build path from breadcrumb
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}/{}", path_parts.join("/"), page.slug)
     };
 

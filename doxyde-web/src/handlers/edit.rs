@@ -191,7 +191,12 @@ pub async fn edit_page_content_handler(
         let url = if i == 0 {
             "/".to_string()
         } else {
-            let path_parts: Vec<&str> = breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+            let path_parts: Vec<&str> = breadcrumb
+                .iter()
+                .skip(1)
+                .take(i)
+                .map(|p| p.slug.as_str())
+                .collect();
             format!("/{}", path_parts.join("/"))
         };
 
@@ -205,7 +210,7 @@ pub async fn edit_page_content_handler(
     let current_path = if page.parent_page_id.is_none() {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -476,7 +481,7 @@ async fn build_page_path(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-    let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+    let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
 
     Ok(format!("/{}", path_parts.join("/")))
 }
@@ -509,7 +514,12 @@ pub async fn new_page_handler(
         let url = if i == 0 {
             "/".to_string()
         } else {
-            let path_parts: Vec<&str> = breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+            let path_parts: Vec<&str> = breadcrumb
+                .iter()
+                .skip(1)
+                .take(i)
+                .map(|p| p.slug.as_str())
+                .collect();
             format!("/{}", path_parts.join("/"))
         };
 
@@ -523,7 +533,7 @@ pub async fn new_page_handler(
     let current_path = if page.parent_page_id.is_none() {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -814,16 +824,23 @@ pub async fn save_draft_handler(
     }
 
     // Update each submitted component
-    for i in 0..form.component_ids.len() {
-        let component_id = form.component_ids[i];
-        let component_type = &form.component_types[i];
-        let title = if form.component_titles[i].is_empty() {
+    let zipped = form
+        .component_ids
+        .iter()
+        .zip(&form.component_types)
+        .zip(&form.component_titles)
+        .zip(&form.component_templates)
+        .zip(&form.component_contents);
+
+    for (i, ((((component_id, component_type), component_title), template), content_str)) in
+        zipped.enumerate()
+    {
+        let component_id = *component_id;
+        let title = if component_title.is_empty() {
             None
         } else {
-            Some(form.component_titles[i].clone())
+            Some(component_title.clone())
         };
-        let template = &form.component_templates[i];
-        let content_str = &form.component_contents[i];
 
         tracing::info!(
             "=== Processing component {} (index: {}) ===",

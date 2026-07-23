@@ -15,6 +15,7 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 use axum::{
+    body::Body,
     extract::{FromRequestParts, Request, State},
     http::{request::Parts, StatusCode},
     middleware::Next,
@@ -77,20 +78,18 @@ pub async fn database_injection_middleware(
                 Err(e) => {
                     tracing::error!("Failed to get database pool for site '{}': {:?}", domain, e);
                     // Always fail fast to avoid data corruption
-                    return axum::response::Response::builder()
-                        .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(axum::body::Body::from("Database initialization failed"))
-                        .unwrap();
+                    let mut response = Response::new(Body::from("Database initialization failed"));
+                    *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    return response;
                 }
             }
         }
     } else {
         tracing::error!("No site context found in request");
         // Fail fast - no fallback
-        return axum::response::Response::builder()
-            .status(axum::http::StatusCode::INTERNAL_SERVER_ERROR)
-            .body(axum::body::Body::from("Site context missing"))
-            .unwrap();
+        let mut response = Response::new(Body::from("Site context missing"));
+        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+        return response;
     }
 
     // Continue with the request

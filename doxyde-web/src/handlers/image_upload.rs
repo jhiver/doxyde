@@ -228,7 +228,9 @@ pub async fn upload_image_handler(
         "height": metadata.height,
     });
     if let Some(ref thumb_rel) = rel_thumb {
-        content["thumb_file_path"] = json!(thumb_rel);
+        if let Some(obj) = content.as_object_mut() {
+            obj.insert("thumb_file_path".to_string(), json!(thumb_rel));
+        }
     }
 
     // Create new component
@@ -352,7 +354,9 @@ pub async fn upload_image_ajax_handler(
         "height": metadata.height,
     });
     if let Some(ref thumb_rel) = rel_thumb {
-        response["thumb_file_path"] = json!(thumb_rel);
+        if let Some(obj) = response.as_object_mut() {
+            obj.insert("thumb_file_path".to_string(), json!(thumb_rel));
+        }
     }
 
     Ok(Json(response).into_response())
@@ -537,7 +541,9 @@ pub async fn upload_component_image_handler(
         "height": metadata.height,
     });
     if let Some(ref thumb_rel) = rel_thumb {
-        content["thumb_file_path"] = json!(thumb_rel);
+        if let Some(obj) = content.as_object_mut() {
+            obj.insert("thumb_file_path".to_string(), json!(thumb_rel));
+        }
     }
 
     // Update the component
@@ -555,8 +561,8 @@ pub async fn upload_component_image_handler(
     let mut response = json!({
         "success": true,
         "slug": slug,
-        "title": content["title"],
-        "description": content["description"],
+        "title": content.get("title").cloned().unwrap_or(serde_json::Value::Null),
+        "description": content.get("description").cloned().unwrap_or(serde_json::Value::Null),
         "format": metadata.format.extension(),
         "file_path": rel_path,
         "content_hash": saved.content_hash,
@@ -567,7 +573,9 @@ pub async fn upload_component_image_handler(
         "height": metadata.height,
     });
     if let Some(ref thumb_rel) = rel_thumb {
-        response["thumb_file_path"] = json!(thumb_rel);
+        if let Some(obj) = response.as_object_mut() {
+            obj.insert("thumb_file_path".to_string(), json!(thumb_rel));
+        }
     }
 
     Ok(Json(response).into_response())

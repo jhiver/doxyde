@@ -155,6 +155,33 @@ pub struct CalendarResponse {
     pub blocked: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestedStay {
+    pub listing_id: i64,
+    pub listing_name: String,
+    pub check_in: String,
+    pub check_out: String,
+    pub nights: i64,
+    #[serde(default)]
+    pub price_total: Option<f64>,
+    #[serde(default)]
+    pub currency_code: Option<String>,
+    #[serde(default)]
+    pub image: Option<String>,
+    #[serde(default)]
+    pub person_capacity: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuggestedStaysResponse {
+    #[serde(default)]
+    pub suggestions: Vec<SuggestedStay>,
+    #[serde(default)]
+    pub generated_at: String,
+    #[serde(default)]
+    pub degraded: bool,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Contact {
     pub first_name: String,
@@ -225,6 +252,32 @@ impl SejoursClient {
             .send()
             .await
             .context("sejours-api /v1/availability request failed")?;
+        Self::json(resp).await
+    }
+
+    pub async fn suggested_stays(
+        &self,
+        listing_ids: &[i64],
+        adults: i64,
+        children: i64,
+    ) -> Result<SuggestedStaysResponse> {
+        let body = serde_json::json!({
+            "listing_ids": listing_ids,
+            "horizon_days": 30,
+            "min_nights": 1,
+            "max_nights": 7,
+            "limit": 6,
+            "adults": adults,
+            "children": children,
+        });
+        let resp = self
+            .client
+            .post(self.url("/v1/suggested-stays"))
+            .header(SECRET_HEADER, &self.secret)
+            .json(&body)
+            .send()
+            .await
+            .context("sejours-api /v1/suggested-stays request failed")?;
         Self::json(resp).await
     }
 

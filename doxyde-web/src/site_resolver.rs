@@ -131,10 +131,9 @@ pub async fn site_resolver_middleware(
         Ok(path) => path,
         Err(e) => {
             tracing::error!("Failed to get sites directory: {:?}", e);
-            return Response::builder()
-                .status(StatusCode::INTERNAL_SERVER_ERROR)
-                .body(Body::from("Site configuration error"))
-                .unwrap();
+            let mut response = Response::new(Body::from("Site configuration error"));
+            *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+            return response;
         }
     };
 

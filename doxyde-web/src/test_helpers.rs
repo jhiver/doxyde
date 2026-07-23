@@ -401,7 +401,10 @@ pub async fn create_test_session(
     let session = Session::new(user_id);
 
     session_repo.create(&session).await?;
-    let session = session_repo.find_by_id(&session.id).await?.unwrap();
+    let session = session_repo
+        .find_by_id(&session.id)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Created session not found"))?;
 
     Ok(session)
 }
