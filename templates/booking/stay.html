@@ -6,6 +6,12 @@
 
 {% block content %}
 <div class="booking-page booking-stay">
+    {% if hero_image %}
+    <div class="booking-stay-hero">
+        <img src="{{ hero_image }}" alt="{{ site_title }}" loading="eager">
+    </div>
+    {% endif %}
+
     <form class="booking-search-bar" action="/.stay" method="GET" toolname="search_stays" tooldescription="Search available stays for given check-in and check-out dates and number of guests (adults, children). Returns a list of available listings with prices.">
         <div class="booking-field">
             <label for="from">{{ labels["booking.checkin"] | default(value="Check-in") }}</label>
@@ -63,6 +69,41 @@
                 {% for r in secondary_results %}{% include "booking/_result_card.html" %}{% endfor %}
             </div>
         {% endif %}
+    {% elif suggestions and suggestions | length > 0 %}
+        <h2 class="booking-section-title">
+            {% if suggested_degraded %}
+                {{ labels["booking.next_availability_title"] | default(value="Next availability") }}
+            {% else %}
+                {{ labels["booking.suggested_title"] | default(value="Suggested stays") }}
+            {% endif %}
+        </h2>
+        <div class="booking-results booking-results-suggested">
+            {% for s in suggestions %}
+            {% set s_url = s.search_url | default(value="/.stay?from=" ~ s.check_in ~ "&to=" ~ s.check_out ~ "&adults=" ~ q_adults ~ "&children=" ~ q_children ~ "&infants=" ~ q_infants ~ utm_qs) %}
+            <div class="booking-card booking-card-clickable" onclick="bkCard(event, '{{ s_url | safe }}')">
+                {% if s.image %}
+                <div class="booking-gallery">
+                    <div class="booking-gallery-track">
+                        <img src="{{ s.image }}" alt="{{ s.listing_name | default(value='') }}" loading="lazy">
+                    </div>
+                </div>
+                {% endif %}
+                <div class="booking-card-head">
+                    <h3 class="booking-card-name">{{ s.listing_name }}</h3>
+                    <div class="booking-card-meta">
+                        {{ s.check_in }} → {{ s.check_out }} · {{ s.nights }} {{ labels["booking.nights"] | default(value="nights") }}
+                        {% if s.person_capacity %} · {{ s.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
+                    </div>
+                </div>
+                {% if s.price_total %}
+                <div class="booking-card-price">
+                    <span class="booking-card-amount">{{ s.price_total }} {{ s.currency_code | default(value='') }}</span>
+                </div>
+                {% endif %}
+                <a class="booking-book-btn" href="{{ s_url | safe }}">{{ labels["booking.check_availability"] | default(value="Check availability") }}</a>
+            </div>
+            {% endfor %}
+        </div>
     {% endif %}
 </div>
 

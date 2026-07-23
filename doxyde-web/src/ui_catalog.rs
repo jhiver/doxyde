@@ -26,6 +26,8 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.show_all_photos", "Show all photos"),
     // Search results + booking flow (lot 2)
     ("booking.results_title", "Available stays"),
+    ("booking.suggested_title", "Suggested stays"),
+    ("booking.next_availability_title", "Next availability"),
     ("booking.no_results", "No availability for these dates. Try different dates."),
     ("booking.sister_house", "Also available at our sister house"),
     ("booking.multi_stay_note", "Combination of stays — each leg is booked separately."),

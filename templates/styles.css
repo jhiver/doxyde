@@ -2986,6 +2986,20 @@ footer a:hover {
 /* The stay-search page is wider. Cards keep a consistent size and pack from the
    left, so a sparse result set never leaves a lone stretched card. */
 .booking-page.booking-stay { max-width: 1180px; }
+.booking-stay-hero {
+    width: 100%;
+    height: 220px;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+.booking-stay-hero img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
 .booking-results-primary { grid-template-columns: repeat(auto-fill, minmax(300px, 360px)); justify-content: start; }
 /* Sister-house results stay compact. */
 .booking-results-secondary { grid-template-columns: repeat(auto-fill, minmax(230px, 280px)); justify-content: start; gap: 1rem; }
@@ -2993,8 +3007,9 @@ footer a:hover {
 .booking-results-secondary .booking-gallery-track img { height: 140px; }
 .booking-results-secondary .booking-card-name { font-size: 0.95rem; }
 .booking-results-secondary .booking-card-amount { font-size: 1.1rem; }
+.booking-results-suggested { grid-template-columns: repeat(auto-fill, minmax(280px, 340px)); justify-content: start; }
 @media (max-width: 700px) {
-    .booking-results-primary, .booking-results-secondary { grid-template-columns: 1fr; }
+    .booking-results-primary, .booking-results-secondary, .booking-results-suggested { grid-template-columns: 1fr; }
 }
 
 /* ---- /.book page: Airbnb-style gallery + two-column layout ---- */

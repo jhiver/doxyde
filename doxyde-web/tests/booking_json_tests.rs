@@ -457,3 +457,352 @@ async fn test_book_json_not_configured() {
     assert_eq!(json_body["status"], "error");
     assert_eq!(json_body["code"], "not_configured");
 }
+
+async fn setup_test_with_real_templates(
+) -> (TestServer, sqlx::SqlitePool, MockServer, tempfile::TempDir) {
+    let mock_server = MockServer::start().await;
+    let temp_dir = tempfile::TempDir::new().expect("Failed to create temp dir");
+    let temp_path = temp_dir.path().to_string_lossy().to_string();
+
+    let mut state = doxyde_web::test_helpers::create_test_app_state()
+        .await
+        .expect("Failed to create test app state");
+    state.config.sites_directory = temp_path.clone();
+
+    let base_path = std::path::PathBuf::from(&temp_path);
+    let context = doxyde_web::site_resolver::SiteContext::new("test.local".to_string(), &base_path);
+    let pool = state
+        .db_router
+        .get_pool(&context)
+        .await
+        .expect("Failed to get pool");
+
+    sqlx::query("UPDATE booking_config SET service_url = ?, service_secret = ? WHERE id = 1")
+        .bind(mock_server.uri())
+        .bind("test-secret")
+        .execute(&pool)
+        .await
+        .expect("Failed to update booking config");
+
+    sqlx::query(
+        "INSERT INTO booking_listing (listing_id, role, position, page_path) VALUES (?, ?, ?, ?)",
+    )
+    .bind(123)
+    .bind("primary")
+    .bind(0)
+    .bind("/stars")
+    .execute(&pool)
+    .await
+    .expect("Failed to insert booking listing");
+
+    state.templates = doxyde_web::templates::init_templates("../templates", false)
+        .expect("Failed to initialize templates");
+
+    let app = create_router(state);
+    let server = TestServer::new(app).expect("Failed to create test server");
+
+    (server, pool, mock_server, temp_dir)
+}
+
+#[tokio::test]
+async fn test_suggested_stays_no_date_calls_api_and_renders_module() {
+    let (server, pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    sqlx::query(
+        "INSERT INTO booking_listing (listing_id, role, position, page_path) VALUES (?, ?, ?, ?)",
+    )
+    .bind(456)
+    .bind("secondary")
+    .bind(1)
+    .bind("/villa")
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let mock_response = json!({
+        "suggestions": [
+            {
+                "listing_id": 123,
+                "listing_name": "Sunset Villa",
+                "check_in": "2099-08-01",
+                "check_out": "2099-08-04",
+                "nights": 3,
+                "price_total": 350.0,
+                "currency_code": "EUR",
+                "image": "https://example.com/sunset.jpg",
+                "person_capacity": 4
+            }
+        ],
+        "degraded": false
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .mount(&mock_server)
+        .await;
+
+    let response = server.get("/.stay").add_header("Host", "test.local").await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(html.contains("Suggested stays"));
+    assert!(html.contains("Sunset Villa"));
+    assert!(html.contains("2099-08-01 → 2099-08-04"));
+    assert!(html.contains("350 EUR"));
+    assert!(
+        html.contains("https:&#x2F;&#x2F;example.com&#x2F;sunset.jpg"),
+        "rendered HTML did not contain the suggestion image: {html}"
+    );
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
+    let listing_ids = body["listing_ids"].as_array().unwrap();
+    let ids: Vec<i64> = listing_ids.iter().map(|v| v.as_i64().unwrap()).collect();
+    assert_eq!(ids, vec![123, 456]);
+}
+
+#[tokio::test]
+async fn test_suggested_stays_link_params_and_encoded_attribution() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    let mock_response = json!({
+        "suggestions": [
+            {
+                "listing_id": 123,
+                "listing_name": "Ocean Loft",
+                "check_in": "2099-09-10",
+                "check_out": "2099-09-13",
+                "nights": 3,
+                "price_total": 200.0,
+                "currency_code": "EUR",
+                "image": null,
+                "person_capacity": 2
+            }
+        ],
+        "degraded": false
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .mount(&mock_server)
+        .await;
+
+    let response = server
+        .get("/.stay?adults=3&children=1&infants=1&utm_source=google&gclid=abc%20123")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(
+        html.contains("/.stay?from=2099-09-10&to=2099-09-13&adults=3&children=1&infants=1&utm_source=google&gclid=abc%20123"),
+        "rendered HTML did not contain the attributed suggestion link: {html}"
+    );
+}
+
+#[tokio::test]
+async fn test_suggested_stays_degraded_uses_next_availability_and_no_scarcity() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    let mock_response = json!({
+        "suggestions": [
+            {
+                "listing_id": 123,
+                "listing_name": "Beach House",
+                "check_in": "2099-10-01",
+                "check_out": "2099-10-05",
+                "nights": 4,
+                "price_total": 500.0,
+                "currency_code": "EUR",
+                "image": null,
+                "person_capacity": 4
+            }
+        ],
+        "degraded": true
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .mount(&mock_server)
+        .await;
+
+    let response = server.get("/.stay").add_header("Host", "test.local").await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(html.contains("Next availability"));
+    assert!(!html.contains("Suggested stays"));
+
+    let lower_html = html.to_lowercase();
+    assert!(!lower_html.contains("last room"));
+    assert!(!lower_html.contains("last night"));
+    assert!(!lower_html.contains("hurry"));
+    assert!(!lower_html.contains("only 1 left"));
+}
+
+#[tokio::test]
+async fn test_suggested_stays_empty_suggestions_renders_no_module() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    let mock_response = json!({
+        "suggestions": [],
+        "degraded": false
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .mount(&mock_server)
+        .await;
+
+    let response = server.get("/.stay").add_header("Host", "test.local").await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(!html.contains("Suggested stays"));
+    assert!(!html.contains("Next availability"));
+}
+
+#[tokio::test]
+async fn test_suggested_stays_api_failure_silently_degrades() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&mock_server)
+        .await;
+
+    let response = server.get("/.stay").add_header("Host", "test.local").await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(!html.contains("The booking service is temporarily unavailable"));
+    assert!(!html.contains("Suggested stays"));
+}
+
+#[tokio::test]
+async fn test_dated_request_calls_availability_and_not_suggested_stays() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    let mock_avail = json!({
+        "check_in": "2099-01-01",
+        "check_out": "2099-01-05",
+        "nights": 4,
+        "adults": 2,
+        "children": 0,
+        "infants": 0,
+        "results": []
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/availability"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_avail))
+        .mount(&mock_server)
+        .await;
+
+    let response = server
+        .get("/.stay?from=2099-01-01&to=2099-01-05")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url.path(), "/v1/availability");
+}
+
+#[tokio::test]
+async fn test_partial_dates_preserve_normal_form_without_suggestions_call() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    let response = server
+        .get("/.stay?from=2099-01-01")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(!html.contains("Suggested stays"));
+    assert!(!html.contains("Next availability"));
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert!(requests.is_empty());
+}
+
+#[tokio::test]
+async fn test_default_visible_dates_are_tomorrow_and_day_after() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    let mock_response = json!({
+        "suggestions": [],
+        "degraded": false
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/suggested-stays"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_response))
+        .mount(&mock_server)
+        .await;
+
+    let response = server.get("/.stay").add_header("Host", "test.local").await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+
+    let today = chrono::Utc::now()
+        .with_timezone(&chrono_tz::Indian::Mauritius)
+        .date_naive();
+    let expected_from = (today + chrono::Duration::days(1))
+        .format("%Y-%m-%d")
+        .to_string();
+    let expected_to = (today + chrono::Duration::days(2))
+        .format("%Y-%m-%d")
+        .to_string();
+
+    assert!(html.contains(&format!("value=\"{}\"", expected_from)));
+    assert!(html.contains(&format!("value=\"{}\"", expected_to)));
+}
+
+#[test]
+fn test_suggested_stay_deserialization_nullable_fields() {
+    use doxyde_web::services::sejours_client::SuggestedStaysResponse;
+
+    let json_data = r#"{
+        "suggestions": [
+            {
+                "listing_id": 999,
+                "listing_name": "Unit 999",
+                "check_in": "2026-08-01",
+                "check_out": "2026-08-02",
+                "nights": 1,
+                "price_total": null,
+                "currency_code": null,
+                "image": null,
+                "person_capacity": null
+            }
+        ],
+        "generated_at": "2026-07-23T12:00:00Z",
+        "degraded": true
+    }"#;
+
+    let res: SuggestedStaysResponse =
+        serde_json::from_str(json_data).expect("deserialization failed");
+    assert!(res.degraded);
+    assert_eq!(res.suggestions.len(), 1);
+    let sug = &res.suggestions[0];
+    assert_eq!(sug.listing_id, 999);
+    assert_eq!(sug.check_in, "2026-08-01");
+    assert_eq!(sug.check_out, "2026-08-02");
+    assert_eq!(sug.nights, 1);
+    assert!(sug.price_total.is_none());
+    assert!(sug.currency_code.is_none());
+    assert!(sug.image.is_none());
+    assert!(sug.person_capacity.is_none());
+    assert_eq!(sug.listing_name, "Unit 999");
+}
