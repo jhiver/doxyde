@@ -362,12 +362,16 @@ pub async fn stay_handler(
     }
 
     if !has_dates {
-        let all_ids: Vec<i64> = all.iter().map(|l| l.listing_id).collect();
+        let primary_ids: Vec<i64> = all
+            .iter()
+            .filter(|l| l.role == "primary")
+            .map(|l| l.listing_id)
+            .collect();
         let mut suggestions_json = Vec::new();
         let mut degraded = false;
         let mut hero_image: Option<String> = None;
 
-        match client.suggested_stays(&all_ids, adults, children).await {
+        match client.suggested_stays(&primary_ids, adults, children).await {
             Ok(sug_resp) => {
                 degraded = sug_resp.degraded;
                 let utm_qs = attribution_query(&attr);
