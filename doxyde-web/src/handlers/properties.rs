@@ -75,7 +75,12 @@ pub async fn page_properties_handler(
         let url = if i == 0 {
             "/".to_string()
         } else {
-            let path_parts: Vec<&str> = breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+            let path_parts: Vec<&str> = breadcrumb
+                .iter()
+                .skip(1)
+                .take(i)
+                .map(|p| p.slug.as_str())
+                .collect();
             format!("/{}", path_parts.join("/"))
         };
 
@@ -89,7 +94,7 @@ pub async fn page_properties_handler(
     let current_path = if page.parent_page_id.is_none() {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -250,7 +255,7 @@ pub async fn update_page_properties_handler(
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
 
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 

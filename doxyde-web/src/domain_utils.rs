@@ -19,11 +19,7 @@ pub fn extract_base_domain(domain: &str) -> String {
     let domain_no_port = domain.split(':').next().unwrap_or(domain);
 
     // Handle email-like domains by taking everything after @
-    let domain_no_prefix = if let Some(at_pos) = domain_no_port.rfind('@') {
-        &domain_no_port[at_pos + 1..]
-    } else {
-        domain_no_port
-    };
+    let domain_no_prefix = domain_no_port.rsplit('@').next().unwrap_or(domain_no_port);
 
     // Convert to lowercase for consistency
     let domain_lower = domain_no_prefix.to_lowercase();
@@ -33,13 +29,14 @@ pub fn extract_base_domain(domain: &str) -> String {
 
     // If we have at least 2 parts, take the last 2 as the base domain
     // This handles most common cases like example.com, example.org, etc.
-    if parts.len() >= 2 {
-        let base = format!("{}.{}", parts[parts.len() - 2], parts[parts.len() - 1]);
-        base
-    } else {
-        // For single-part domains (like "localhost"), return as-is
-        domain_lower
+    if let Some((tld, rest)) = parts.split_last() {
+        if let Some(domain_name) = rest.last() {
+            return format!("{domain_name}.{tld}");
+        }
     }
+
+    // For single-part domains (like "localhost"), return as-is
+    domain_lower
 }
 
 /// Resolves a site directory path from a base path and domain name.

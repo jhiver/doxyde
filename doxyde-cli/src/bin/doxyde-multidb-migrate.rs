@@ -260,7 +260,7 @@ fn calculate_site_key(base_domain: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(base_domain.as_bytes());
     let hash = hasher.finalize();
-    hex::encode(&hash[..4])
+    hex::encode(hash.iter().take(4).copied().collect::<Vec<_>>())
 }
 
 /// Transform a database from single-site to multi-site format

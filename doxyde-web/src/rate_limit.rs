@@ -20,7 +20,7 @@ pub fn create_login_rate_limiter(max_attempts: u32) -> SharedRateLimiter {
         Some(n) => Quota::per_minute(n),
         None => {
             // If zero is passed, default to 1 to avoid panic
-            Quota::per_minute(NonZeroU32::new(1).unwrap())
+            Quota::per_minute(NonZeroU32::MIN)
         }
     };
     Arc::new(RateLimiter::direct(quota))
@@ -32,7 +32,7 @@ pub fn create_api_rate_limiter(max_requests: u32) -> SharedRateLimiter {
         Some(n) => Quota::per_minute(n),
         None => {
             // If zero is passed, default to 1 to avoid panic
-            Quota::per_minute(NonZeroU32::new(1).unwrap())
+            Quota::per_minute(NonZeroU32::MIN)
         }
     };
     Arc::new(RateLimiter::direct(quota))

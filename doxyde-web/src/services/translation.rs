@@ -63,7 +63,10 @@ pub async fn translate_batch_sync_bounded(
     }
 
     if !miss_idx.is_empty() {
-        let miss_refs: Vec<&str> = miss_idx.iter().map(|&i| items[i].as_str()).collect();
+        let miss_refs: Vec<&str> = miss_idx
+            .iter()
+            .filter_map(|&i| items.get(i).map(|s| s.as_str()))
+            .collect();
         match tokio::time::timeout(
             timeout,
             state
@@ -73,10 +76,11 @@ pub async fn translate_batch_sync_bounded(
         .await
         {
             Ok(Ok(results)) if results.len() == miss_idx.len() => {
-                for (k, res) in results.into_iter().enumerate() {
-                    let idx = miss_idx[k];
-                    store_success(pool, lang, &miss_hashes[k], &res.translated).await;
-                    out[idx] = Some(res.translated);
+                for ((res, &idx), hash) in results.into_iter().zip(&miss_idx).zip(&miss_hashes) {
+                    store_success(pool, lang, hash, &res.translated).await;
+                    if let Some(slot) = out.get_mut(idx) {
+                        *slot = Some(res.translated);
+                    }
                 }
             }
             Ok(Ok(_)) => {
@@ -97,7 +101,7 @@ pub async fn translate_batch_sync_bounded(
     // Assemble results. Any string still unresolved (timeout/error) is served as
     // source now and enqueued for deferred translation so the next crawl is warm.
     let mut result = Vec::with_capacity(items.len());
-    for (i, slot) in out.into_iter().enumerate() {
+    for (item, slot) in items.iter().zip(out) {
         match slot {
             Some(t) => result.push(t),
             None => {
@@ -106,7 +110,7 @@ pub async fn translate_batch_sync_bounded(
                     &state.translation.in_flight,
                     &state.translation.tx,
                     site_key,
-                    &items[i],
+                    item,
                     lang,
                     context,
                 )

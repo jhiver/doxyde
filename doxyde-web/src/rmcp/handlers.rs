@@ -114,7 +114,9 @@ pub async fn handle_http(
         // Only include id if it exists and is not null
         if let Some(id) = &request_id {
             if !id.is_null() {
-                response["id"] = id.clone();
+                if let Some(obj) = response.as_object_mut() {
+                    obj.insert("id".to_string(), id.clone());
+                }
             }
         }
 

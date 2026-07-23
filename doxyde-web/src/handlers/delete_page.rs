@@ -85,7 +85,7 @@ pub async fn delete_page_handler(
     let current_path = if breadcrumb.len() <= 1 {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -179,7 +179,7 @@ pub async fn do_delete_page_handler(
     let parent_url = if breadcrumb.len() <= 1 {
         "/".to_string()
     } else {
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}/", path_parts.join("/"))
     };
 

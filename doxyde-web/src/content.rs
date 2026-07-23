@@ -89,10 +89,9 @@ impl ContentPath {
         // Find the last segment that starts with '.'
         let parts: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
 
-        if let Some(last) = parts.last() {
+        if let Some((last, path_parts)) = parts.split_last() {
             if last.starts_with('.') {
                 // We have an action
-                let path_parts = &parts[..parts.len() - 1];
                 let path = if path_parts.is_empty() {
                     "/".to_string()
                 } else {

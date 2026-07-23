@@ -17,7 +17,7 @@
 use crate::{
     attribution::attribution_capture_middleware,
     auth::CurrentUser,
-    configuration::Configuration,
+    configuration::{defaults, Configuration},
     content,
     db_middleware::{database_injection_middleware, SiteDatabase},
     debug_middleware::debug_form_middleware,
@@ -51,8 +51,20 @@ pub fn create_router(state: AppState) -> Router {
     let max_upload_size = state.config.max_upload_size;
 
     // Load the configuration to get security headers config
-    let config = Configuration::load().expect("Failed to load configuration");
-    let headers_middleware = create_security_headers_middleware(config.security.headers);
+    let headers_config = Configuration::load()
+        .map(|c| c.security.headers)
+        .unwrap_or_else(|_| crate::configuration::HeadersConfig {
+            enable_hsts: true,
+            enable_csp: true,
+            enable_frame_options: true,
+            enable_content_type_options: true,
+            csp_content: defaults::default_csp_content(),
+            hsts_content: defaults::default_hsts_content(),
+            frame_options_content: defaults::default_frame_options_content(),
+            referrer_policy: defaults::default_referrer_policy(),
+            permissions_policy: defaults::default_permissions_policy(),
+        });
+    let headers_middleware = create_security_headers_middleware(headers_config);
 
     Router::new()
         // Health check

@@ -730,10 +730,22 @@ async fn migrate_images(domain: &str, dry_run: bool) -> Result<()> {
                             .ok_or_else(|| anyhow!("Component {} not found", comp_id))?;
 
                         let mut content = comp.content.clone();
-                        content["file_path"] = serde_json::json!(result.new_path.to_string_lossy());
-                        content["content_hash"] = serde_json::json!(result.content_hash);
+                        let obj = content.as_object_mut().ok_or_else(|| {
+                            anyhow!("Image component {} content is not an object", comp_id)
+                        })?;
+                        obj.insert(
+                            "file_path".to_string(),
+                            serde_json::json!(result.new_path.to_string_lossy()),
+                        );
+                        obj.insert(
+                            "content_hash".to_string(),
+                            serde_json::json!(result.content_hash),
+                        );
                         if let Some(ref tp) = result.thumb_path {
-                            content["thumb_file_path"] = serde_json::json!(tp.to_string_lossy());
+                            obj.insert(
+                                "thumb_file_path".to_string(),
+                                serde_json::json!(tp.to_string_lossy()),
+                            );
                         }
 
                         component_repo
@@ -927,7 +939,9 @@ async fn rewrite_image_paths(pool: &SqlitePool, site_dir: &Path, dry_run: bool) 
                 if new_path != *fp {
                     println!("  [{}] file_path: {} -> {}", id, fp, new_path);
                     if !dry_run {
-                        content["file_path"] = serde_json::json!(new_path);
+                        if let Some(obj) = content.as_object_mut() {
+                            obj.insert("file_path".to_string(), serde_json::json!(new_path));
+                        }
                     }
                     changed = true;
                 }
@@ -939,7 +953,9 @@ async fn rewrite_image_paths(pool: &SqlitePool, site_dir: &Path, dry_run: bool) 
                 if new_path != *tp {
                     println!("  [{}] thumb_file_path: {} -> {}", id, tp, new_path);
                     if !dry_run {
-                        content["thumb_file_path"] = serde_json::json!(new_path);
+                        if let Some(obj) = content.as_object_mut() {
+                            obj.insert("thumb_file_path".to_string(), serde_json::json!(new_path));
+                        }
                     }
                     changed = true;
                 }

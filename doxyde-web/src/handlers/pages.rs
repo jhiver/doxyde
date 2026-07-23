@@ -220,8 +220,9 @@ pub async fn render_page(
                     let child_url = if child_breadcrumb.len() <= 1 {
                         "/".to_string()
                     } else {
-                        let path_parts: Vec<&str> = child_breadcrumb[1..]
+                        let path_parts: Vec<&str> = child_breadcrumb
                             .iter()
+                            .skip(1)
                             .map(|p| p.slug.as_str())
                             .collect();
                         format!("/{}", path_parts.join("/"))
@@ -273,7 +274,9 @@ pub async fn render_page(
                 }
 
                 // Inject pages data into component content
-                config["pages"] = serde_json::json!(pages_data);
+                if let Some(obj) = config.as_object_mut() {
+                    obj.insert("pages".to_string(), serde_json::json!(pages_data));
+                }
                 component.content = config;
             }
         }
@@ -298,7 +301,12 @@ pub async fn render_page(
         let url = if i == 0 {
             "/".to_string()
         } else {
-            let path_parts: Vec<&str> = breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+            let path_parts: Vec<&str> = breadcrumb
+                .iter()
+                .skip(1)
+                .take(i)
+                .map(|p| p.slug.as_str())
+                .collect();
             format!("/{}", path_parts.join("/"))
         };
 
@@ -313,7 +321,7 @@ pub async fn render_page(
         "/".to_string()
     } else {
         // Build current page path from breadcrumb (excluding root)
-        let path_parts: Vec<&str> = breadcrumb[1..].iter().map(|p| p.slug.as_str()).collect();
+        let path_parts: Vec<&str> = breadcrumb.iter().skip(1).map(|p| p.slug.as_str()).collect();
         format!("/{}", path_parts.join("/"))
     };
 
@@ -353,8 +361,12 @@ pub async fn render_page(
                     format!("/{}", child.slug)
                 } else {
                     // Build path from breadcrumb up to current level
-                    let path_parts: Vec<&str> =
-                        breadcrumb[1..=i].iter().map(|p| p.slug.as_str()).collect();
+                    let path_parts: Vec<&str> = breadcrumb
+                        .iter()
+                        .skip(1)
+                        .take(i)
+                        .map(|p| p.slug.as_str())
+                        .collect();
                     format!("/{}/{}", path_parts.join("/"), child.slug)
                 };
 

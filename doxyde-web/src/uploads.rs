@@ -90,7 +90,10 @@ impl ImageFormat {
             Ok(ImageFormat::Png)
         } else if data.starts_with(GIF_MAGIC) {
             Ok(ImageFormat::Gif)
-        } else if data.starts_with(WEBP_MAGIC) && data.len() > 12 && &data[8..12] == b"WEBP" {
+        } else if data.starts_with(WEBP_MAGIC)
+            && data.len() > 12
+            && data.get(8..12) == Some(b"WEBP")
+        {
             Ok(ImageFormat::Webp)
         } else if data.starts_with(SVG_MAGIC) || data.starts_with(SVG_MAGIC_ALT) {
             Ok(ImageFormat::Svg)
@@ -217,7 +220,7 @@ pub fn is_dangerous_filename(filename: &str) -> bool {
     }
 
     // Check each extension part
-    for ext in &parts[1..] {
+    for ext in parts.iter().skip(1) {
         if DANGEROUS_EXTENSIONS.contains(ext) {
             return true;
         }
@@ -227,7 +230,7 @@ pub fn is_dangerous_filename(filename: &str) -> bool {
     // e.g., .php.jpg, .exe.txt
     if parts.len() > 2 {
         // Has double extension
-        for ext in &parts[1..parts.len() - 1] {
+        for ext in parts.iter().skip(1).take(parts.len().saturating_sub(2)) {
             if DANGEROUS_EXTENSIONS.contains(ext) {
                 // Dangerous extension hidden by another extension
                 return true;
