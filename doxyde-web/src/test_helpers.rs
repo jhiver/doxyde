@@ -20,10 +20,24 @@ use crate::{autoreload_templates::TemplateEngine, AppState};
 use doxyde_core::models::{session::Session, site::Site, user::User};
 use doxyde_db::repositories::{SessionRepository, UserRepository};
 use sqlx::SqlitePool;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Arc,
+};
+
+static TEST_SITES_DIR_ID: AtomicU64 = AtomicU64::new(0);
 
 /// Create a test configuration with sensible defaults
 pub fn create_test_config() -> crate::config::Config {
+    let sites_dir_id = TEST_SITES_DIR_ID.fetch_add(1, Ordering::Relaxed);
+    let sites_directory = std::env::temp_dir()
+        .join(format!(
+            "doxyde-test-sites-{}-{sites_dir_id}",
+            std::process::id()
+        ))
+        .to_string_lossy()
+        .into_owned();
+
     crate::config::Config {
         database_url: "sqlite::memory:".to_string(),
         host: "localhost".to_string(),
@@ -43,8 +57,10 @@ pub fn create_test_config() -> crate::config::Config {
         csrf_header_name: "X-CSRF-Token".to_string(), // Test default
         static_files_max_age: 3600,                   // 1 hour for tests
         oauth_token_expiry: 3600,                     // 1 hour for tests
-        sites_directory: "./test-sites".to_string(),  // Test sites directory
-        multi_site_mode: false,                       // Single database for tests
+        // App-state tests run concurrently and may lazily create a site DB.
+        // Isolate their paths so separate routers cannot race the same migration.
+        sites_directory,
+        multi_site_mode: false, // Single database for tests
         i18n_service_addr: "127.0.0.1:4003".to_string(),
         translation_workers: 4,
         i18n_sync_timeout_ms: 3000,
@@ -407,4 +423,17 @@ pub async fn create_test_session(
         .ok_or_else(|| anyhow::anyhow!("Created session not found"))?;
 
     Ok(session)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::create_test_config;
+
+    #[test]
+    fn test_configs_use_isolated_site_directories() {
+        let first = create_test_config();
+        let second = create_test_config();
+
+        assert_ne!(first.sites_directory, second.sites_directory);
+    }
 }

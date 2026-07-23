@@ -505,7 +505,7 @@ async fn setup_test_with_real_templates(
 }
 
 #[tokio::test]
-async fn test_suggested_stays_no_date_calls_api_and_renders_module() {
+async fn test_suggested_stays_no_date_uses_only_primary_site_listings() {
     let (server, pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
 
     sqlx::query(
@@ -560,7 +560,7 @@ async fn test_suggested_stays_no_date_calls_api_and_renders_module() {
     let body: serde_json::Value = serde_json::from_slice(&requests[0].body).unwrap();
     let listing_ids = body["listing_ids"].as_array().unwrap();
     let ids: Vec<i64> = listing_ids.iter().map(|v| v.as_i64().unwrap()).collect();
-    assert_eq!(ids, vec![123, 456]);
+    assert_eq!(ids, vec![123]);
 }
 
 #[tokio::test]
