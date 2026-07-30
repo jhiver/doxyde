@@ -29,6 +29,10 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+mod language;
+
+use language::enable_language;
+
 #[derive(Parser)]
 #[command(name = "doxyde")]
 #[command(about = "Doxyde CLI tool for site and user management")]
@@ -51,7 +55,7 @@ enum Commands {
         #[command(subcommand)]
         command: SiteCommands,
 
-        /// Site domain to operate on (required for init, show, update-title commands)
+        /// Site domain to operate on (required for init, show, update-title and enable-language)
         #[arg(long, global = true)]
         site: Option<String>,
     },
@@ -105,6 +109,12 @@ enum SiteCommands {
     UpdateTitle {
         /// New site title
         title: String,
+    },
+
+    /// Enable a known language for one site
+    EnableLanguage {
+        /// BCP-47 language code
+        code: String,
     },
 }
 
@@ -283,6 +293,16 @@ async fn handle_site_command(command: SiteCommands, site: Option<&str>) -> Resul
             }
 
             println!("Site title updated successfully!");
+            Ok(())
+        }
+        SiteCommands::EnableLanguage { code } => {
+            let database_url = resolve_database_url("sqlite:doxyde.db", site)?;
+            let pool = connect_database(&database_url).await?;
+            if enable_language(&pool, &code).await? {
+                println!("Enabled language {code}");
+            } else {
+                println!("Language {code} is already enabled");
+            }
             Ok(())
         }
     }
@@ -1055,6 +1075,29 @@ fn extract_domain_from_directory(dir_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_enable_language_command() -> Result<()> {
+        let cli = Cli::try_parse_from([
+            "doxyde",
+            "site",
+            "--site",
+            "twaki.la",
+            "enable-language",
+            "de",
+        ])?;
+        match cli.command {
+            Commands::Site {
+                command: SiteCommands::EnableLanguage { code },
+                site,
+            } => {
+                assert_eq!(code, "de");
+                assert_eq!(site.as_deref(), Some("twaki.la"));
+                Ok(())
+            }
+            _ => Err(anyhow!("unexpected parsed command")),
+        }
+    }
 
     #[test]
     fn test_compute_relative_path_already_relative() {
