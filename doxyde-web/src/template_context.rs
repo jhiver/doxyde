@@ -16,7 +16,7 @@
 
 use anyhow::Result;
 use doxyde_core::models::{page::Page, site::Site};
-use doxyde_db::repositories::{BookingRepository, PageRepository};
+use doxyde_db::repositories::{BookingRepository, PageRepository, PageVersionRepository};
 use tera::Context;
 
 use crate::{
@@ -148,8 +148,26 @@ pub async fn add_base_context(
             } else {
                 Vec::new()
             };
+            let version_repo = PageVersionRepository::new(db.clone());
+            let mut published_children = Vec::with_capacity(children.len());
+            for child in children {
+                let Some(child_id) = child.id else {
+                    continue;
+                };
+                match version_repo.get_published(child_id).await {
+                    Ok(Some(_)) => published_children.push(child),
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(
+                            error = %error,
+                            page_id = child_id,
+                            "Failed to check top-navigation page publication status"
+                        );
+                    }
+                }
+            }
 
-            (title, children)
+            (title, published_children)
         } else {
             (site.title.clone(), Vec::new())
         };

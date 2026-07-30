@@ -2121,8 +2121,14 @@ impl DoxydeRmcpService {
             ));
         }
 
-        // Determine position (at the end)
-        let position = siblings.len() as i32;
+        // Determine position after the current maximum. Existing sites can have
+        // gaps or one-based positions, so sibling count is not a safe position.
+        let position = siblings
+            .iter()
+            .map(|page| page.position)
+            .max()
+            .unwrap_or(-1)
+            + 1;
 
         // Create the page
         let template = req.template.unwrap_or_else(|| "default".to_string());
@@ -2138,8 +2144,8 @@ impl DoxydeRmcpService {
         new_page.position = position;
         new_page.description = req.description;
         new_page.keywords = req.keywords;
-        new_page.meta_robots = "index, follow".to_string();
-        new_page.structured_data_type = "Article".to_string();
+        new_page.meta_robots = "index,follow".to_string();
+        new_page.structured_data_type = "WebPage".to_string();
         new_page.sort_mode = "position".to_string();
 
         let page_id = page_repo.create(&new_page).await?;
@@ -5243,11 +5249,21 @@ mod tests {
             .get_root_page()
             .await?
             .ok_or_else(|| anyhow::anyhow!("Root page not found"))?;
+        let root_id = root
+            .id
+            .ok_or_else(|| anyhow::anyhow!("Root page has no ID"))?;
+        let mut existing = doxyde_core::models::Page::new_with_parent(
+            root_id,
+            "existing".to_string(),
+            "Existing".to_string(),
+        );
+        existing.position = 6;
+        page_repo.create(&existing).await?;
 
         let service = DoxydeRmcpService::new(pool.clone());
 
         let req = CreatePageRequest {
-            parent_page_id: Some(root.id.unwrap()),
+            parent_page_id: Some(root_id),
             slug: Some("test-page".to_string()),
             title: "Test Page".to_string(),
             description: Some("Test description for SEO".to_string()),
@@ -5262,7 +5278,14 @@ mod tests {
         assert_eq!(page_info.slug, "test-page");
         assert_eq!(page_info.title, "Test Page");
         assert_eq!(page_info.path, "/test-page");
-        assert_eq!(page_info.parent_id, root.id);
+        assert_eq!(page_info.parent_id, Some(root_id));
+        let page = page_repo
+            .find_by_id(page_info.id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Created page not found"))?;
+        assert_eq!(page.position, 7);
+        assert_eq!(page.meta_robots, "index,follow");
+        assert_eq!(page.structured_data_type, "WebPage");
         Ok(())
     }
 

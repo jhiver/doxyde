@@ -21,18 +21,53 @@ use axum::{
     response::{Html, IntoResponse},
 };
 use doxyde_core::models::{page::Page, site::Site};
-use doxyde_db::repositories::{
-    ComponentRepository, PageRepository, PageVersionRepository, SiteUserRepository,
-};
+use doxyde_db::repositories::{ComponentRepository, PageRepository, PageVersionRepository};
 use tera::Context;
 
 use crate::{
     auth::OptionalUser,
     content_translate::{translate_context_titles, translate_page_content, TranslationPolicy},
+    handlers::edit::can_edit_page,
     locale_middleware::RequestLocale,
     template_context::{add_base_context, add_locale_context},
     AppState,
 };
+
+async fn page_is_published(
+    version_repo: &PageVersionRepository,
+    page_id: i64,
+) -> Result<bool, StatusCode> {
+    version_repo
+        .get_published(page_id)
+        .await
+        .map(|version| version.is_some())
+        .map_err(|error| {
+            tracing::error!(error = %error, page_id, "Failed to check page publication status");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
+async fn visible_pages(
+    version_repo: &PageVersionRepository,
+    pages: Vec<Page>,
+    include_unpublished: bool,
+) -> Result<Vec<Page>, StatusCode> {
+    if include_unpublished {
+        return Ok(pages);
+    }
+
+    let mut visible = Vec::with_capacity(pages.len());
+    for page in pages {
+        let Some(page_id) = page.id else {
+            continue;
+        };
+        if page_is_published(version_repo, page_id).await? {
+            visible.push(page);
+        }
+    }
+
+    Ok(visible)
+}
 
 /// Display a page by slug (old route handler - kept for compatibility)
 pub async fn show_page(Path(_slug): Path<String>) -> Result<&'static str, StatusCode> {
@@ -88,6 +123,10 @@ pub async fn render_page(
     let page_repo = PageRepository::new(db.clone());
     let version_repo = PageVersionRepository::new(db.clone());
     let component_repo = ComponentRepository::new(db.clone());
+    let can_edit = match &user {
+        OptionalUser(Some(current_user)) => can_edit_page(&state, &db, &site, current_user).await?,
+        OptionalUser(None) => false,
+    };
 
     // Get the published version of the page
     let page_id = page.id.ok_or(StatusCode::NOT_FOUND)?;
@@ -95,6 +134,12 @@ pub async fn render_page(
         tracing::error!(error = %e, "Failed to get published version");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+
+    // A page row is created before its first version is published. It must not
+    // become a public empty page (or leak into navigation) while still a draft.
+    if published_version.is_none() && !can_edit {
+        return Err(StatusCode::NOT_FOUND);
+    }
 
     // Get components if we have a published version
     let mut components = if let Some(version) = &published_version {
@@ -148,7 +193,7 @@ pub async fn render_page(
                 };
 
                 // Fetch pages based on parent_page_id
-                let mut child_pages = if let Some(parent_id) = parent_page_id {
+                let child_pages = if let Some(parent_id) = parent_page_id {
                     // Fetch children of specific parent
                     page_repo
                         .list_children_sorted(parent_id)
@@ -176,6 +221,7 @@ pub async fn render_page(
                         Vec::new()
                     }
                 };
+                let mut child_pages = visible_pages(&version_repo, child_pages, can_edit).await?;
 
                 // Check order_by config and sort pages accordingly
                 let order_by = config
@@ -287,6 +333,7 @@ pub async fn render_page(
         tracing::error!(error = %e, page_id = page_id, "Failed to list children pages");
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
+    let children = visible_pages(&version_repo, children, can_edit).await?;
 
     // Get breadcrumb trail
     let breadcrumb = page_repo.get_breadcrumb_trail(page_id).await.map_err(|e| {
@@ -339,6 +386,7 @@ pub async fn render_page(
                 tracing::error!(error = %e, nav_page_id = nav_page_id, "Failed to list children for navigation");
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
+        let page_children = visible_pages(&version_repo, page_children, can_edit).await?;
 
         // Skip if no children
         if page_children.is_empty() {
@@ -482,27 +530,9 @@ pub async fn render_page(
     // the same policy as the page content. No-op in the source language.
     translate_context_titles(&mut context, &state, &db, &locale, policy, &site.domain).await;
 
-    // Add user info and check edit permissions if logged in
-    let mut can_edit = false;
+    // Add user info for authenticated editors.
     if let OptionalUser(Some(current_user)) = &user {
         context.insert("user", &current_user.user);
-
-        // Check if user can edit this page
-        if current_user.user.is_admin {
-            can_edit = true;
-        } else {
-            // Check site permissions
-            let site_user_repo = SiteUserRepository::new(db.clone());
-            if let (Some(site_id), Some(user_id)) = (site.id, current_user.user.id) {
-                if let Ok(Some(site_user)) =
-                    site_user_repo.find_by_site_and_user(site_id, user_id).await
-                {
-                    use doxyde_core::models::permission::SiteRole;
-                    can_edit =
-                        site_user.role == SiteRole::Editor || site_user.role == SiteRole::Owner;
-                }
-            }
-        }
     }
     context.insert("can_edit", &can_edit);
     context.insert("action", "view");
@@ -597,4 +627,80 @@ pub async fn render_page(
         )],
         Html(html),
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use sqlx::SqlitePool;
+
+    async fn visibility_pool() -> Result<SqlitePool> {
+        let pool = SqlitePool::connect(":memory:").await?;
+        sqlx::query(
+            r#"
+            CREATE TABLE page_versions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                page_id INTEGER NOT NULL,
+                version_number INTEGER NOT NULL,
+                created_by TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                is_published BOOLEAN NOT NULL DEFAULT 0
+            )
+            "#,
+        )
+        .execute(&pool)
+        .await?;
+        Ok(pool)
+    }
+
+    #[tokio::test]
+    async fn public_visibility_requires_a_published_version() -> Result<()> {
+        let pool = visibility_pool().await?;
+        sqlx::query(
+            "INSERT INTO page_versions (page_id, version_number, is_published)
+             VALUES (1, 1, 0), (2, 1, 1)",
+        )
+        .execute(&pool)
+        .await?;
+        let version_repo = PageVersionRepository::new(pool);
+
+        let draft_is_published = page_is_published(&version_repo, 1)
+            .await
+            .map_err(|status| anyhow::anyhow!("draft visibility check failed: {status}"))?;
+        let live_is_published = page_is_published(&version_repo, 2)
+            .await
+            .map_err(|status| anyhow::anyhow!("published visibility check failed: {status}"))?;
+        assert!(!draft_is_published);
+        assert!(live_is_published);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn public_page_lists_exclude_drafts_but_editors_keep_them() -> Result<()> {
+        let pool = visibility_pool().await?;
+        sqlx::query(
+            "INSERT INTO page_versions (page_id, version_number, is_published)
+             VALUES (1, 1, 0), (2, 1, 1)",
+        )
+        .execute(&pool)
+        .await?;
+        let version_repo = PageVersionRepository::new(pool);
+
+        let mut draft = Page::new("draft".to_string(), "Draft".to_string());
+        draft.id = Some(1);
+        let mut published = Page::new("published".to_string(), "Published".to_string());
+        published.id = Some(2);
+
+        let public = visible_pages(&version_repo, vec![draft.clone(), published.clone()], false)
+            .await
+            .map_err(|status| anyhow::anyhow!("public page filtering failed: {status}"))?;
+        assert_eq!(public, vec![published.clone()]);
+
+        let editor = visible_pages(&version_repo, vec![draft.clone(), published.clone()], true)
+            .await
+            .map_err(|status| anyhow::anyhow!("editor page filtering failed: {status}"))?;
+        assert_eq!(editor, vec![draft, published]);
+        Ok(())
+    }
 }
