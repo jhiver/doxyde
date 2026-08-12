@@ -87,22 +87,6 @@ struct GuestControlsContext {
     children_options: Vec<i64>,
 }
 
-impl Default for GuestControlsContext {
-    fn default() -> Self {
-        Self {
-            policy: GuestPolicyContext {
-                person_capacity: None,
-                children_allowed: true,
-                infants_allowed: true,
-                max_children_allowed: None,
-                max_infants_allowed: None,
-            },
-            adult_options: options_through(DEFAULT_MAX_ADULT_OPTIONS, 1),
-            children_options: options_through(DEFAULT_MAX_CHILD_OPTIONS, 0),
-        }
-    }
-}
-
 fn options_through(maximum: i64, minimum: i64) -> Vec<i64> {
     if maximum < minimum {
         Vec::new()
@@ -160,10 +144,6 @@ fn insert_guest_controls(context: &mut Context, controls: &GuestControlsContext)
     context.insert("guest_policy", &controls.policy);
     context.insert("adult_options", &controls.adult_options);
     context.insert("children_options", &controls.children_options);
-}
-
-fn insert_default_guest_controls(context: &mut Context) {
-    insert_guest_controls(context, &GuestControlsContext::default());
 }
 
 fn guest_policy_error_code(error: &anyhow::Error) -> Option<&'static str> {
@@ -704,7 +684,6 @@ pub async fn book_quote_handler(
     context.insert("q_infants", &infants);
     let attribution = Attribution::from(&q);
     insert_attribution_context(&mut context, &attribution);
-    insert_default_guest_controls(&mut context);
 
     let repo = BookingRepository::new(db.clone());
     if !listing_is_selected(&repo, q.listing).await? {
@@ -861,7 +840,6 @@ pub async fn book_create_handler(
     context.insert("q_infants", &infants);
     let form_attribution = Attribution::from(&form);
     insert_attribution_context(&mut context, &form_attribution);
-    insert_default_guest_controls(&mut context);
 
     let repo = BookingRepository::new(db.clone());
     if !listing_is_selected(&repo, form.listing_id).await? {
@@ -938,7 +916,7 @@ pub async fn book_create_handler(
     };
 
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
-    if let Err(e) = client
+    let quote = match client
         .quote(
             form.listing_id,
             &form.from,
@@ -949,20 +927,25 @@ pub async fn book_create_handler(
         )
         .await
     {
-        tracing::error!("booking preflight quote failed: {:?}", e);
-        if let Some(code) = guest_policy_error_code(&e) {
-            if json {
-                return Ok(json_error(code));
+        Ok(quote) => quote,
+        Err(e) => {
+            tracing::error!("booking preflight quote failed: {:?}", e);
+            if let Some(code) = guest_policy_error_code(&e) {
+                if json {
+                    return Ok(json_error(code));
+                }
+                context.insert("guest_policy_error", &code);
+                return Ok(render(&state, "booking/book.html", &context)?.into_response());
             }
-            context.insert("guest_policy_error", &code);
+            if json {
+                return Ok(json_error("booking_error"));
+            }
+            context.insert("booking_error", &true);
             return Ok(render(&state, "booking/book.html", &context)?.into_response());
         }
-        if json {
-            return Ok(json_error("booking_error"));
-        }
-        context.insert("booking_error", &true);
-        return Ok(render(&state, "booking/book.html", &context)?.into_response());
-    }
+    };
+    context.insert("quote", &quote);
+    insert_guest_controls(&mut context, &quote_guest_controls(&quote, adults));
 
     let reservation = match client
         .create_reservation(

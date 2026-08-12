@@ -55,7 +55,7 @@
                     {% endif %}
                 {% elif quote and not quote.available %}
                     <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }} {{ labels["booking.invalid_dates"] | default(value="Pick other dates on the right.") }}</p>
-                {% else %}
+                {% elif quote and quote.available %}
                 <form class="booking-contact-form" action="/.book" method="POST" toolname="book_stay" tooldescription="Book a confirmed stay for specific check-in/check-out dates and number of guests. Requires first name, last name and email. No payment card required at booking time — payment instructions are emailed after confirmation.">
                     <input type="hidden" name="listing_id" value="{{ listing_id }}">
                     <input type="hidden" name="from" value="{{ q_from }}">
@@ -102,7 +102,7 @@
             </div>
 
             <aside class="booking-book-aside">
-                {% if not listing_not_selected and not guest_policy_error %}
+                {% if quote %}
                 <div class="booking-price-card">
                     {% if quote and quote.total_price %}
                     <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
@@ -124,7 +124,7 @@
                         <div class="booking-datepick-guests">
                             <div class="booking-field">
                                 <label for="bk-adults">{{ labels["booking.adults"] | default(value="Adults") }}</label>
-                                <select id="bk-adults">{% for n in adult_options | default(value=[1,2,3,4,5,6]) %}<option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                                <select id="bk-adults">{% for n in adult_options %}<option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
                             </div>
                             <div class="booking-field">
                                 {% if quote and not quote.children_allowed %}
@@ -135,7 +135,7 @@
                                     {% endif %}
                                 {% else %}
                                     <label for="bk-children">{{ labels["booking.children"] | default(value="Children") }}</label>
-                                    <select id="bk-children">{% for n in children_options | default(value=[0,1,2,3,4]) %}<option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                                    <select id="bk-children">{% for n in children_options %}<option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
                                 {% endif %}
                             </div>
                         </div>
@@ -150,22 +150,14 @@
     {% endif %}
 </div>
 
+{% if quote and not confirmed %}
 <script defer src="/.static/vendor/flatpickr/flatpickr.min.js"></script>
 <script>
 (function () {
     var listingId = "{{ listing_id }}";
     var blocked = {{ blocked_dates | default(value=[]) | json_encode | safe }};
     var calMin = "{{ cal_min | default(value='') }}", calMax = "{{ cal_max | default(value='') }}";
-    var guestPolicy = {{ guest_policy | default(value=false) | json_encode | safe }};
-    if (!guestPolicy || typeof guestPolicy !== 'object' || Array.isArray(guestPolicy)) {
-        guestPolicy = {
-            person_capacity: null,
-            children_allowed: true,
-            infants_allowed: true,
-            max_children_allowed: null,
-            max_infants_allowed: null
-        };
-    }
+    var guestPolicy = {{ guest_policy | json_encode | safe }};
     function hiddenGuest(name) {
         return document.querySelector('input[name="' + name + '"]');
     }
@@ -249,4 +241,5 @@
     document.addEventListener('DOMContentLoaded', init);
 })();
 </script>
+{% endif %}
 {% endblock %}

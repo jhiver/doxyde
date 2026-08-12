@@ -708,7 +708,34 @@ async fn test_book_html_rejects_unselected_listing_without_service_details() {
     assert!(html.contains("This stay is not available for booking on this site."));
     assert!(!html.contains("test-secret"));
     assert!(!html.contains("id=\"bk-adults\""));
+    assert!(!html.contains("id=\"bk-checkin\""));
+    assert!(!html.contains("var guestPolicy"));
     assert!(mock_server.received_requests().await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn test_book_html_quote_failure_renders_no_booking_controls() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/quote"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&mock_server)
+        .await;
+
+    let response = server
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(html.contains("The booking service is temporarily unavailable."));
+    assert!(!html.contains("id=\"bk-adults\""));
+    assert!(!html.contains("id=\"bk-checkin\""));
+    assert!(!html.contains("<div class=\"booking-price-card\">"));
+    assert!(!html.contains("var guestPolicy"));
+    assert!(!html.contains("flatpickr.min.js"));
 }
 
 #[tokio::test]
@@ -755,6 +782,98 @@ async fn test_book_html_capacity_two_bounds_guest_controls_and_hidden_values() {
     assert!(html.contains("name=\"children\" value=\"1\""));
     assert!(html.contains("name=\"infants\" value=\"1\""));
     assert!(html.contains("&utm_source=google&gclid=abc%20123"));
+    assert!(html.contains("class=\"booking-contact-form\""));
+    assert!(html.contains("var guestPolicy = {"));
+}
+
+#[tokio::test]
+async fn test_book_html_reservation_failure_renders_policy_aware_controls() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+    mount_quote(
+        &mock_server,
+        json!({
+            "listing_id": 123,
+            "name": "Policy Stay",
+            "person_capacity": 3,
+            "children_allowed": true,
+            "infants_allowed": true,
+            "max_children_allowed": 1,
+            "max_infants_allowed": null,
+            "images": [],
+            "check_in": "2099-01-01",
+            "check_out": "2099-01-05",
+            "nights": 4,
+            "available": true,
+            "currency_code": "EUR",
+            "total_price": 300.0,
+            "components": null
+        }),
+    )
+    .await;
+
+    Mock::given(method("POST"))
+        .and(path("/v1/reservations"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&mock_server)
+        .await;
+
+    let form_data = [
+        ("listing_id", "123"),
+        ("from", "2099-01-01"),
+        ("to", "2099-01-05"),
+        ("adults", "2"),
+        ("children", "1"),
+        ("infants", "0"),
+        ("first_name", "John"),
+        ("last_name", "Doe"),
+        ("email", "john.doe@example.com"),
+    ];
+    let response = server
+        .post("/.book")
+        .add_header("Host", "test.local")
+        .form(&form_data)
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(html.contains("We could not complete your booking."));
+    assert!(html.contains("id=\"bk-checkin\""));
+    assert!(html.contains("class=\"booking-contact-form\""));
+    assert!(html.contains("\"person_capacity\":3"));
+
+    let adults = select_fragment(&html, "bk-adults");
+    assert!(adults.contains("value=\"1\""));
+    assert!(adults.contains("value=\"2\""));
+    assert!(adults.contains("value=\"3\""));
+    assert!(!adults.contains("value=\"4\""));
+
+    let children = select_fragment(&html, "bk-children");
+    assert!(children.contains("value=\"0\""));
+    assert!(children.contains("value=\"1\""));
+    assert!(!children.contains("value=\"2\""));
+}
+
+#[tokio::test]
+async fn test_book_html_unavailable_quote_keeps_policy_controls_without_contact_form() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+    let mut unavailable_quote = valid_quote();
+    unavailable_quote["available"] = json!(false);
+    mount_quote(&mock_server, unavailable_quote).await;
+
+    let response = server
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&adults=2&children=1")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    assert!(html.contains("These dates are no longer available."));
+    assert!(html.contains("id=\"bk-checkin\""));
+    assert!(html.contains("id=\"bk-adults\""));
+    assert!(html.contains("id=\"bk-children\""));
+    assert!(html.contains("var guestPolicy = {"));
+    assert!(!html.contains("class=\"booking-contact-form\""));
+    assert!(!html.contains("id=\"first_name\""));
 }
 
 #[tokio::test]
