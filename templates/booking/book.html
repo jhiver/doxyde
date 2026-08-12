@@ -204,9 +204,8 @@
         var a = adultsEl.value;
         var childrenEl = document.getElementById('bk-children');
         var childrenHidden = hiddenGuest('children');
-        var infantsHidden = hiddenGuest('infants');
         var c = childrenEl ? childrenEl.value : (childrenHidden ? childrenHidden.value : '0');
-        var i = infantsHidden ? infantsHidden.value : '0';
+        var i = "{{ q_infants }}";
         if (!ci || !co || co <= ci) return;
         var adultsHidden = hiddenGuest('adults');
         if (adultsHidden) adultsHidden.value = a;

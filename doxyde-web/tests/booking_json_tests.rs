@@ -586,24 +586,49 @@ async fn test_book_html_create_confirmed() {
 }
 
 #[tokio::test]
-async fn test_book_json_not_configured() {
-    let (server, pool, _mock_server, _temp_dir) = setup_test().await;
+async fn test_book_json_not_configured_precedes_listing_selection_for_get_and_post() {
+    let (server, pool, mock_server, _temp_dir) = setup_test().await;
 
-    // Clear service_url to make it not configured
+    // Clear both booking prerequisites to verify configuration takes precedence.
     sqlx::query("UPDATE booking_config SET service_url = '' WHERE id = 1")
         .execute(&pool)
         .await
         .unwrap();
+    sqlx::query("DELETE FROM booking_listing")
+        .execute(&pool)
+        .await
+        .unwrap();
 
-    let response = server
+    let get_response = server
         .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&format=json")
         .add_header("Host", "test.local")
         .await;
 
-    response.assert_status(StatusCode::OK);
-    let json_body = response.json::<serde_json::Value>();
-    assert_eq!(json_body["status"], "error");
-    assert_eq!(json_body["code"], "not_configured");
+    get_response.assert_status(StatusCode::OK);
+    let get_json = get_response.json::<serde_json::Value>();
+    assert_eq!(get_json["status"], "error");
+    assert_eq!(get_json["code"], "not_configured");
+
+    let form_data = [
+        ("listing_id", "123"),
+        ("from", "2099-01-01"),
+        ("to", "2099-01-05"),
+        ("first_name", "John"),
+        ("last_name", "Doe"),
+        ("email", "john.doe@example.com"),
+        ("format", "json"),
+    ];
+    let post_response = server
+        .post("/.book")
+        .add_header("Host", "test.local")
+        .form(&form_data)
+        .await;
+
+    post_response.assert_status(StatusCode::OK);
+    let post_json = post_response.json::<serde_json::Value>();
+    assert_eq!(post_json["status"], "error");
+    assert_eq!(post_json["code"], "not_configured");
+    assert!(mock_server.received_requests().await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -861,7 +886,7 @@ async fn test_book_html_unavailable_quote_keeps_policy_controls_without_contact_
     mount_quote(&mock_server, unavailable_quote).await;
 
     let response = server
-        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&adults=2&children=1")
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&adults=2&children=1&infants=1")
         .add_header("Host", "test.local")
         .await;
 
@@ -872,8 +897,31 @@ async fn test_book_html_unavailable_quote_keeps_policy_controls_without_contact_
     assert!(html.contains("id=\"bk-adults\""));
     assert!(html.contains("id=\"bk-children\""));
     assert!(html.contains("var guestPolicy = {"));
+    assert!(html.contains("var i = \"1\";"));
+    assert!(!html.contains("name=\"infants\""));
     assert!(!html.contains("class=\"booking-contact-form\""));
     assert!(!html.contains("id=\"first_name\""));
+}
+
+#[tokio::test]
+async fn test_book_html_adult_options_follow_capacity_without_default_cap() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+    let mut quote = valid_quote();
+    quote["person_capacity"] = json!(8);
+    mount_quote(&mock_server, quote).await;
+
+    let response = server
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&adults=7&children=0&infants=0")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    let adults = select_fragment(&html, "bk-adults");
+    assert!(adults.contains("value=\"7\" selected"));
+    assert!(adults.contains("value=\"8\""));
+    assert!(!adults.contains("value=\"9\""));
+    assert!(html.contains("name=\"adults\" value=\"7\""));
 }
 
 #[tokio::test]

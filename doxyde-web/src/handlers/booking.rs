@@ -68,8 +68,6 @@ fn json_error(code: &str) -> Response {
     .into_response()
 }
 
-const DEFAULT_MAX_ADULT_OPTIONS: i64 = 6;
-
 #[derive(Debug, Clone, Serialize)]
 struct GuestPolicyContext {
     person_capacity: Option<i64>,
@@ -94,16 +92,10 @@ fn options_through(maximum: i64, minimum: i64) -> Vec<i64> {
     }
 }
 
-fn bounded_adult_options(person_capacity: Option<i64>) -> Vec<i64> {
-    let maximum = match person_capacity {
-        Some(capacity) => capacity.min(DEFAULT_MAX_ADULT_OPTIONS),
-        None => DEFAULT_MAX_ADULT_OPTIONS,
-    };
-    if maximum < 1 {
-        Vec::new()
-    } else {
-        options_through(maximum, 1)
-    }
+fn adult_options(person_capacity: Option<i64>) -> Vec<i64> {
+    person_capacity
+        .map(|capacity| options_through(capacity, 1))
+        .unwrap_or_default()
 }
 
 fn quote_guest_controls(
@@ -134,7 +126,7 @@ fn quote_guest_controls(
             max_children_allowed: quote.max_children_allowed,
             max_infants_allowed: quote.max_infants_allowed,
         },
-        adult_options: bounded_adult_options(quote.person_capacity),
+        adult_options: adult_options(quote.person_capacity),
         children_options,
     }
 }
@@ -685,14 +677,6 @@ pub async fn book_quote_handler(
     insert_attribution_context(&mut context, &attribution);
 
     let repo = BookingRepository::new(db.clone());
-    if !listing_is_selected(&repo, q.listing).await? {
-        if json {
-            return Ok(json_error("listing_not_selected"));
-        }
-        context.insert("listing_not_selected", &true);
-        return Ok(render(&state, "booking/book.html", &context)?.into_response());
-    }
-
     let config = repo
         .get_config()
         .await
@@ -702,6 +686,13 @@ pub async fn book_quote_handler(
             return Ok(json_error("not_configured"));
         }
         context.insert("not_configured", &true);
+        return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+    if !listing_is_selected(&repo, q.listing).await? {
+        if json {
+            return Ok(json_error("listing_not_selected"));
+        }
+        context.insert("listing_not_selected", &true);
         return Ok(render(&state, "booking/book.html", &context)?.into_response());
     }
     if q.to <= q.from && json {
@@ -841,13 +832,6 @@ pub async fn book_create_handler(
     insert_attribution_context(&mut context, &form_attribution);
 
     let repo = BookingRepository::new(db.clone());
-    if !listing_is_selected(&repo, form.listing_id).await? {
-        if json {
-            return Ok(json_error("listing_not_selected"));
-        }
-        context.insert("listing_not_selected", &true);
-        return Ok(render(&state, "booking/book.html", &context)?.into_response());
-    }
     let config = repo
         .get_config()
         .await
@@ -857,6 +841,13 @@ pub async fn book_create_handler(
             return Ok(json_error("not_configured"));
         }
         context.insert("not_configured", &true);
+        return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+    if !listing_is_selected(&repo, form.listing_id).await? {
+        if json {
+            return Ok(json_error("listing_not_selected"));
+        }
+        context.insert("listing_not_selected", &true);
         return Ok(render(&state, "booking/book.html", &context)?.into_response());
     }
 
