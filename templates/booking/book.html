@@ -162,12 +162,15 @@
         return document.querySelector('input[name="' + name + '"]');
     }
     function maxChildrenForAdults(adults) {
-        var maximum = typeof guestPolicy.max_children_allowed === 'number'
-            ? guestPolicy.max_children_allowed : 4;
-        if (typeof guestPolicy.person_capacity === 'number') {
-            maximum = Math.min(maximum, Math.max(0, guestPolicy.person_capacity - adults));
+        var maximum = typeof guestPolicy.person_capacity === 'number'
+            ? Math.max(0, guestPolicy.person_capacity - adults)
+            : (typeof guestPolicy.max_children_allowed === 'number'
+                ? Math.max(0, guestPolicy.max_children_allowed) : 0);
+        if (typeof guestPolicy.person_capacity === 'number'
+            && typeof guestPolicy.max_children_allowed === 'number') {
+            maximum = Math.min(maximum, Math.max(0, guestPolicy.max_children_allowed));
         }
-        return Math.max(0, Math.min(4, maximum));
+        return maximum;
     }
     function syncChildrenOptions() {
         var adultsEl = document.getElementById('bk-adults');

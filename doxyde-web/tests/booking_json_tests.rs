@@ -951,6 +951,48 @@ async fn test_book_html_children_are_limited_by_remaining_capacity() {
 }
 
 #[tokio::test]
+async fn test_book_html_children_above_default_limit_remain_selected_and_synced() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
+    mount_quote(
+        &mock_server,
+        json!({
+            "listing_id": 123,
+            "name": "Large Stay",
+            "person_capacity": 8,
+            "children_allowed": true,
+            "infants_allowed": true,
+            "max_children_allowed": null,
+            "max_infants_allowed": null,
+            "images": [],
+            "check_in": "2099-01-01",
+            "check_out": "2099-01-05",
+            "nights": 4,
+            "available": true,
+            "currency_code": "EUR",
+            "total_price": 800.0,
+            "components": null
+        }),
+    )
+    .await;
+
+    let response = server
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&adults=2&children=5")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let html = response.text();
+    let children = select_fragment(&html, "bk-children");
+    assert!(children.contains("value=\"5\" selected"));
+    assert!(children.contains("value=\"6\""));
+    assert!(html.contains("name=\"children\" value=\"5\""));
+    assert!(html.contains("Math.max(0, guestPolicy.max_children_allowed)"));
+    assert!(html.contains("var current = parseInt(childrenEl.value, 10);"));
+    assert!(html.contains("var selected = Math.min(Math.max(current, 0), maximum);"));
+    assert!(!html.contains("Math.min(4, maximum)"));
+}
+
+#[tokio::test]
 async fn test_book_html_children_respect_explicit_maximum() {
     let (server, _pool, mock_server, _temp_dir) = setup_test_with_real_templates().await;
     mount_quote(

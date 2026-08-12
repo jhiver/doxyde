@@ -69,7 +69,6 @@ fn json_error(code: &str) -> Response {
 }
 
 const DEFAULT_MAX_ADULT_OPTIONS: i64 = 6;
-const DEFAULT_MAX_CHILD_OPTIONS: i64 = 4;
 
 #[derive(Debug, Clone, Serialize)]
 struct GuestPolicyContext {
@@ -119,10 +118,10 @@ fn quote_guest_controls(
         (Some(capacity), Some(policy)) => capacity.min(policy),
         (Some(capacity), None) => capacity,
         (None, Some(policy)) => policy,
-        (None, None) => DEFAULT_MAX_CHILD_OPTIONS,
+        (None, None) => 0,
     };
     let children_options = if quote.children_allowed {
-        options_through(maximum_children.min(DEFAULT_MAX_CHILD_OPTIONS), 0)
+        options_through(maximum_children, 0)
     } else {
         Vec::new()
     };
