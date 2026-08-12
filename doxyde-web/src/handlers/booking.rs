@@ -172,6 +172,7 @@ fn guest_policy_error_code(error: &anyhow::Error) -> Option<&'static str> {
         Some("capacity_exceeded") => Some("capacity_exceeded"),
         Some("children_not_allowed") => Some("children_not_allowed"),
         Some("infants_not_allowed") => Some("infants_not_allowed"),
+        Some("guest_policy_unavailable") => Some("guest_policy_unavailable"),
         _ if api_error.status() == 404 => Some("listing_not_found"),
         _ => None,
     }
@@ -937,6 +938,32 @@ pub async fn book_create_handler(
     };
 
     let client = SejoursClient::new(&config.service_url, &config.service_secret);
+    if let Err(e) = client
+        .quote(
+            form.listing_id,
+            &form.from,
+            &form.to,
+            adults,
+            children,
+            infants,
+        )
+        .await
+    {
+        tracing::error!("booking preflight quote failed: {:?}", e);
+        if let Some(code) = guest_policy_error_code(&e) {
+            if json {
+                return Ok(json_error(code));
+            }
+            context.insert("guest_policy_error", &code);
+            return Ok(render(&state, "booking/book.html", &context)?.into_response());
+        }
+        if json {
+            return Ok(json_error("booking_error"));
+        }
+        context.insert("booking_error", &true);
+        return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+
     let reservation = match client
         .create_reservation(
             form.listing_id,

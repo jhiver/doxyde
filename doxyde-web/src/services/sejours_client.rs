@@ -28,8 +28,11 @@ use std::time::Duration;
 
 const SECRET_HEADER: &str = "X-Sejours-Secret";
 
-fn default_allowed() -> bool {
-    true
+fn required_optional_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<i64>::deserialize(deserializer)
 }
 
 /// Structured error returned by sejours-api for a non-success response.
@@ -94,13 +97,11 @@ pub struct Listing {
     pub description: Option<String>,
     #[serde(default)]
     pub person_capacity: Option<i64>,
-    #[serde(default = "default_allowed")]
     pub children_allowed: bool,
-    #[serde(default = "default_allowed")]
     pub infants_allowed: bool,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_optional_i64")]
     pub max_children_allowed: Option<i64>,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_optional_i64")]
     pub max_infants_allowed: Option<i64>,
     #[serde(default)]
     pub guests_included: Option<i64>,
@@ -175,13 +176,11 @@ pub struct QuoteResponse {
     pub name: Option<String>,
     #[serde(default)]
     pub person_capacity: Option<i64>,
-    #[serde(default = "default_allowed")]
     pub children_allowed: bool,
-    #[serde(default = "default_allowed")]
     pub infants_allowed: bool,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_optional_i64")]
     pub max_children_allowed: Option<i64>,
-    #[serde(default)]
+    #[serde(deserialize_with = "required_optional_i64")]
     pub max_infants_allowed: Option<i64>,
     #[serde(default)]
     pub images: Vec<String>,

@@ -95,6 +95,26 @@ async fn mount_quote(mock_server: &MockServer, quote: serde_json::Value) {
         .await;
 }
 
+fn valid_quote() -> serde_json::Value {
+    json!({
+        "listing_id": 123,
+        "name": "Cozy Stay",
+        "person_capacity": 4,
+        "children_allowed": true,
+        "infants_allowed": true,
+        "max_children_allowed": null,
+        "max_infants_allowed": null,
+        "images": [],
+        "check_in": "2099-01-01",
+        "check_out": "2099-01-05",
+        "nights": 4,
+        "available": true,
+        "currency_code": "EUR",
+        "total_price": 400.0,
+        "components": null
+    })
+}
+
 #[tokio::test]
 async fn test_stay_json_valid_dates() {
     let (server, _pool, mock_server, _temp_dir) = setup_test().await;
@@ -220,6 +240,10 @@ async fn test_book_json_quote() {
         "listing_id": 123,
         "name": "Cozy Stay",
         "person_capacity": 4,
+        "children_allowed": true,
+        "infants_allowed": true,
+        "max_children_allowed": null,
+        "max_infants_allowed": null,
         "images": [],
         "check_in": "2099-01-01",
         "check_out": "2099-01-05",
@@ -263,8 +287,44 @@ async fn test_book_json_quote() {
 }
 
 #[tokio::test]
+async fn test_book_json_rejects_old_quote_response_missing_policy_fields() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    mount_quote(
+        &mock_server,
+        json!({
+            "listing_id": 123,
+            "name": "Old API Stay",
+            "person_capacity": 4,
+            "images": [],
+            "check_in": "2099-01-01",
+            "check_out": "2099-01-05",
+            "nights": 4,
+            "available": true
+        }),
+    )
+    .await;
+
+    let response = server
+        .get("/.book?listing=123&from=2099-01-01&to=2099-01-05&format=json")
+        .add_header("Host", "test.local")
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let json_body = response.json::<serde_json::Value>();
+    assert_eq!(json_body["status"], "error");
+    assert_eq!(json_body["code"], "service_error");
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url.path(), "/v1/quote");
+}
+
+#[tokio::test]
 async fn test_book_json_create_confirmed() {
     let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    mount_quote(&mock_server, valid_quote()).await;
 
     let mock_reservation = json!({
         "reservation_id": 456,
@@ -289,9 +349,14 @@ async fn test_book_json_create_confirmed() {
         ("listing_id", "123"),
         ("from", "2099-01-01"),
         ("to", "2099-01-05"),
+        ("adults", "2"),
+        ("children", "1"),
+        ("infants", "0"),
         ("first_name", "John"),
         ("last_name", "Doe"),
         ("email", "john.doe@example.com"),
+        ("utm_source", "newsletter"),
+        ("gclid", "gclid-123"),
         ("format", "json"),
     ];
 
@@ -305,11 +370,75 @@ async fn test_book_json_create_confirmed() {
     let json_body = response.json::<serde_json::Value>();
     assert_eq!(json_body["status"], "confirmed");
     assert_eq!(json_body["reservation"]["reservation_id"], 456);
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].url.path(), "/v1/quote");
+    assert_eq!(requests[1].url.path(), "/v1/reservations");
+    let quote_body: serde_json::Value = requests[0].body_json().unwrap();
+    assert_eq!(quote_body["listing_id"], 123);
+    assert_eq!(quote_body["from"], "2099-01-01");
+    assert_eq!(quote_body["to"], "2099-01-05");
+    assert_eq!(quote_body["adults"], 2);
+    assert_eq!(quote_body["children"], 1);
+    assert_eq!(quote_body["infants"], 0);
+    let reservation_body: serde_json::Value = requests[1].body_json().unwrap();
+    assert_eq!(reservation_body["adults"], 2);
+    assert_eq!(reservation_body["children"], 1);
+    assert_eq!(reservation_body["infants"], 0);
+    assert_eq!(reservation_body["attribution"]["utm_source"], "newsletter");
+    assert_eq!(reservation_body["attribution"]["gclid"], "gclid-123");
+}
+
+#[tokio::test]
+async fn test_book_json_rejects_old_quote_before_reservation() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    mount_quote(
+        &mock_server,
+        json!({
+            "listing_id": 123,
+            "check_in": "2099-01-01",
+            "check_out": "2099-01-05",
+            "nights": 4,
+            "available": true
+        }),
+    )
+    .await;
+
+    let form_data = [
+        ("listing_id", "123"),
+        ("from", "2099-01-01"),
+        ("to", "2099-01-05"),
+        ("adults", "2"),
+        ("children", "0"),
+        ("infants", "0"),
+        ("first_name", "John"),
+        ("last_name", "Doe"),
+        ("email", "john.doe@example.com"),
+        ("format", "json"),
+    ];
+    let response = server
+        .post("/.book")
+        .add_header("Host", "test.local")
+        .form(&form_data)
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let json_body = response.json::<serde_json::Value>();
+    assert_eq!(json_body["status"], "error");
+    assert_eq!(json_body["code"], "booking_error");
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url.path(), "/v1/quote");
 }
 
 #[tokio::test]
 async fn test_book_json_create_error() {
     let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    mount_quote(&mock_server, valid_quote()).await;
 
     Mock::given(method("POST"))
         .and(path("/v1/reservations"))
@@ -414,6 +543,8 @@ async fn test_stay_json_accept_header() {
 #[tokio::test]
 async fn test_book_html_create_confirmed() {
     let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    mount_quote(&mock_server, valid_quote()).await;
 
     let mock_reservation = json!({
         "reservation_id": 456,
@@ -637,6 +768,8 @@ async fn test_book_html_children_forbidden_renders_adults_only() {
             "person_capacity": 2,
             "children_allowed": false,
             "infants_allowed": false,
+            "max_children_allowed": null,
+            "max_infants_allowed": null,
             "images": [],
             "check_in": "2099-01-01",
             "check_out": "2099-01-05",
@@ -673,6 +806,7 @@ async fn test_book_html_children_are_limited_by_remaining_capacity() {
             "children_allowed": true,
             "infants_allowed": true,
             "max_children_allowed": 4,
+            "max_infants_allowed": null,
             "images": [],
             "check_in": "2099-01-01",
             "check_out": "2099-01-05",
@@ -709,6 +843,7 @@ async fn test_book_html_children_respect_explicit_maximum() {
             "children_allowed": true,
             "infants_allowed": true,
             "max_children_allowed": 1,
+            "max_infants_allowed": null,
             "images": [],
             "check_in": "2099-01-01",
             "check_out": "2099-01-05",
@@ -757,8 +892,49 @@ async fn test_book_json_maps_structured_guest_policy_error() {
 }
 
 #[tokio::test]
+async fn test_book_json_maps_guest_policy_unavailable_without_reservation() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/quote"))
+        .respond_with(ResponseTemplate::new(422).set_body_json(json!({
+            "detail": {"code": "guest_policy_unavailable", "message": "policy"}
+        })))
+        .mount(&mock_server)
+        .await;
+
+    let form_data = [
+        ("listing_id", "123"),
+        ("from", "2099-01-01"),
+        ("to", "2099-01-05"),
+        ("adults", "1"),
+        ("children", "1"),
+        ("infants", "0"),
+        ("first_name", "John"),
+        ("last_name", "Doe"),
+        ("email", "john.doe@example.com"),
+        ("format", "json"),
+    ];
+    let response = server
+        .post("/.book")
+        .add_header("Host", "test.local")
+        .form(&form_data)
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let json_body = response.json::<serde_json::Value>();
+    assert_eq!(json_body["status"], "error");
+    assert_eq!(json_body["code"], "guest_policy_unavailable");
+
+    let requests = mock_server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].url.path(), "/v1/quote");
+}
+
+#[tokio::test]
 async fn test_book_json_maps_reservation_guest_policy_error() {
     let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+    mount_quote(&mock_server, valid_quote()).await;
+
     Mock::given(method("POST"))
         .and(path("/v1/reservations"))
         .respond_with(ResponseTemplate::new(422).set_body_json(json!({
@@ -1095,17 +1271,11 @@ fn test_suggested_stay_deserialization_nullable_fields() {
 }
 
 #[test]
-fn test_booking_policy_fields_default_for_older_api_responses() {
+fn test_booking_policy_fields_are_required_from_upgraded_api() {
     use doxyde_web::services::sejours_client::{Listing, QuoteResponse};
 
-    let listing: Listing = serde_json::from_str(r#"{"listing_id": 1}"#)
-        .expect("older listing response should deserialize");
-    assert!(listing.children_allowed);
-    assert!(listing.infants_allowed);
-    assert!(listing.max_children_allowed.is_none());
-    assert!(listing.max_infants_allowed.is_none());
-
-    let quote: QuoteResponse = serde_json::from_str(
+    assert!(serde_json::from_str::<Listing>(r#"{"listing_id": 1}"#).is_err());
+    assert!(serde_json::from_str::<QuoteResponse>(
         r#"{
             "listing_id": 1,
             "check_in": "2099-01-01",
@@ -1114,9 +1284,18 @@ fn test_booking_policy_fields_default_for_older_api_responses() {
             "available": true
         }"#,
     )
-    .expect("older quote response should deserialize");
-    assert!(quote.children_allowed);
-    assert!(quote.infants_allowed);
-    assert!(quote.max_children_allowed.is_none());
-    assert!(quote.max_infants_allowed.is_none());
+    .is_err());
+    assert!(serde_json::from_str::<QuoteResponse>(
+        r#"{
+            "listing_id": 1,
+            "children_allowed": true,
+            "infants_allowed": true,
+            "max_children_allowed": null,
+            "check_in": "2099-01-01",
+            "check_out": "2099-01-02",
+            "nights": 1,
+            "available": true
+        }"#,
+    )
+    .is_err());
 }
