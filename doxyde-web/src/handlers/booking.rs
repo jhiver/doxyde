@@ -30,7 +30,7 @@ use axum::{
 use axum_extra::extract::{cookie::CookieJar, Host};
 use doxyde_core::models::site::Site;
 use doxyde_db::repositories::{BookingListing, BookingRepository};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use tera::Context;
 
 use crate::{
@@ -40,7 +40,7 @@ use crate::{
     csrf::get_or_create_csrf_token,
     db_middleware::SiteDatabase,
     locale_middleware::RequestLocale,
-    services::sejours_client::{Contact, SejoursClient},
+    services::sejours_client::{Contact, SejoursApiError, SejoursClient},
     site_config::get_site_config,
     template_context::{add_base_context, add_locale_context},
     AppState,
@@ -66,6 +66,132 @@ fn json_error(code: &str) -> Response {
         "code": code
     }))
     .into_response()
+}
+
+const DEFAULT_MAX_ADULT_OPTIONS: i64 = 6;
+const DEFAULT_MAX_CHILD_OPTIONS: i64 = 4;
+
+#[derive(Debug, Clone, Serialize)]
+struct GuestPolicyContext {
+    person_capacity: Option<i64>,
+    children_allowed: bool,
+    infants_allowed: bool,
+    max_children_allowed: Option<i64>,
+    max_infants_allowed: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct GuestControlsContext {
+    policy: GuestPolicyContext,
+    adult_options: Vec<i64>,
+    children_options: Vec<i64>,
+}
+
+impl Default for GuestControlsContext {
+    fn default() -> Self {
+        Self {
+            policy: GuestPolicyContext {
+                person_capacity: None,
+                children_allowed: true,
+                infants_allowed: true,
+                max_children_allowed: None,
+                max_infants_allowed: None,
+            },
+            adult_options: options_through(DEFAULT_MAX_ADULT_OPTIONS, 1),
+            children_options: options_through(DEFAULT_MAX_CHILD_OPTIONS, 0),
+        }
+    }
+}
+
+fn options_through(maximum: i64, minimum: i64) -> Vec<i64> {
+    if maximum < minimum {
+        Vec::new()
+    } else {
+        (minimum..=maximum).collect()
+    }
+}
+
+fn bounded_adult_options(person_capacity: Option<i64>) -> Vec<i64> {
+    let maximum = match person_capacity {
+        Some(capacity) => capacity.min(DEFAULT_MAX_ADULT_OPTIONS),
+        None => DEFAULT_MAX_ADULT_OPTIONS,
+    };
+    if maximum < 1 {
+        Vec::new()
+    } else {
+        options_through(maximum, 1)
+    }
+}
+
+fn quote_guest_controls(
+    quote: &crate::services::sejours_client::QuoteResponse,
+    adults: i64,
+) -> GuestControlsContext {
+    let max_children_by_capacity = quote
+        .person_capacity
+        .map(|capacity| capacity.saturating_sub(adults).max(0));
+    let max_children_by_policy = quote.max_children_allowed.map(|maximum| maximum.max(0));
+    let maximum_children = match (max_children_by_capacity, max_children_by_policy) {
+        (Some(capacity), Some(policy)) => capacity.min(policy),
+        (Some(capacity), None) => capacity,
+        (None, Some(policy)) => policy,
+        (None, None) => DEFAULT_MAX_CHILD_OPTIONS,
+    };
+    let children_options = if quote.children_allowed {
+        options_through(maximum_children.min(DEFAULT_MAX_CHILD_OPTIONS), 0)
+    } else {
+        Vec::new()
+    };
+
+    GuestControlsContext {
+        policy: GuestPolicyContext {
+            person_capacity: quote.person_capacity,
+            children_allowed: quote.children_allowed,
+            infants_allowed: quote.infants_allowed,
+            max_children_allowed: quote.max_children_allowed,
+            max_infants_allowed: quote.max_infants_allowed,
+        },
+        adult_options: bounded_adult_options(quote.person_capacity),
+        children_options,
+    }
+}
+
+fn insert_guest_controls(context: &mut Context, controls: &GuestControlsContext) {
+    context.insert("guest_policy", &controls.policy);
+    context.insert("adult_options", &controls.adult_options);
+    context.insert("children_options", &controls.children_options);
+}
+
+fn insert_default_guest_controls(context: &mut Context) {
+    insert_guest_controls(context, &GuestControlsContext::default());
+}
+
+fn guest_policy_error_code(error: &anyhow::Error) -> Option<&'static str> {
+    let api_error = error.downcast_ref::<SejoursApiError>()?;
+    match api_error.code() {
+        Some("capacity_exceeded") => Some("capacity_exceeded"),
+        Some("children_not_allowed") => Some("children_not_allowed"),
+        Some("infants_not_allowed") => Some("infants_not_allowed"),
+        _ if api_error.status() == 404 => Some("listing_not_found"),
+        _ => None,
+    }
+}
+
+async fn listing_is_selected(
+    repo: &BookingRepository,
+    listing_id: i64,
+) -> Result<bool, StatusCode> {
+    let listings = repo.list_listings().await.map_err(|error| {
+        tracing::error!(
+            ?error,
+            listing_id,
+            "Failed to load booking listing selection"
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+    Ok(listings
+        .iter()
+        .any(|listing| listing.listing_id == listing_id))
 }
 
 /// True when an ISO `YYYY-MM-DD` date is strictly before today in Mauritius time.
@@ -569,7 +695,25 @@ pub async fn book_quote_handler(
     let children = q.children.unwrap_or(0).max(0);
     let infants = q.infants.unwrap_or(0).max(0);
 
+    context.insert("listing_id", &q.listing);
+    context.insert("q_from", &q.from);
+    context.insert("q_to", &q.to);
+    context.insert("q_adults", &adults);
+    context.insert("q_children", &children);
+    context.insert("q_infants", &infants);
+    let attribution = Attribution::from(&q);
+    insert_attribution_context(&mut context, &attribution);
+    insert_default_guest_controls(&mut context);
+
     let repo = BookingRepository::new(db.clone());
+    if !listing_is_selected(&repo, q.listing).await? {
+        if json {
+            return Ok(json_error("listing_not_selected"));
+        }
+        context.insert("listing_not_selected", &true);
+        return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
+
     let config = repo
         .get_config()
         .await
@@ -599,6 +743,13 @@ pub async fn book_quote_handler(
         Ok(quote) => quote,
         Err(e) => {
             tracing::error!("quote failed: {:?}", e);
+            if let Some(code) = guest_policy_error_code(&e) {
+                if json {
+                    return Ok(json_error(code));
+                }
+                context.insert("guest_policy_error", &code);
+                return Ok(render(&state, "booking/book.html", &context)?.into_response());
+            }
             if json {
                 return Ok(json_error("service_error"));
             }
@@ -606,6 +757,8 @@ pub async fn book_quote_handler(
             return Ok(render(&state, "booking/book.html", &context)?.into_response());
         }
     };
+
+    insert_guest_controls(&mut context, &quote_guest_controls(&quote, adults));
 
     let blocked_dates = match client.calendar(q.listing).await {
         Ok(cal) => {
@@ -630,13 +783,6 @@ pub async fn book_quote_handler(
     }
 
     context.insert("quote", &quote);
-    context.insert("listing_id", &q.listing);
-    context.insert("q_from", &q.from);
-    context.insert("q_to", &q.to);
-    context.insert("q_adults", &adults);
-    context.insert("q_children", &children);
-    context.insert("q_infants", &infants);
-    insert_attribution_context(&mut context, &Attribution::from(&q));
 
     Ok(render(&state, "booking/book.html", &context)?.into_response())
 }
@@ -712,8 +858,18 @@ pub async fn book_create_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
+    let form_attribution = Attribution::from(&form);
+    insert_attribution_context(&mut context, &form_attribution);
+    insert_default_guest_controls(&mut context);
 
     let repo = BookingRepository::new(db.clone());
+    if !listing_is_selected(&repo, form.listing_id).await? {
+        if json {
+            return Ok(json_error("listing_not_selected"));
+        }
+        context.insert("listing_not_selected", &true);
+        return Ok(render(&state, "booking/book.html", &context)?.into_response());
+    }
     let config = repo
         .get_config()
         .await
@@ -798,6 +954,13 @@ pub async fn book_create_handler(
         Ok(res) => res,
         Err(e) => {
             tracing::error!("reservation failed: {:?}", e);
+            if let Some(code) = guest_policy_error_code(&e) {
+                if json {
+                    return Ok(json_error(code));
+                }
+                context.insert("guest_policy_error", &code);
+                return Ok(render(&state, "booking/book.html", &context)?.into_response());
+            }
             if json {
                 return Ok(json_error("booking_error"));
             }

@@ -17,6 +17,9 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.guests", "Guests"),
     ("booking.adults", "Adults"),
     ("booking.children", "Children"),
+    ("booking.adults_only", "Adults only"),
+    ("booking.children_not_allowed", "Children are not allowed for this stay."),
+    ("booking.infants_not_allowed", "Infants are not allowed for this stay."),
     ("booking.book", "Book"),
     ("booking.check_availability", "Check availability"),
     ("booking.select_date", "Select date"),
@@ -50,6 +53,22 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.no_card_required", "No credit card required"),
     ("booking.pay_later", "Reserve now — no card needed. We'll email you payment instructions after you book."),
     ("booking.not_configured", "Booking is not configured for this site yet."),
+    (
+        "booking.listing_not_bookable",
+        "This stay is not available for booking on this site.",
+    ),
+    (
+        "booking.listing_not_found",
+        "This stay could not be found. Please choose another stay.",
+    ),
+    (
+        "booking.capacity_exceeded",
+        "The selected number of guests exceeds this stay's capacity.",
+    ),
+    (
+        "booking.guest_policy_error",
+        "These guest details are not allowed for this stay. Please adjust the number of guests.",
+    ),
     (
         "booking.service_error",
         "The booking service is temporarily unavailable. Please try again shortly.",

@@ -28,6 +28,61 @@ use std::time::Duration;
 
 const SECRET_HEADER: &str = "X-Sejours-Secret";
 
+fn default_allowed() -> bool {
+    true
+}
+
+/// Structured error returned by sejours-api for a non-success response.
+///
+/// Only the HTTP status and the optional machine-readable code are retained;
+/// response bodies are deliberately not propagated to Doxyde templates or
+/// JSON responses because they may contain service-specific detail.
+#[derive(Debug, Clone)]
+pub struct SejoursApiError {
+    status: u16,
+    code: Option<String>,
+}
+
+impl SejoursApiError {
+    pub fn status(&self) -> u16 {
+        self.status
+    }
+
+    pub fn code(&self) -> Option<&str> {
+        self.code.as_deref()
+    }
+}
+
+impl std::fmt::Display for SejoursApiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.code.as_deref() {
+            Some(code) => write!(f, "sejours-api returned HTTP {} ({code})", self.status),
+            None => write!(f, "sejours-api returned HTTP {}", self.status),
+        }
+    }
+}
+
+impl std::error::Error for SejoursApiError {}
+
+fn error_code_from_value(value: &serde_json::Value) -> Option<String> {
+    match value {
+        serde_json::Value::Object(object) => object
+            .get("code")
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string),
+        serde_json::Value::String(value) => Some(value.clone()),
+        _ => None,
+    }
+}
+
+fn response_error_code(body: &str) -> Option<String> {
+    let value = serde_json::from_str::<serde_json::Value>(body).ok()?;
+    value
+        .get("detail")
+        .and_then(error_code_from_value)
+        .or_else(|| error_code_from_value(&value))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Listing {
     pub listing_id: i64,
@@ -39,6 +94,14 @@ pub struct Listing {
     pub description: Option<String>,
     #[serde(default)]
     pub person_capacity: Option<i64>,
+    #[serde(default = "default_allowed")]
+    pub children_allowed: bool,
+    #[serde(default = "default_allowed")]
+    pub infants_allowed: bool,
+    #[serde(default)]
+    pub max_children_allowed: Option<i64>,
+    #[serde(default)]
+    pub max_infants_allowed: Option<i64>,
     #[serde(default)]
     pub guests_included: Option<i64>,
     #[serde(default)]
@@ -112,6 +175,14 @@ pub struct QuoteResponse {
     pub name: Option<String>,
     #[serde(default)]
     pub person_capacity: Option<i64>,
+    #[serde(default = "default_allowed")]
+    pub children_allowed: bool,
+    #[serde(default = "default_allowed")]
+    pub infants_allowed: bool,
+    #[serde(default)]
+    pub max_children_allowed: Option<i64>,
+    #[serde(default)]
+    pub max_infants_allowed: Option<i64>,
     #[serde(default)]
     pub images: Vec<String>,
     pub check_in: String,
@@ -367,7 +438,10 @@ impl SejoursClient {
             .await
             .context("read sejours-api response body")?;
         if !status.is_success() {
-            return Err(anyhow!("sejours-api returned {}: {}", status, text));
+            return Err(anyhow!(SejoursApiError {
+                status: status.as_u16(),
+                code: response_error_code(&text),
+            }));
         }
         serde_json::from_str(&text).with_context(|| format!("decode sejours-api response: {text}"))
     }

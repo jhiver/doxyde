@@ -39,7 +39,21 @@
 
         <div class="booking-book-layout">
             <div class="booking-book-main">
-                {% if quote and not quote.available %}
+                {% if listing_not_selected %}
+                    <p class="booking-notice booking-notice-error">{{ labels["booking.listing_not_bookable"] | default(value="This stay is not available for booking on this site.") }}</p>
+                {% elif guest_policy_error %}
+                    {% if guest_policy_error == "capacity_exceeded" %}
+                        <p class="booking-notice booking-notice-error">{{ labels["booking.capacity_exceeded"] | default(value="The selected number of guests exceeds this stay's capacity.") }}</p>
+                    {% elif guest_policy_error == "children_not_allowed" %}
+                        <p class="booking-notice booking-notice-error">{{ labels["booking.children_not_allowed"] | default(value="Children are not allowed for this stay.") }}</p>
+                    {% elif guest_policy_error == "infants_not_allowed" %}
+                        <p class="booking-notice booking-notice-error">{{ labels["booking.infants_not_allowed"] | default(value="Infants are not allowed for this stay.") }}</p>
+                    {% elif guest_policy_error == "listing_not_found" %}
+                        <p class="booking-notice booking-notice-error">{{ labels["booking.listing_not_found"] | default(value="This stay could not be found. Please choose another stay.") }}</p>
+                    {% else %}
+                        <p class="booking-notice booking-notice-error">{{ labels["booking.guest_policy_error"] | default(value="These guest details are not allowed for this stay. Please adjust the number of guests.") }}</p>
+                    {% endif %}
+                {% elif quote and not quote.available %}
                     <p class="booking-notice">{{ labels["booking.unavailable"] | default(value="These dates are no longer available.") }} {{ labels["booking.invalid_dates"] | default(value="Pick other dates on the right.") }}</p>
                 {% else %}
                 <form class="booking-contact-form" action="/.book" method="POST" toolname="book_stay" tooldescription="Book a confirmed stay for specific check-in/check-out dates and number of guests. Requires first name, last name and email. No payment card required at booking time — payment instructions are emailed after confirmation.">
@@ -88,6 +102,7 @@
             </div>
 
             <aside class="booking-book-aside">
+                {% if not listing_not_selected and not guest_policy_error %}
                 <div class="booking-price-card">
                     {% if quote and quote.total_price %}
                     <div class="booking-price-card-amount">{{ quote.total_price }} {{ quote.currency_code | default(value='') }}</div>
@@ -109,15 +124,27 @@
                         <div class="booking-datepick-guests">
                             <div class="booking-field">
                                 <label for="bk-adults">{{ labels["booking.adults"] | default(value="Adults") }}</label>
-                                <select id="bk-adults">{% for n in [1,2,3,4,5,6] %}<option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                                <select id="bk-adults">{% for n in adult_options | default(value=[1,2,3,4,5,6]) %}<option value="{{ n }}"{% if q_adults == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
                             </div>
                             <div class="booking-field">
-                                <label for="bk-children">{{ labels["booking.children"] | default(value="Children") }}</label>
-                                <select id="bk-children">{% for n in [0,1,2,3,4] %}<option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                                {% if quote and not quote.children_allowed %}
+                                    {% if quote.infants_allowed %}
+                                        <p class="booking-guest-policy">{{ labels["booking.children_not_allowed"] | default(value="Children are not allowed for this stay.") }}</p>
+                                    {% else %}
+                                        <p class="booking-guest-policy">{{ labels["booking.adults_only"] | default(value="Adults only") }}</p>
+                                    {% endif %}
+                                {% else %}
+                                    <label for="bk-children">{{ labels["booking.children"] | default(value="Children") }}</label>
+                                    <select id="bk-children">{% for n in children_options | default(value=[0,1,2,3,4]) %}<option value="{{ n }}"{% if q_children == n %} selected{% endif %}>{{ n }}</option>{% endfor %}</select>
+                                {% endif %}
                             </div>
                         </div>
+                        {% if quote and quote.children_allowed and not quote.infants_allowed %}
+                        <p class="booking-guest-policy">{{ labels["booking.infants_not_allowed"] | default(value="Infants are not allowed for this stay.") }}</p>
+                        {% endif %}
                     </div>
                 </div>
+                {% endif %}
             </aside>
         </div>
     {% endif %}
@@ -129,20 +156,79 @@
     var listingId = "{{ listing_id }}";
     var blocked = {{ blocked_dates | default(value=[]) | json_encode | safe }};
     var calMin = "{{ cal_min | default(value='') }}", calMax = "{{ cal_max | default(value='') }}";
+    var guestPolicy = {{ guest_policy | default(value=false) | json_encode | safe }};
+    if (!guestPolicy || typeof guestPolicy !== 'object' || Array.isArray(guestPolicy)) {
+        guestPolicy = {
+            person_capacity: null,
+            children_allowed: true,
+            infants_allowed: true,
+            max_children_allowed: null,
+            max_infants_allowed: null
+        };
+    }
+    function hiddenGuest(name) {
+        return document.querySelector('input[name="' + name + '"]');
+    }
+    function maxChildrenForAdults(adults) {
+        var maximum = typeof guestPolicy.max_children_allowed === 'number'
+            ? guestPolicy.max_children_allowed : 4;
+        if (typeof guestPolicy.person_capacity === 'number') {
+            maximum = Math.min(maximum, Math.max(0, guestPolicy.person_capacity - adults));
+        }
+        return Math.max(0, Math.min(4, maximum));
+    }
+    function syncChildrenOptions() {
+        var adultsEl = document.getElementById('bk-adults');
+        var childrenEl = document.getElementById('bk-children');
+        if (!adultsEl || !childrenEl || !guestPolicy.children_allowed) return;
+        var adults = parseInt(adultsEl.value, 10);
+        if (isNaN(adults)) adults = 1;
+        var current = parseInt(childrenEl.value, 10);
+        if (isNaN(current)) current = 0;
+        var maximum = maxChildrenForAdults(adults);
+        var selected = Math.min(Math.max(current, 0), maximum);
+        while (childrenEl.options.length > 0) childrenEl.remove(0);
+        for (var n = 0; n <= maximum; n += 1) {
+            var option = document.createElement('option');
+            option.value = String(n);
+            option.textContent = String(n);
+            option.selected = n === selected;
+            childrenEl.appendChild(option);
+        }
+        var childrenHidden = hiddenGuest('children');
+        if (childrenHidden) childrenHidden.value = String(selected);
+    }
     function requote() {
-        var ci = document.getElementById('bk-checkin').value;
-        var co = document.getElementById('bk-checkout').value;
-        var a = document.getElementById('bk-adults').value;
-        var c = document.getElementById('bk-children').value;
+        var ciEl = document.getElementById('bk-checkin');
+        var coEl = document.getElementById('bk-checkout');
+        var adultsEl = document.getElementById('bk-adults');
+        if (!ciEl || !coEl || !adultsEl) return;
+        syncChildrenOptions();
+        var ci = ciEl.value;
+        var co = coEl.value;
+        var a = adultsEl.value;
+        var childrenEl = document.getElementById('bk-children');
+        var childrenHidden = hiddenGuest('children');
+        var infantsHidden = hiddenGuest('infants');
+        var c = childrenEl ? childrenEl.value : (childrenHidden ? childrenHidden.value : '0');
+        var i = infantsHidden ? infantsHidden.value : '0';
         if (!ci || !co || co <= ci) return;
+        var adultsHidden = hiddenGuest('adults');
+        if (adultsHidden) adultsHidden.value = a;
+        if (childrenHidden) childrenHidden.value = c;
         window.location.href = '/.book?listing=' + encodeURIComponent(listingId) +
-            '&from=' + ci + '&to=' + co + '&adults=' + a + '&children=' + c + '&infants={{ q_infants }}' +
+            '&from=' + encodeURIComponent(ci) + '&to=' + encodeURIComponent(co) +
+            '&adults=' + encodeURIComponent(a) + '&children=' + encodeURIComponent(c) +
+            '&infants=' + encodeURIComponent(i) +
             '{{ utm_qs | default(value="") | safe }}';
     }
     function init() {
-        if (typeof flatpickr === 'undefined') { setTimeout(init, 100); return; }
         var ciEl = document.getElementById('bk-checkin'), coEl = document.getElementById('bk-checkout');
-        if (!ciEl) return;
+        if (!ciEl || !coEl) return;
+        if (typeof flatpickr === 'undefined') { setTimeout(init, 100); return; }
+        var adultsEl = document.getElementById('bk-adults');
+        var childrenEl = document.getElementById('bk-children');
+        syncChildrenOptions();
         var common = { dateFormat: 'Y-m-d', disable: blocked, disableMobile: true };
         if (calMin) common.minDate = calMin; if (calMax) common.maxDate = calMax;
         var coPicker = flatpickr(coEl, common);
@@ -157,8 +243,8 @@
             }
         }));
         coEl.addEventListener('change', requote);
-        document.getElementById('bk-adults').addEventListener('change', requote);
-        document.getElementById('bk-children').addEventListener('change', requote);
+        if (adultsEl) adultsEl.addEventListener('change', requote);
+        if (childrenEl) childrenEl.addEventListener('change', requote);
     }
     document.addEventListener('DOMContentLoaded', init);
 })();
