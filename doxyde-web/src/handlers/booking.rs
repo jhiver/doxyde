@@ -608,6 +608,55 @@ pub async fn stay_handler(
 }
 
 // ---------------------------------------------------------------------------
+// /.stay-quotes — async batch quotes for stay search results
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+pub struct StayQuotesPayload {
+    #[serde(default, alias = "guests")]
+    pub adults: Option<i64>,
+    #[serde(default, alias = "kids")]
+    pub children: Option<i64>,
+    #[serde(default)]
+    pub infants: Option<i64>,
+    pub stays: Vec<crate::services::sejours_client::BatchQuoteItem>,
+}
+
+pub async fn stay_quotes_handler(
+    Host(host): Host,
+    SiteDatabase(db): SiteDatabase,
+    axum::Json(payload): axum::Json<StayQuotesPayload>,
+) -> Result<Response, StatusCode> {
+    let repo = BookingRepository::new(db);
+    let config = repo
+        .get_config()
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if !config.is_configured() {
+        return Ok(json_error("not_configured"));
+    }
+    let client = SejoursClient::new(&config.service_url, &config.service_secret);
+    let adults = payload.adults.unwrap_or(2).max(1);
+    let children = payload.children.unwrap_or(0).max(0);
+    let infants = payload.infants.unwrap_or(0).max(0);
+
+    match client
+        .batch_quotes(&payload.stays, adults, children, infants)
+        .await
+    {
+        Ok(res) => Ok(axum::Json(serde_json::json!({
+            "status": "ok",
+            "quotes": res.quotes
+        }))
+        .into_response()),
+        Err(e) => {
+            tracing::error!("batch_quotes failed for host {}: {:?}", host, e);
+            Ok(json_error("service_error"))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // /.book — quote (GET) + create (POST)
 // ---------------------------------------------------------------------------
 

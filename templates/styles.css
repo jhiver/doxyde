@@ -3175,6 +3175,31 @@ footer a:hover {
     color: var(--gray-500, #6b7280); background: var(--gray-100, #f3f4f6);
     padding: 0.1rem 0.45rem; border-radius: 999px;
 }
+.booking-price-placeholder {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--gray-500, #6b7280);
+    font-size: 0.85rem;
+}
+.booking-price-skeleton {
+    display: inline-block;
+    width: 44px;
+    height: 18px;
+    background: linear-gradient(90deg, var(--gray-200, #e5e7eb) 25%, var(--gray-100, #f3f4f6) 50%, var(--gray-200, #e5e7eb) 75%);
+    background-size: 200% 100%;
+    animation: bkSkeleton 1.5s infinite;
+    border-radius: 4px;
+}
+@keyframes bkSkeleton {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+.booking-price-loading-text {
+    font-size: 0.75rem;
+    color: var(--gray-500, #6b7280);
+    letter-spacing: 0.02em;
+}
 .booking-card-note { font-size: 0.85rem; color: var(--gray-600, #4b5563); font-style: italic; }
 .booking-card-legs { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; }
 .booking-leg { display: flex; flex-direction: column; gap: 0.35rem; }

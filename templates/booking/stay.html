@@ -141,4 +141,72 @@ function bkCard(e, url) {
     });
 })();
 </script>
+
+{% if searched and ((primary_results and primary_results | length > 0) or (secondary_results and secondary_results | length > 0)) %}
+<script>
+(function() {
+    var staysToPrice = [
+        {% for r in primary_results %}
+        {% if r.stay_id %}
+        {
+            stay_id: {{ r.stay_id | json_encode | safe }},
+            legs: [
+                {% for leg in r.legs %}
+                { listing_id: {{ leg.listing_id }}, check_in: {{ leg.check_in | json_encode | safe }}, check_out: {{ leg.check_out | json_encode | safe }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }{% if not loop.last or (secondary_results and secondary_results | length > 0) %},{% endif %}
+        {% endif %}
+        {% endfor %}
+        {% if secondary_results %}
+        {% for r in secondary_results %}
+        {% if r.stay_id %}
+        {
+            stay_id: {{ r.stay_id | json_encode | safe }},
+            legs: [
+                {% for leg in r.legs %}
+                { listing_id: {{ leg.listing_id }}, check_in: {{ leg.check_in | json_encode | safe }}, check_out: {{ leg.check_out | json_encode | safe }} }{% if not loop.last %},{% endif %}
+                {% endfor %}
+            ]
+        }{% if not loop.last %},{% endif %}
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+    ];
+
+    if (!staysToPrice || staysToPrice.length === 0) return;
+
+    fetch('/.stay-quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            adults: {{ q_adults | default(value=2) }},
+            children: {{ q_children | default(value=0) }},
+            infants: {{ q_infants | default(value=0) }},
+            stays: staysToPrice
+        })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+        if (!data || !data.quotes) return;
+        for (var stayId in data.quotes) {
+            var q = data.quotes[stayId];
+            var els = document.querySelectorAll('.booking-card-price[data-stay-id="' + stayId + '"]');
+            for (var i = 0; i < els.length; i++) {
+                var el = els[i];
+                if (q.total_price !== null && q.total_price !== undefined) {
+                    var curr = q.currency_code ? ' ' + q.currency_code : '';
+                    el.innerHTML = '<span class="booking-card-amount">' + q.total_price + curr + '</span>';
+                } else {
+                    el.innerHTML = '';
+                }
+            }
+        }
+    })
+    .catch(function(err) {
+        console.warn('Async price loading failed:', err);
+    });
+})();
+</script>
+{% endif %}
 {% endblock %}

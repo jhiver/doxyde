@@ -35,6 +35,7 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.sister_house", "Also available at our sister house"),
     ("booking.multi_stay_note", "Combination of stays — each leg is booked separately."),
     ("booking.estimated", "estimated"),
+    ("booking.calculating_price", "Calculating price…"),
     ("booking.nights", "nights"),
     ("booking.from_label", "From"),
     ("booking.to_label", "To"),

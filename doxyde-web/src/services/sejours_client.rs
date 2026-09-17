@@ -139,6 +139,8 @@ pub struct StayLeg {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AvailabilityResult {
+    #[serde(default)]
+    pub stay_id: Option<String>,
     pub name: String,
     pub is_multi_stay: bool,
     pub leg_count: i64,
@@ -156,6 +158,35 @@ pub struct AvailabilityResult {
     #[serde(default)]
     pub images: Vec<String>,
     pub legs: Vec<StayLeg>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StayLegRequest {
+    pub listing_id: i64,
+    pub check_in: String,
+    pub check_out: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchQuoteItem {
+    pub stay_id: String,
+    pub legs: Vec<StayLegRequest>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StayQuoteResult {
+    #[serde(default)]
+    pub total_price: Option<f64>,
+    #[serde(default)]
+    pub currency_code: Option<String>,
+    #[serde(default)]
+    pub available: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BatchQuotesResponse {
+    #[serde(default)]
+    pub quotes: std::collections::HashMap<String, StayQuoteResult>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -387,6 +418,30 @@ impl SejoursClient {
             .send()
             .await
             .context("sejours-api /v1/quote request failed")?;
+        Self::json(resp).await
+    }
+
+    pub async fn batch_quotes(
+        &self,
+        stays: &[BatchQuoteItem],
+        adults: i64,
+        children: i64,
+        infants: i64,
+    ) -> Result<BatchQuotesResponse> {
+        let body = serde_json::json!({
+            "adults": adults,
+            "children": children,
+            "infants": infants,
+            "stays": stays,
+        });
+        let resp = self
+            .client
+            .post(self.url("/v1/quotes"))
+            .header(SECRET_HEADER, &self.secret)
+            .json(&body)
+            .send()
+            .await
+            .context("sejours-api /v1/quotes request failed")?;
         Self::json(resp).await
     }
 

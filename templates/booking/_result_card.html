@@ -22,12 +22,12 @@
             {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
         </div>
     </div>
-    {% if r.total_price %}
-    <div class="booking-card-price">
-        <span class="booking-card-amount">{{ r.total_price }} {{ r.currency_code | default(value='') }}</span>
-        {% if r.price_is_estimate %}<span class="booking-card-estimate">{{ labels["booking.estimated"] | default(value="estimated") }}</span>{% endif %}
+    <div class="booking-card-price" data-stay-id="{{ r.stay_id | default(value='') }}">
+        <span class="booking-price-placeholder">
+            <span class="booking-price-skeleton"></span>
+            <span class="booking-price-loading-text">{{ labels["booking.calculating_price"] | default(value="Calculating price…") }}</span>
+        </span>
     </div>
-    {% endif %}
     <a class="booking-book-btn" href="{{ book_url | safe }}">{{ labels["booking.book_now"] | default(value="Book now") }}</a>
 </div>
 
@@ -52,12 +52,12 @@
             {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
         </div>
     </div>
-    {% if r.total_price %}
-    <div class="booking-card-price">
-        <span class="booking-card-amount">{{ r.total_price }} {{ r.currency_code | default(value='') }}</span>
-        {% if r.price_is_estimate %}<span class="booking-card-estimate">{{ labels["booking.estimated"] | default(value="estimated") }}</span>{% endif %}
+    <div class="booking-card-price" data-stay-id="{{ r.stay_id | default(value='') }}">
+        <span class="booking-price-placeholder">
+            <span class="booking-price-skeleton"></span>
+            <span class="booking-price-loading-text">{{ labels["booking.calculating_price"] | default(value="Calculating price…") }}</span>
+        </span>
     </div>
-    {% endif %}
     <p class="booking-card-note">{{ labels["booking.multi_stay_note"] | default(value="Combination of stays — each leg is booked separately.") }}</p>
     <div class="booking-card-legs">
         {% for leg in r.legs %}

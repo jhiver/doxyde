@@ -121,6 +121,10 @@ pub fn create_router(state: AppState) -> Router {
         // Booking (séjours) routes
         .route("/.stay", get(handlers::booking::stay_handler))
         .route(
+            "/.stay-quotes",
+            post(handlers::booking::stay_quotes_handler),
+        )
+        .route(
             "/.book",
             get(handlers::booking::book_quote_handler).post(handlers::booking::book_create_handler),
         )

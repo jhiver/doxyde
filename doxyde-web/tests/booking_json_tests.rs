@@ -1508,3 +1508,54 @@ fn test_booking_policy_fields_are_required_from_upgraded_api() {
     )
     .is_err());
 }
+
+#[tokio::test]
+async fn test_stay_quotes_endpoint() {
+    let (server, _pool, mock_server, _temp_dir) = setup_test().await;
+
+    let mock_quotes = json!({
+        "quotes": {
+            "single-123": {
+                "total_price": 250.0,
+                "currency_code": "EUR",
+                "available": true
+            }
+        }
+    });
+
+    Mock::given(method("POST"))
+        .and(path("/v1/quotes"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(mock_quotes))
+        .mount(&mock_server)
+        .await;
+
+    let payload = json!({
+        "adults": 2,
+        "children": 0,
+        "infants": 0,
+        "stays": [
+            {
+                "stay_id": "single-123",
+                "legs": [
+                    {
+                        "listing_id": 123,
+                        "check_in": "2099-01-01",
+                        "check_out": "2099-01-05"
+                    }
+                ]
+            }
+        ]
+    });
+
+    let response = server
+        .post("/.stay-quotes")
+        .add_header("Host", "test.local")
+        .json(&payload)
+        .await;
+
+    response.assert_status(StatusCode::OK);
+    let body: serde_json::Value = response.json();
+    assert_eq!(body["status"], "ok");
+    assert_eq!(body["quotes"]["single-123"]["total_price"], 250.0);
+    assert_eq!(body["quotes"]["single-123"]["currency_code"], "EUR");
+}
