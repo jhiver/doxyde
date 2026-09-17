@@ -998,9 +998,11 @@ mod tests {
         for var in &env_vars {
             env::remove_var(var);
         }
+        env::set_var("DOXYDE_IGNORE_SYSTEM_CONFIG", "1");
 
         // Test loading with defaults
         let config = Configuration::load().expect("Should load configuration with defaults");
+        env::remove_var("DOXYDE_IGNORE_SYSTEM_CONFIG");
 
         // Verify defaults are set correctly
         assert_eq!(config.database_url, "sqlite:doxyde.db");

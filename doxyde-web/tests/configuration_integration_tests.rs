@@ -44,6 +44,7 @@ impl EnvGuard {
         for var in vars {
             env::remove_var(var);
         }
+        env::set_var("DOXYDE_IGNORE_SYSTEM_CONFIG", "1");
 
         Self { saved_vars }
     }
@@ -51,6 +52,7 @@ impl EnvGuard {
 
 impl Drop for EnvGuard {
     fn drop(&mut self) {
+        env::remove_var("DOXYDE_IGNORE_SYSTEM_CONFIG");
         // Restore environment state
         for (var, value) in &self.saved_vars {
             if let Some(val) = value {

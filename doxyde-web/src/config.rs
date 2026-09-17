@@ -140,9 +140,11 @@ mod tests {
         for var in &env_vars {
             env::remove_var(var);
         }
+        env::set_var("DOXYDE_IGNORE_SYSTEM_CONFIG", "1");
 
         // Test loading with defaults
         let config = Config::from_env().expect("Should load config with defaults");
+        env::remove_var("DOXYDE_IGNORE_SYSTEM_CONFIG");
 
         // Verify that values come from the new Configuration system defaults
         assert_eq!(config.host, "0.0.0.0"); // Should match Configuration defaults

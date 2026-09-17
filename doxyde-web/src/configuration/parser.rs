@@ -138,12 +138,14 @@ pub fn parse_toml_file<P: AsRef<Path>>(path: P) -> Result<TomlConfig> {
 pub fn get_config_file_paths() -> Vec<PathBuf> {
     let mut paths = Vec::new();
 
-    // System-wide configuration
-    paths.push(PathBuf::from("/etc/doxyde.conf"));
+    // System-wide configuration (can be skipped via DOXYDE_IGNORE_SYSTEM_CONFIG)
+    if std::env::var("DOXYDE_IGNORE_SYSTEM_CONFIG").is_err() {
+        paths.push(PathBuf::from("/etc/doxyde.conf"));
 
-    // User-specific configuration
-    if let Ok(home) = std::env::var("HOME") {
-        paths.push(PathBuf::from(home).join(".doxyde.conf"));
+        // User-specific configuration
+        if let Ok(home) = std::env::var("HOME") {
+            paths.push(PathBuf::from(home).join(".doxyde.conf"));
+        }
     }
 
     // Current directory configuration (highest precedence)
@@ -320,6 +322,7 @@ pub fn merge_toml_configs(configs: Vec<TomlConfig>) -> TomlConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
     use std::io::Write;
     use tempfile::NamedTempFile;
 
@@ -422,6 +425,7 @@ security_hsts_content = "max-age=63072000"
     }
 
     #[test]
+    #[serial]
     fn test_get_config_file_paths() {
         let paths = get_config_file_paths();
         assert!(!paths.is_empty());
