@@ -419,6 +419,8 @@ pub async fn stay_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
+    let guests = adults + children;
+    context.insert("q_guests", &guests);
 
     let repo = BookingRepository::new(db.clone());
     let config = repo
@@ -722,6 +724,8 @@ pub async fn book_quote_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
+    let guests = adults + children;
+    context.insert("q_guests", &guests);
     let attribution = Attribution::from(&q);
     insert_attribution_context(&mut context, &attribution);
 
@@ -877,6 +881,8 @@ pub async fn book_create_handler(
     context.insert("q_adults", &adults);
     context.insert("q_children", &children);
     context.insert("q_infants", &infants);
+    let guests = adults + children;
+    context.insert("q_guests", &guests);
     let form_attribution = Attribution::from(&form);
     insert_attribution_context(&mut context, &form_attribution);
 

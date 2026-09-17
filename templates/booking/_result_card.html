@@ -18,8 +18,8 @@
     <div class="booking-card-head">
         <h3 class="booking-card-name">{{ r.name }}</h3>
         <div class="booking-card-meta">
-            {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }}
-            {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
+            {% set guests_count = q_guests | default(value=2) %}
+            {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }} · {{ labels["booking.for"] | default(value="for") }} {{ guests_count }} {% if guests_count == 1 %}{{ labels["booking.guest_one"] | default(value="Guest") | lower }}{% else %}{{ labels["booking.guests"] | default(value="Guests") | lower }}{% endif %}{% if r.person_capacity and r.person_capacity > guests_count %} ({{ labels["booking.max"] | default(value="max:") }} {{ r.person_capacity }}){% endif %}
         </div>
     </div>
     <div class="booking-card-price" data-stay-id="{{ r.stay_id | default(value='') }}">
@@ -48,8 +48,8 @@
     <div class="booking-card-head">
         <h3 class="booking-card-name">{{ r.name }}</h3>
         <div class="booking-card-meta">
-            {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }}
-            {% if r.person_capacity %} · {{ r.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
+            {% set guests_count = q_guests | default(value=2) %}
+            {{ r.nights }} {{ labels["booking.nights"] | default(value="nights") }} · {{ labels["booking.for"] | default(value="for") }} {{ guests_count }} {% if guests_count == 1 %}{{ labels["booking.guest_one"] | default(value="Guest") | lower }}{% else %}{{ labels["booking.guests"] | default(value="Guests") | lower }}{% endif %}{% if r.person_capacity and r.person_capacity > guests_count %} ({{ labels["booking.max"] | default(value="max:") }} {{ r.person_capacity }}){% endif %}
         </div>
     </div>
     <div class="booking-card-price" data-stay-id="{{ r.stay_id | default(value='') }}">

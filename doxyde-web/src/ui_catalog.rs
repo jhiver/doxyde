@@ -26,6 +26,8 @@ pub const UI_LABELS: &[(&str, &str)] = &[
     ("booking.add_date", "Add date"),
     // Guest-count option: singular noun ("1 Guest"); plural reuses booking.guests.
     ("booking.guest_one", "Guest"),
+    ("booking.for", "for"),
+    ("booking.max", "max:"),
     ("booking.show_all_photos", "Show all photos"),
     // Search results + booking flow (lot 2)
     ("booking.results_title", "Available stays"),

@@ -120,4 +120,60 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_result_card_guest_capacity_rendering() {
+        let tera = match Tera::new("../templates/**/*.html") {
+            Ok(t) => t,
+            Err(e) => panic!("Failed to parse templates: {}", e),
+        };
+
+        let mut labels = std::collections::HashMap::new();
+        labels.insert("booking.nights", "nuits");
+        labels.insert("booking.for", "pour");
+        labels.insert("booking.guests", "Voyageurs");
+        labels.insert("booking.guest_one", "Voyageur");
+        labels.insert("booking.max", "max :");
+
+        // Test case 1: capacity > searched guests (e.g. 4 capacity, 2 guests)
+        let mut ctx1 = tera::Context::new();
+        ctx1.insert("q_guests", &2);
+        ctx1.insert("q_adults", &2);
+        ctx1.insert("q_children", &0);
+        ctx1.insert("q_infants", &0);
+        ctx1.insert("utm_qs", "");
+        ctx1.insert("labels", &labels);
+        let r1 = serde_json::json!({
+            "is_multi_stay": false,
+            "name": "Panoramic Suite",
+            "nights": 5,
+            "person_capacity": 4,
+            "legs": [{"listing_id": 1, "check_in": "2026-10-01", "check_out": "2026-10-06"}]
+        });
+        ctx1.insert("r", &r1);
+
+        let rendered1 = tera.render("booking/_result_card.html", &ctx1).unwrap();
+        assert!(rendered1.contains("5 nuits · pour 2 voyageurs (max : 4)"));
+
+        // Test case 2: capacity == searched guests (e.g. 2 capacity, 2 guests)
+        let mut ctx2 = ctx1.clone();
+        let r2 = serde_json::json!({
+            "is_multi_stay": false,
+            "name": "Cozy Studio",
+            "nights": 5,
+            "person_capacity": 2,
+            "legs": [{"listing_id": 2, "check_in": "2026-10-01", "check_out": "2026-10-06"}]
+        });
+        ctx2.insert("r", &r2);
+        let rendered2 = tera.render("booking/_result_card.html", &ctx2).unwrap();
+        assert!(rendered2.contains("5 nuits · pour 2 voyageurs"));
+        assert!(!rendered2.contains("(max :"));
+
+        // Test case 3: 1 guest, capacity 4
+        let mut ctx3 = ctx1.clone();
+        ctx3.insert("q_guests", &1);
+        ctx3.insert("q_adults", &1);
+        let rendered3 = tera.render("booking/_result_card.html", &ctx3).unwrap();
+        assert!(rendered3.contains("5 nuits · pour 1 voyageur (max : 4)"));
+    }
 }

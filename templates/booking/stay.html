@@ -91,8 +91,8 @@
                 <div class="booking-card-head">
                     <h3 class="booking-card-name">{{ s.listing_name }}</h3>
                     <div class="booking-card-meta">
-                        {{ s.check_in }} → {{ s.check_out }} · {{ s.nights }} {{ labels["booking.nights"] | default(value="nights") }}
-                        {% if s.person_capacity %} · {{ s.person_capacity }} {{ labels["booking.guests"] | default(value="Guests") }}{% endif %}
+                        {% set s_guests = q_guests | default(value=2) %}
+                        {{ s.check_in }} → {{ s.check_out }} · {{ s.nights }} {{ labels["booking.nights"] | default(value="nights") }} · {{ labels["booking.for"] | default(value="for") }} {{ s_guests }} {% if s_guests == 1 %}{{ labels["booking.guest_one"] | default(value="Guest") | lower }}{% else %}{{ labels["booking.guests"] | default(value="Guests") | lower }}{% endif %}{% if s.person_capacity and s.person_capacity > s_guests %} ({{ labels["booking.max"] | default(value="max:") }} {{ s.person_capacity }}){% endif %}
                     </div>
                 </div>
                 {% if s.price_total %}
